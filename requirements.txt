@@ -1,0 +1,9 @@
+h5py
+numpy
+psutils
+
+PyQt4
+pyqtgraph
+
+PyTango
+
