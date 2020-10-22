@@ -16,7 +16,7 @@ from PyQt4 import QtCore, QtGui
 
 import pyqtgraph as pg
 
-from ui_vimbacam.LogWidget_ui import Ui_LogWidget
+from src.ui_vimbacam.LogWidget_ui import Ui_LogWidget
 
 # ----------------------------------------------------------------------
 class LogWidget(QtGui.QWidget):

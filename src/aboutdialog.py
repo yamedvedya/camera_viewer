@@ -14,7 +14,7 @@ import os
 
 from PyQt4 import QtGui
 
-from ui_vimbacam.AboutDialog_ui import Ui_AboutDialog
+from src.ui_vimbacam.AboutDialog_ui import Ui_AboutDialog
 
 # ----------------------------------------------------------------------
 class AboutDialog(QtGui.QDialog):

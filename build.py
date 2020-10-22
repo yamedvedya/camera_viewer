@@ -25,7 +25,7 @@ import sys
 in_dirs = ["ui"]
 out_dirs = ["src/ui_vimbacam"]
 
-ui_compilers = {"linux": {
+ui_compilers = {"linux2": {
                     "pyqt": "pyuic4",
                     "pyside": "pyside-uic"
                 },
@@ -35,7 +35,7 @@ ui_compilers = {"linux": {
                 }
                }
 
-rc_compilers = {"linux": {
+rc_compilers = {"linux2": {
                     "pyqt": "pyrcc4",
                     "pyside": "pyside-rcc"
                 },

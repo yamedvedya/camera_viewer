@@ -27,20 +27,20 @@ from PyQt4 import QtCore, QtGui
 
 import pyqtgraph as pg
 
-from aboutdialog import AboutDialog
-from utils.functions import (make_log_name,
+from src.aboutdialog import AboutDialog
+from src.utils.functions import (make_log_name,
                              parse_log_level)
-from utils.xmlsettings import XmlSettings
-from utils.guilogger import GuiLogger
+from src.utils.xmlsettings import XmlSettings
+from src.utils.guilogger import GuiLogger
 
-from widgets.frameviewer import FrameViewer
-from widgets.settingswidget import SettingsWidget
-from widgets.logwidget import LogWidget
+from src.widgets.frameviewer import FrameViewer
+from src.widgets.settingswidget import SettingsWidget
+from src.widgets.logwidget import LogWidget
 
-from roisrv.roiserver import RoiServer
+from src.roisrv.roiserver import RoiServer
 
-from ui_vimbacam.MainWindow_ui import Ui_MainWindow
-from ui_vimbacam import CameraSettingsWidget_ui
+from src.ui_vimbacam.MainWindow_ui import Ui_MainWindow
+from src.ui_vimbacam import CameraSettingsWidget_ui
 
 # ----------------------------------------------------------------------
 class MainWindow(QtGui.QMainWindow):
@@ -59,6 +59,8 @@ class MainWindow(QtGui.QMainWindow):
         """
         """
         super(MainWindow, self).__init__()
+
+        print('Current dir: {}'.format(os.getcwd()))
 
         self.cfgPath = './config/'
         self.options = options

@@ -15,7 +15,7 @@ from PyQt4 import QtCore, QtGui
 
 import pyqtgraph as pg
 
-from ui_vimbacam.ProjectionWidget_ui import Ui_ProjectionWidget
+from src.ui_vimbacam.ProjectionWidget_ui import Ui_ProjectionWidget
 
 # ----------------------------------------------------------------------
 class ProjectionWidget(QtGui.QWidget):

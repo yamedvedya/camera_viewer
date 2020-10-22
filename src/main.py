@@ -19,7 +19,7 @@ from optparse import OptionParser
 
 from PyQt4 import QtGui
 
-from mainwindow import MainWindow
+from src.mainwindow import MainWindow
 
 
 # ----------------------------------------------------------------------
@@ -32,9 +32,10 @@ def main():
 
     parser.add_option("-b", "--beamlineID", dest="beamlineID",
                       help="Beamline identifier",
-                      default="DESY_P22")
+                      default="DESY_P23")
     parser.add_option("-i", "--config", dest="config",
-                      help="Configuration file")
+                      help="Configuration file",
+                      default="/home/p23user/utils/camera_viewer/config/camera_LM04.xml")
 
     (options, _) = parser.parse_args()
 
