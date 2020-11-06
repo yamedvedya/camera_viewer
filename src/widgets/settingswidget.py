@@ -12,11 +12,6 @@
 import logging
 import subprocess
 
-import socket
-import errno, time
-import json
-from StringIO import StringIO
-
 try:
     import PyTango
 except ImportError:
@@ -27,28 +22,28 @@ from src.utils.errors import report_error
 from PyQt4 import QtCore, QtGui
 
 from src.ui_vimbacam.SettingsWidget_ui import Ui_SettingsWidget
+from src.widgets.marker import Marker
 
+from src.utils.functions import refresh_combo_box
 
 # ----------------------------------------------------------------------
 class SettingsWidget(QtGui.QWidget):
     """
     """
-    markerChanged = QtCore.Signal(int, int, int, bool)
-    roiChanged = QtCore.Signal(int, int, int, int, float, bool)
-    roiStats = QtCore.Signal(int, int, float, float, int)
-    roiMarkerSelected = QtCore.Signal(str)
+    marker_changed = QtCore.Signal(int)
+    markers_changed = QtCore.Signal()
+    roi_changed = QtCore.Signal(int)
+    roi_marker_selected = QtCore.Signal(str)
 
-    colorMapChanged = QtCore.Signal(str)
-    levelsChanged = QtCore.Signal(float, float)
-    enableAutoLevels = QtCore.Signal(bool)
+    color_map_changed = QtCore.Signal(str)
+    levels_changed = QtCore.Signal(float, float)
+    enable_auto_levels = QtCore.Signal(bool)
     set_dark_image = QtCore.Signal()
     remove_dark_image = QtCore.Signal()
     image_size_changed = QtCore.Signal(float, float, float, float)
 
     PARAMS_EDITOR = "atkpanel"
-    SYNC_TICK = 4000  # [ms]
-    SOCKET_TIMEOUT = 5
-    DATA_BUFFER_SIZE = 2 ** 22
+    SYNC_TICK = 1000  # [ms]
     NUM_MARKERS = 2
 
     # ----------------------------------------------------------------------
@@ -59,206 +54,273 @@ class SettingsWidget(QtGui.QWidget):
         self.settings = settings
         self.log = logging.getLogger("cam_logger")
 
-        self._deviceID = settings.option("device", "name")
-
-        self._proxyType = settings.option("device", "proxy")
-
         self._ui = Ui_SettingsWidget()
         self._ui.setupUi(self)
-        self._roiMarker = ''
-        self._ui.tbAllParams.clicked.connect(self._editAllParams)
-        self._ui.sbExposureTime.editingFinished.connect(lambda: self._settingsChanged('Exposure'))
-        self._ui.sbGain.editingFinished.connect(lambda: self._settingsChanged('Gain'))
-        self._ui.sbViewX.editingFinished.connect(lambda: self._settingsChanged('X'))
-        self._ui.sbViewY.editingFinished.connect(lambda: self._settingsChanged('Y'))
-        self._ui.sbViewW.editingFinished.connect(lambda: self._settingsChanged('W'))
-        self._ui.sbViewH.editingFinished.connect(lambda: self._settingsChanged('H'))
+        self._marker_grid = QtGui.QGridLayout(self._ui.layout_markers)
+        self._markers_widgets = []
 
-        for marker in range(self.NUM_MARKERS):
-            getattr(self._ui, "sbMarkerX_{}".format(marker)).valueChanged.connect(
-                lambda value, x=marker: self._markerChanged(x))
-            getattr(self._ui, "sbMarkerY_{}".format(marker)).valueChanged.connect(
-                lambda value, x=marker: self._markerChanged(x))
-            getattr(self._ui, "chbShowMarker_{}".format(marker)).stateChanged.connect(
-                lambda state, x=marker: self._markerChanged(x))
-        self.marker2ectrl = [None for _ in range(self.NUM_MARKERS)]
+        self._camera_device = None
+        self._rois, self._markers, self._statistics = None, None, None
+        self._current_roi_index = None
+
+        self._roiMarker = ''
+
+        self._first_camera = True
+
+        self._picture_width = None
+        self._picture_height = None
+
+        self._ui.tbAllParams.clicked.connect(self._edit_all_params)
+        for ui in ['ExposureTime', 'Gain', 'ViewX', 'ViewY', 'ViewW', 'ViewH']:
+            getattr(self._ui, 'sb{}'.format(ui)).editingFinished.connect(lambda x=ui: self._settings_changed(x))
 
         self._ui.chkAutoLevels.stateChanged.connect(self._autoLevelsChanged)
         self._ui.sbMinLevel.valueChanged.connect(self._levelsChanged)
         self._ui.sbMaxLevel.valueChanged.connect(self._levelsChanged)
         self._ui.cbColorMap.currentIndexChanged.connect(self._colorMapChanged)
-        self._ui.sbRoiX.valueChanged.connect(self._roiChanged)
-        self._ui.sbRoiY.valueChanged.connect(self._roiChanged)
-        self._ui.sbRoiWidth.valueChanged.connect(self._roiChanged)
-        self._ui.sbRoiHeight.valueChanged.connect(self._roiChanged)
-        self._ui.sbThreshold.valueChanged.connect(self._roiChanged)
-        self._ui.chbShowRoi.stateChanged.connect(self._roiChanged)
-        self._ui.pbInOut.clicked.connect(self._moveScreen)
-        self._ui.bgRoiMarker.buttonClicked.connect(self._roiMarkerChanged)
+
+        for ui in ['RoiX', 'RoiY', 'RoiWidth', 'RoiHeight', 'Threshold']:
+            getattr(self._ui, 'sb{}'.format(ui)).valueChanged.connect(lambda value, name=ui: self._roi_changed(name, value))
+        self._ui.chbShowRoi.stateChanged.connect(lambda: self._make_roi_visible(self._ui.chbShowRoi.isChecked()))
+
+        self._ui.pbInOut.clicked.connect(lambda: self._camera_device.move_motor())
+        self._ui.bgRoiMarker.buttonClicked.connect(self._roi_marker_changed)
         self._ui.tbDarkImage.clicked.connect(self.set_dark_image)
         self._ui.tbDarkImageDelete.clicked.connect(self.remove_dark_image)
+        self._ui.but_add_marker.clicked.connect(self._add_marker)
 
-        if self._proxyType == 'TangoTineProxy':
-            self._settingsServer = settings.option("device", "settings_server")
-            self._deviceProxy = PyTango.DeviceProxy(str(self._settingsServer))
-            self._exposureName = "ExposureValue.Set"
-            self._gainName = "GainValue.Set"
-            att_conf_exposure = self._deviceProxy.get_attribute_config('ExposureValue.Set')
-            att_conf_gain = self._deviceProxy.get_attribute_config('GainValue.Set')
-            exposure_max = self._deviceProxy.read_attribute('ExposureValue.Max')
-            exposure_min = self._deviceProxy.read_attribute('ExposureValue.Min')
-            gain_max = self._deviceProxy.read_attribute('GainValue.Max')
-            gain_min = self._deviceProxy.read_attribute('GainValue.Min')
-            att_conf_exposure.max_value = str(exposure_max.value)
-            att_conf_exposure.min_value = str(exposure_min.value)
-            att_conf_gain.max_value = str(gain_max.value)
-            att_conf_gain.min_value = str(gain_min.value)
-            self._deviceProxy.set_attribute_config(att_conf_exposure)
-            self._deviceProxy.set_attribute_config(att_conf_gain)
-
-        elif self._proxyType == 'VimbaProxy':
-            self._tangoServer = settings.option("device", "tango_server")
-            self._deviceProxy = PyTango.DeviceProxy(str(self._tangoServer))
-            self._exposureName = "ExposureTimeAbs"
-            self._viewX_name = "OffsetX"
-            self._viewY_name = "OffsetY"
-            self._viewH_name = "Height"
-            self._viewHmax_name = "HeightMax"
-            self._viewW_name = "Width"
-            self._viewWmax_name = "WidthMax"
-            self.hMax = self._deviceProxy.read_attribute(self._viewHmax_name).value
-            self.wMax = self._deviceProxy.read_attribute(self._viewWmax_name).value
-            # self._deviceProxy.write_attribute(self._viewX_name, 0)
-            # self._deviceProxy.write_attribute(self._viewY_name, 0)
-            # self._deviceProxy.write_attribute(self._viewW_name, self.wMax)
-            # self._deviceProxy.write_attribute(self._viewH_name, self.hMax)
-
-            self._gainName = str(self._deviceProxy.get_property('GainFeatureName')['GainFeatureName'][0])
-            self._high_depth = settings.option("device", "high_depth")
-
-            if self._high_depth:
-                self._ui.sbMaxLevel.setMaximum(2 ** 12)
-                self._ui.sbMinLevel.setMaximum(2 ** 12)
-            else:
-                self._ui.sbMaxLevel.setMaximum(2 ** 8)
-                self._ui.sbMinLevel.setMaximum(2 ** 8)
-
-        try:
-            if settings.option("motor", "type") == 'none':
-                self._ui.pbInOut.setEnabled(False)
-            elif settings.option("motor", "type") == 'Acromag':
-                self._ui.pbInOut.setEnabled(True)
-                self._motorType = 'Acromag'
-                self._valveTangoServer = settings.option("motor", "valve_tango_server")
-                self._valveChannel = int(settings.option("motor", "valve_channel"))
-                self._valveDeviceProxy = PyTango.DeviceProxy(self._valveTangoServer)
-
-            elif settings.option("motor", "type") == 'FSBT':
-                self._ui.pbInOut.setEnabled(True)
-                self._motorType = 'FSBT'
-                self._fsbtServerHost = settings.option("motor", "host")
-                self._fsbtServerPort = int(settings.option("motor", "port"))
-                self._motorName = settings.option("motor", "name")
-        except:
-            self._ui.pbInOut.setEnabled(False)
-
-        self.vflip = self.settings.option("flip", "vertical") == "True"
-        self.hflip = self.settings.option("flip", "horizontal") == "True"
+        self._ui.cb_counter.currentIndexChanged.connect(lambda: self._camera_device.set_counter(
+            self._ui.cb_counter.currentText()))
 
         self._tangoMutex = QtCore.QMutex()
-        self._reloadSettings()
 
-        # keep in sync with TANGO
+        #keep in sync with TANGO
         self._syncTimer = QtCore.QTimer(self)
-        self._syncTimer.timeout.connect(self._reloadSettings)
-        # self._syncTimer.start(self.SYNC_TICK)
-
+        self._syncTimer.timeout.connect(self._sync_settings)
+        self._syncTimer.start(self.SYNC_TICK)
 
     # ----------------------------------------------------------------------
-    def updateLevels(self, min, max, map):
+    def _sync_settings(self):
+        motor_position = self._camera_device.motor_position()
+        if motor_position is not None:
+            self._ui.pbInOut.setText('Move Out' if motor_position else 'Move In')
+            self._ui.lb_screen_status.setText('Screen is In' if motor_position else 'Screen is Out')
+
+        counter_name = self._camera_device.get_counter()
+        if counter_name is not None:
+            refresh_combo_box(self._ui.cb_counter, counter_name)
+
+    # ----------------------------------------------------------------------
+    def set_variables(self, camera_device, rois, markers, statistics, current_roi_index):
+        self._camera_device = camera_device
+        self._rois = rois
+        self._markers = markers
+        self._statistics = statistics
+        self._current_roi_index = current_roi_index
+
+    # ----------------------------------------------------------------------
+    def close_camera(self, auto_screen):
+        if not self._first_camera:
+            self.save_camera_settings()
+
+        if self._ui.chk_auto_screen.isChecked() and auto_screen:
+            self._camera_device.move_motor(False)
+
+    # ----------------------------------------------------------------------
+    def set_new_camera(self, auto_screen):
+        if self.load_camera_settings():
+            self._first_camera = False
+            self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
+            self._ui.gb_sardana.setVisible(self._camera_device.has_counter())
+            if self._ui.chk_auto_screen.isChecked() and auto_screen:
+                self._camera_device.move_motor(True)
+            return True
+        else:
+            return False
+
+    # ----------------------------------------------------------------------
+    def _add_marker(self):
+        new_ind = len(self._markers) + 1
+        self._markers[new_ind] = {'x': 0, 'y': 0}
+        self._update_marker_layout()
+
+    # ----------------------------------------------------------------------
+    def _delete_marker(self, id):
+
+        del self._markers[id]
+        self._update_marker_layout()
+
+    # ----------------------------------------------------------------------
+    def _update_marker_layout(self, save=True):
+
+        layout = self._ui.layout_markers.layout()
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            if item:
+                w = layout.itemAt(i).widget()
+                if w:
+                    layout.removeWidget(w)
+                    w.setVisible(False)
+
+        self._markers_widgets = []
+        for ind, values in self._markers.items():
+            widget = Marker(ind)
+            widget.marker_changed.connect(self._marker_changed)
+            widget.delete_me.connect(self._delete_marker)
+            widget.set_values(values)
+            widget.setVisible(True)
+            layout.addWidget(widget)
+            self._markers_widgets.append(widget)
+
+        self.markers_changed.emit()
+        if save:
+            self.save_camera_settings()
+
+    # ----------------------------------------------------------------------
+    def _get_picture_size(self):
+        return (min(max(self._ui.sbViewX.value(), 0), self._picture_width),
+                min(max(self._ui.sbViewY.value(), 0), self._picture_height),
+                min(max(self._ui.sbViewW.value(), 1), self._picture_width),
+                min(max(self._ui.sbViewH.value(), 1), self._picture_height))
+
+    # ----------------------------------------------------------------------
+    def _change_picture_size(self):
+
+        view_x, view_y, view_w, view_h = self._get_picture_size()
+
+        self._ui.sbViewX.setMaximum(self._picture_width - view_w)
+        self._ui.sbViewY.setMaximum(self._picture_height - view_h)
+        self._ui.sbViewW.setMaximum(self._picture_width - view_x)
+        self._ui.sbViewH.setMaximum(self._picture_height - view_y)
+
+        self.image_size_changed.emit(view_x, view_y, view_w, view_h)
+
+    # ----------------------------------------------------------------------
+    def _save_one_setting(self, name, value):
+        try:
+            self._camera_device.save_settings(name, value)
+        except Exception as err:
+            report_error(err, self.log, self)
+
+    # ----------------------------------------------------------------------
+    def update_levels(self, min, max, map):
         """
         """
         self._blockSignals(True)
+        if min is None:
+            min = 0
         self._ui.sbMinLevel.setValue(min)
+
+        if max is None:
+            max = 1
         self._ui.sbMaxLevel.setValue(max)
-        # self._ui.cbColorMap.setItemText(map)
+
+        if map is None:
+            map = self._ui.cbColorMap.currentText()
 
         index = self._ui.cbColorMap.findText(map, QtCore.Qt.MatchFixedString)
         if index >= 0:
             self._ui.cbColorMap.setCurrentIndex(index)
 
-        self.levelsChanged.emit(min, max)
-        self.colorMapChanged.emit(map)
+        self.levels_changed.emit(min, max)
+        self.color_map_changed.emit(map)
         self._blockSignals(False)
 
     # ----------------------------------------------------------------------
-    def updateMarker(self, num, x, y):
+    def update_marker(self, num):
         """
         """
-        self._blockSignals(True)
-
-        getattr(self._ui, 'sbMarkerX_{:d}'.format(num)).setValue(x)
-        getattr(self._ui, 'sbMarkerY_{:d}'.format(num)).setValue(y)
-
-        self._blockSignals(False)
+        self._markers_widgets[num].set_values(self._markers[num])
+        self._camera_device.save_settings('marker_{:d}_x'.format(num), self._markers[num]['x'])
+        self._camera_device.save_settings('marker_{:d}_y'.format(num), self._markers[num]['y'])
 
     # ----------------------------------------------------------------------
-    def updateRoi(self, x, y, w, h, threshold):
+    def update_roi(self, index):
         """
         """
         self._blockSignals(True)
-
-        self._ui.sbRoiX.setValue(x)
-        self._ui.sbRoiY.setValue(y)
-        self._ui.sbRoiWidth.setValue(w)
-        self._ui.sbRoiHeight.setValue(h)
-        self._ui.sbThreshold.setValue(threshold)
-
-        self.x = x
-        self.y = y
-
+        for ui in ["RoiX", "RoiY", "RoiWidth", "RoiHeight"]:
+            getattr(self._ui, 'sb{}'.format(ui)).setValue(self._rois[index][ui])
+            self._camera_device.save_settings(ui, self._rois[index][ui])
         self._blockSignals(False)
 
     # CS
     # ----------------------------------------------------------------------
-    def updateStats(self, Extrema, CoM, CoMval, FWHM, Sum):
+    def update_roi_statistics(self, roi_index):
+
         """Stats changed     """
-        self._ui.leMaxVal.setText('{:2.2f}'.format(Extrema[1]))
-        self._ui.leMinVal.setText('{:2.2f}'.format(Extrema[0]))
-        self._ui.leMinX.setText(str(Extrema[2][0] + self.x))
-        self._ui.leMinY.setText(str(Extrema[2][1] + self.y))
-        self._ui.leMaxX.setText(str(Extrema[3][0] + self.x))
-        self._ui.leMaxY.setText(str(Extrema[3][1] + self.y))
-        self._ui.leComX.setText(str("{:10.2f}".format(CoM[0])))
-        self._ui.leComY.setText(str("{:10.2f}".format(CoM[1])))
-        self._ui.leComVal.setText(str(CoMval))
-        self._ui.leFwhmX.setText(str(FWHM[0]))
-        self._ui.leFwhmY.setText(str(FWHM[1]))
-        self.roiCoM = [CoM[0], CoM[1], CoMval]
-        self.sum = Sum
 
-        self._ui.leXcorr.setText(str("{:10.2f}".format(FWHM[0] * 1.0787)))
-        self._ui.leYcorr.setText(str("{:10.2f}".format(FWHM[1] * 0.7029)))
 
-        self._ui.leSum.setText(str(Sum))
+        try:
+            self._ui.leMaxVal.setText('{:2.2f}'.format(self._statistics[roi_index]["extrema"][1]))
+        except:
+            self._ui.leMaxVal.setText('')
+
+        try:
+            self._ui.leMinVal.setText('{:2.2f}'.format(self._statistics[roi_index]["extrema"][0]))
+        except:
+            self._ui.leMinVal.setText('')
+
+        try:
+            self._ui.leMinX.setText(str(self._statistics[roi_index]["extrema"][2][0]))
+        except:
+            self._ui.leMinX.setText('')
+
+        try:
+            self._ui.leMinY.setText(str(self._statistics[roi_index]["extrema"][2][1]))
+        except:
+            self._ui.leMinY.setText('')
+
+        try:
+            self._ui.leMaxX.setText(str(self._statistics[roi_index]["extrema"][3][0]))
+        except:
+            self._ui.leMaxX.setText('')
+
+        try:
+            self._ui.leMaxY.setText(str(self._statistics[roi_index]["extrema"][3][1]))
+        except:
+            self._ui.leMaxY.setText('')
+
+        try:
+            self._ui.leComX.setText(str("{:10.2f}".format(self._statistics[roi_index]["com_pos"][0])))
+        except:
+            self._ui.leComX.setText('')
+
+        try:
+            self._ui.leComY.setText(str("{:10.2f}".format(self._statistics[roi_index]["com_pos"][1])))
+        except:
+            self._ui.leComY.setText('')
+
+        try:
+            self._ui.leComVal.setText(str(self._statistics[roi_index]["intensity_at_com"]))
+        except:
+            self._ui.leComVal.setText('')
+
+        try:
+            self._ui.leFwhmX.setText(str(self._statistics[roi_index]["fwhm"][0]))
+        except:
+            self._ui.leFwhmX.setText('')
+
+        try:
+            self._ui.leFwhmY.setText(str(self._statistics[roi_index]["fwhm"][1]))
+        except:
+            self._ui.leFwhmY.setText('')
+
+        try:
+            self._ui.leSum.setText(str(self._statistics[roi_index]["sum"]))
+        except:
+            self._ui.leSum.setText('')
 
     # ----------------------------------------------------------------------
-    def _markerChanged(self, num):
+    def _marker_changed(self, num, coor, value):
         """
         """
-        x = getattr(self._ui, 'sbMarkerX_{:d}'.format(num)).value()
-        y = getattr(self._ui, 'sbMarkerY_{:d}'.format(num)).value()
-        visible = getattr(self._ui, 'chbShowMarker_{:d}'.format(num)).isChecked()
-
-        getattr(self._ui, 'sbMarkerX_{:d}'.format(num)).setEnabled(visible)
-        getattr(self._ui, 'sbMarkerY_{:d}'.format(num)).setEnabled(visible)
-
-        self.marker2ectrl = (x, y, visible)
-
-        self.markerChanged.emit(num, x, y, visible)
+        self._markers[num][str(coor)] = value
+        self._camera_device.save_settings('marker_{:d}_{}'.format(num, str(coor)), value)
+        self.marker_changed.emit(num)
 
     # ----------------------------------------------------------------------
-    def _roiMarkerChanged(self):
+    def _roi_marker_changed(self):
         """
         """
         if self._ui.chbShowMax.isChecked():
@@ -295,162 +357,37 @@ class SettingsWidget(QtGui.QWidget):
             visible = 'min'
         elif self._ui.chbShowCom.isChecked():
             visible = 'com'
-        self.roiMarkerSelected.emit(visible)
+        self.roi_marker_selected.emit(visible)
 
     # ----------------------------------------------------------------------
-    def _roiChanged(self):
+    def _roi_changed(self, name, value):
         """
         """
-        x = self._ui.sbRoiX.value()
-        y = self._ui.sbRoiY.value()
-        w = self._ui.sbRoiWidth.value()
-        h = self._ui.sbRoiHeight.value()
-        threshold = self._ui.sbThreshold.value()
-
-        visible = self._ui.chbShowRoi.isChecked()
-        self._ui.sbRoiX.setEnabled(visible)
-        self._ui.sbRoiY.setEnabled(visible)
-        self._ui.sbRoiWidth.setEnabled(visible)
-        self._ui.sbRoiHeight.setEnabled(visible)
-
-        self.roi2ectrl = (x, y, w, h, threshold, visible)
-        self.roiChanged.emit(x, y, w, h, threshold, visible)
+        self._rois[self._current_roi_index[0]][name] = value
+        self._camera_device.save_settings(name, self._rois[self._current_roi_index[0]][name])
+        self.roi_changed.emit(self._current_roi_index[0])
 
     # ----------------------------------------------------------------------
-    def _settingsChanged(self, type):
+    def _make_roi_visible(self, state):
+
+        self._rois[self._current_roi_index[0]]['Roi_Visible'] = state
+        self._camera_device.save_settings('Roi_Visible', state)
+        self._ui.sbRoiX.setEnabled(state)
+        self._ui.sbRoiY.setEnabled(state)
+        self._ui.sbRoiWidth.setEnabled(state)
+        self._ui.sbRoiHeight.setEnabled(state)
+
+        self.roi_changed.emit(self._current_roi_index[0])
+
+    # ----------------------------------------------------------------------
+    def _settings_changed(self, name):
         """
         """
         with QtCore.QMutexLocker(self._tangoMutex):
-            self._applySettings()
-
-        # self._reloadSettings()
-
-    #        self._ui.tbApply.setEnabled(True)
+            self._camera_device.save_settings(name, getattr(self._ui, 'sb{}'.format(name)).value())
 
     # ----------------------------------------------------------------------
-    def _reloadSettings(self):
-        """From the TANGO db.
-        """
-        self._blockSignals(True)
-
-        try:
-            with QtCore.QMutexLocker(self._tangoMutex):
-                try:
-                    exposureTime = self._deviceProxy.read_attribute(self._exposureName).value
-                except:
-                    exposureTime = self._deviceProxy.read_attribute('ExposureValue.Default').value
-                    self._deviceProxy.write_attribute(self._exposureName, exposureTime)
-                try:
-                    gain = self._deviceProxy.read_attribute(self._gainName).value
-                except:
-                    gain = self._deviceProxy.read_attribute('GainValue.Default').value
-                    self._deviceProxy.write_attribute(self._gainName, gain)
-                try:
-                    self.hMax = self._deviceProxy.read_attribute(self._viewHmax_name).value
-                    self.wMax = self._deviceProxy.read_attribute(self._viewWmax_name).value
-                    self.viewX = self._deviceProxy.read_attribute(self._viewX_name).value
-                    self.viewY = self._deviceProxy.read_attribute(self._viewY_name).value
-                    self.viewW = self._deviceProxy.read_attribute(self._viewW_name).value
-                    self.viewH = self._deviceProxy.read_attribute(self._viewH_name).value
-                    if self.hflip:
-                        viewX = self.wMax - self.viewW - self.viewX
-                    else:
-                        viewX = self.viewX
-                    if self.vflip:
-                        viewY = self.hMax - self.viewH - self.viewY
-                    else:
-                        viewY = self.viewY
-                    # self._deviceProxy.write_attribute(self._viewX_name, 0)
-                    # self._deviceProxy.write_attribute(self._viewY_name, 0)
-                    # self._deviceProxy.write_attribute(self._viewW_name, self.wMax)
-                    # self._deviceProxy.write_attribute(self._viewH_name, self.hMax)
-                    self._ui.sbViewX.setValue(viewX)
-                    self._ui.sbViewX.setMaximum(self.wMax - self.viewW)
-                    self._ui.sbViewY.setValue(viewY)
-                    self._ui.sbViewY.setMaximum(self.hMax - self.viewH)
-                    self._ui.sbViewW.setValue(self.viewW)
-                    self._ui.sbViewW.setMaximum(self.wMax - viewX)
-                    self._ui.sbViewH.setValue(self.viewH)
-                    self._ui.sbViewH.setMaximum(self.hMax - viewY)
-                except:
-                    self._ui.sbViewX.setDisabled(True)
-                    self._ui.sbViewY.setDisabled(True)
-                    self._ui.sbViewW.setDisabled(True)
-                    self._ui.sbViewH.setDisabled(True)
-
-                self._ui.sbExposureTime.setValue(int(exposureTime))
-                self._ui.sbGain.setValue(gain)
-
-                if self._proxyType == 'VimbaProxy':
-                    try:
-                        fps = self._deviceProxy.read_attribute("AcquisitionFrameRateAbs").value
-                    except:
-                        fps = 1.0
-                else:
-                    fps = 1.0
-
-                self._ui.lbFps.setText("FPS limit: {:.2f}".format(fps))
-
-        except Exception as err:
-            report_error(err, self.log, self)
-
-        self._blockSignals(False)
-
-    # ----------------------------------------------------------------------
-    def _applySettings(self):
-        """Save camera's settings to the TANGO db.
-        """
-        # stop acq if it's running? TODO
-        try:
-            exposureTime = min(max(float(self._ui.sbExposureTime.value()), 50), 1e6)
-            gain = min(max(float(self._ui.sbGain.value()), 0), 22)
-
-            self._deviceProxy.write_attribute(self._exposureName, exposureTime)
-            self._deviceProxy.write_attribute(self._gainName, gain)
-
-            # reload fps...
-            #            fps = camera.read_attribute("AcquisitionFrameRateAbs").value
-            if self._proxyType == 'VimbaProxy':
-                try:
-                    fps = self._deviceProxy.read_attribute("AcquisitionFrameRateLimit").value
-                except:
-                    fps = 1.0
-
-                viewX = min(max(self._ui.sbViewX.value(), 0), self.wMax)
-                viewY = min(max(self._ui.sbViewY.value(), 0), self.hMax)  # make sure tha offsetX + width < Wmax
-                viewW = min(max(self._ui.sbViewW.value(), 1), self.wMax)  # can only be changed in increments of 4
-                viewH = min(max(self._ui.sbViewH.value(), 1), self.hMax)
-                self._ui.sbViewX.setMaximum(self.wMax - viewW)
-                self._ui.sbViewY.setMaximum(self.hMax - viewH)
-                self._ui.sbViewW.setMaximum(self.wMax - viewX)
-                self._ui.sbViewH.setMaximum(self.hMax - viewY)
-                self.image_size_changed.emit(viewX, viewY, viewW, viewH)
-
-                if self.hflip:
-                    viewX = self.wMax - viewW - viewX
-                if self.vflip:
-                    viewY = self.hMax - viewH - viewY
-                print(viewW, viewH, viewX, viewY)
-                self._deviceProxy.write_attribute(self._viewW_name, viewW)
-                self._deviceProxy.write_attribute(self._viewH_name, viewH)
-                self._deviceProxy.write_attribute(self._viewX_name, viewX)
-                self._deviceProxy.write_attribute(self._viewY_name, viewY)
-            else:
-                fps = 2
-            self._ui.lbFps.setText("{:.2f}".format(fps))
-            self.log.debug("Settings saved, exposure time: {}, gain: {}".format(exposureTime, gain))
-
-        except Exception as err:
-            if str(err).find('The value was not valid'):
-                QtGui.QMessageBox.warning(self, "Achtung!", "The value is not valid!",
-                                          QtGui.QMessageBox.Ok)
-
-                return
-            else:
-                report_error(err, self.log, self)
-
-    # ----------------------------------------------------------------------
-    def _editAllParams(self):
+    def _edit_all_params(self):
         """
         """
         server = self._tangoServer
@@ -461,92 +398,167 @@ class SettingsWidget(QtGui.QWidget):
         subprocess.Popen([self.PARAMS_EDITOR, server])
 
     # ----------------------------------------------------------------------
-    def saveUiSettings(self, settings):
+    def save_ui_settings(self, settings):
         """
         Args:
             (QSettings)
         """
-        levelMin = self._ui.sbMinLevel.value()
-        levelMax = self._ui.sbMaxLevel.value()
-        colorMap = str(self._ui.cbColorMap.currentText()).lower()
-        settings.setValue("SettingsWidget/levelMin", levelMin)
-        settings.setValue("SettingsWidget/levelMax", levelMax)
-        settings.setValue("SettingsWidget/colorMap", colorMap)
-        settings.setValue("SettingsWidget/autoLevelsSet", self._ui.chkAutoLevels.isChecked())
-
-        for marker in range(self.NUM_MARKERS):
-            markerX = getattr(self._ui, "sbMarkerX_{:d}".format(marker)).value()
-            markerY = getattr(self._ui, "sbMarkerY_{:d}".format(marker)).value()
-            self.log.info("Marker position: {}, {}".format(markerX, markerY))
-
-            settings.setValue("SettingsWidget/markerX_{:d}".format(marker), markerX)
-            settings.setValue("SettingsWidget/markerY_{:d}".format(marker), markerY)
-            settings.setValue("SettingsWidget/markerVisible_{:d}".format(marker),
-                              getattr(self._ui, "chbShowMarker_{:d}".format(marker)).isChecked())
-
-        roiX = self._ui.sbRoiX.value()
-        roiY = self._ui.sbRoiY.value()
-        roiW = self._ui.sbRoiWidth.value()
-        roiH = self._ui.sbRoiHeight.value()
-        roiThres = self._ui.sbThreshold.value()
-        self.log.info("ROI position: {}, {}, size: {}, {}".format(roiX, roiY,
-                                                                  roiW, roiH))
-        # save ROI position and state
-        settings.setValue("SettingsWidget/roiX", roiX)
-        settings.setValue("SettingsWidget/roiY", roiY)
-        settings.setValue("SettingsWidget/roiWidth", roiW)
-        settings.setValue("SettingsWidget/roiHeight", roiH)
-        settings.setValue("SettingsWidget/roiThres", roiThres)
-        settings.setValue("SettingsWidget/roiVisible",
-                          self._ui.chbShowRoi.isChecked())
 
         settings.setValue("SettingsWidget/geometry", self.saveGeometry())
-        # settings.setValue("SettingsWidget/state", self.saveState())
 
     # ----------------------------------------------------------------------
-    def loadUiSettings(self, settings):
+    def load_ui_settings(self, settings):
         """
         Args:
             (QSettings)
         """
-        min, _ = settings.value("SettingsWidget/levelMin").toInt()
-        max, _ = settings.value("SettingsWidget/levelMax").toInt()
-        map = settings.value("SettingsWidget/colorMap").toString()
-        autoLevels = settings.value("SettingsWidget/autoLevelsSet").toBool()
-        self._ui.chkAutoLevels.setChecked(autoLevels)
-        self.updateLevels(min, max, map)
-
-        x, _ = settings.value("SettingsWidget/roiX").toInt()
-        y, _ = settings.value("SettingsWidget/roiY").toInt()
-        w, _ = settings.value("SettingsWidget/roiWidth").toInt()
-        h, _ = settings.value("SettingsWidget/roiHeight").toInt()
-        threshold, _ = settings.value("SettingsWidget/roiThres").toFloat()
-        self.updateRoi(x, y, w, h, threshold)
-
-        visible = settings.value("SettingsWidget/roiVisible").toBool()
-        self._ui.chbShowRoi.setChecked(visible)
-
-        self._ui.sbRoiX.setEnabled(visible)
-        self._ui.sbRoiY.setEnabled(visible)
-        self._ui.sbRoiWidth.setEnabled(visible)
-        self._ui.sbRoiHeight.setEnabled(visible)
-
-        for marker in range(self.NUM_MARKERS):
-            try:
-                x, _ = settings.value("SettingsWidget/markerX_{:d}".format(marker)).toInt()
-                y, _ = settings.value("SettingsWidget/markerY_{:d}".format(marker)).toInt()
-                visible = settings.value("SettingsWidget/markerVisible_{:d}".format(marker)).toBool()
-            except:
-                x = 0
-                y = 0
-                visible = False
-
-            self.updateMarker(marker, x, y)
-            getattr(self._ui, "sbMarkerX_{:d}".format(marker)).setEnabled(visible)
-            getattr(self._ui, "sbMarkerY_{:d}".format(marker)).setEnabled(visible)
-            getattr(self._ui, "chbShowMarker_{:d}".format(marker)).setChecked(visible)
-
         self.restoreGeometry(settings.value("SettingsWidget/geometry").toByteArray())
+
+    # ----------------------------------------------------------------------
+    def load_camera_settings(self):
+
+        self._blockSignals(True)
+        result = True
+
+        try:
+            self.update_levels(self._camera_device.get_settings('level_min', int),
+                               self._camera_device.get_settings('level_max', int),
+                               self._camera_device.get_settings('color_map', str))
+
+            auto_levels = self._camera_device.get_settings('auto_levels_set', bool)
+            if auto_levels is None:
+                auto_levels = True
+            self._ui.chkAutoLevels.setChecked(auto_levels)
+            self._autoLevelsChanged()
+
+            _auto_screen = self._camera_device.get_settings('auto_levels_set', bool)
+            if _auto_screen is None:
+                _auto_screen = False
+            self._ui.chk_auto_screen.setChecked(_auto_screen)
+
+            for roi_ui in ['RoiX', 'RoiY', 'RoiWidth', 'RoiHeight']:
+                self._rois[self._current_roi_index[0]][roi_ui] = self._camera_device.get_settings(roi_ui, int)
+
+            self._rois[self._current_roi_index[0]]['Threshold'] = self._camera_device.get_settings('Threshold', float)
+
+            roi_visible = self._camera_device.get_settings('Roi_Visible', bool)
+            self._rois[self._current_roi_index[0]]['Roi_Visible'] = roi_visible
+            self.update_roi(self._current_roi_index[0])
+            self._ui.chbShowRoi.setChecked(roi_visible)
+            self._ui.sbRoiX.setEnabled(roi_visible)
+            self._ui.sbRoiY.setEnabled(roi_visible)
+            self._ui.sbRoiWidth.setEnabled(roi_visible)
+            self._ui.sbRoiHeight.setEnabled(roi_visible)
+
+            self.roi_changed.emit(self._current_roi_index[0])
+
+            for key in self._markers.keys():
+                del self._markers[key]
+
+            for ind in range(self._camera_device.get_settings('num_markers', int)):
+                self._markers[ind] = {'x': self._camera_device.get_settings('marker_{:d}_x'.format(ind), int),
+                                      'y': self._camera_device.get_settings('marker_{:d}_y'.format(ind), int)}
+            self._update_marker_layout(False)
+
+            with QtCore.QMutexLocker(self._tangoMutex):
+                self._ui.sbExposureTime.setValue(self._camera_device.get_settings('ExposureTime', int))
+                self._ui.sbGain.setValue(self._camera_device.get_settings('Gain', int))
+
+                self._picture_width = self._camera_device.get_settings('wMax', int)
+                self._picture_height = self._camera_device.get_settings('hMax', int)
+
+                viewX = self._camera_device.get_settings('viewX', int)
+                viewY = self._camera_device.get_settings('viewY', int)
+                viewW = self._camera_device.get_settings('viewW', int)
+                viewH = self._camera_device.get_settings('viewH', int)
+
+                if viewX is not None:
+                    self._ui.sbViewX.setDisabled(False)
+                    self._ui.sbViewX.setValue(viewX)
+                    if self._picture_width is not None and viewW is not None:
+                        self._ui.sbViewX.setMaximum(self._picture_width - viewW)
+                    else:
+                        self._ui.sbViewX.setMaximum(10000)
+                else:
+                    self._ui.sbViewX.setDisabled(True)
+
+                if viewY is not None:
+                    self._ui.sbViewY.setDisabled(False)
+                    self._ui.sbViewY.setValue(viewY)
+                    if self._picture_height is not None and viewH is not None:
+                        self._ui.sbViewY.setMaximum(self._picture_height - viewH)
+                    else:
+                        self._ui.sbViewY.setMaximum(10000)
+                else:
+                    self._ui.sbViewY.setDisabled(True)
+
+                if viewW is not None:
+                    self._ui.sbViewW.setDisabled(False)
+                    self._ui.sbViewW.setValue(viewW)
+                    if self._picture_width is not None:
+                        self._ui.sbViewW.setMaximum(self._picture_width - viewX)
+                    else:
+                        self._ui.sbViewW.setMaximum(10000)
+                else:
+                    self._ui.sbViewW.setDisabled(True)
+
+                if viewH is not None:
+                    self._ui.sbViewH.setDisabled(False)
+                    self._ui.sbViewH.setValue(viewH)
+                    if self._picture_height is not None:
+                        self._ui.sbViewH.setMaximum(self._picture_height - viewY)
+                    else:
+                        self._ui.sbViewH.setMaximum(10000)
+                else:
+                    self._ui.sbViewH.setDisabled(True)
+
+                fps = self._camera_device.get_settings('FPS', int)
+                if fps is not None:
+                    self._ui.lbFps.setText("FPS limit: {:.2f}".format(fps))
+                else:
+                    self._ui.lbFps.setText("")
+
+        except Exception as err:
+            report_error(err, self.log, self)
+            result = False
+
+        finally:
+            self._blockSignals(False)
+            return result
+
+    # ----------------------------------------------------------------------
+    def save_camera_settings(self):
+
+        try:
+            self._camera_device.save_settings('level_min', self._ui.sbMinLevel.value())
+            self._camera_device.save_settings('level_max', self._ui.sbMaxLevel.value())
+            self._camera_device.save_settings('color_map', str(self._ui.cbColorMap.currentText()).lower())
+            self._camera_device.save_settings('auto_levels_set', self._ui.chkAutoLevels.isChecked())
+            self._camera_device.save_settings('auto_levels_set', self._ui.chk_auto_screen.isChecked())
+
+            for roi_param in ['RoiX', 'RoiY', 'RoiWidth', 'RoiHeight', 'Threshold', 'Roi_Visible']:
+                self._camera_device.save_settings(roi_param, self._rois[self._current_roi_index[0]][roi_param])
+
+            self._camera_device.save_settings('num_markers', len(self._markers))
+            for num, values in self._markers.items():
+                self._camera_device.save_settings('marker_{:d}_x'.format(num), values['x'])
+                self._camera_device.save_settings('marker_{:d}_y'.format(num), values['y'])
+
+            self._camera_device.save_settings('ExposureTime', min(max(float(self._ui.sbExposureTime.value()), 50), 1e6))
+            self._camera_device.save_settings('Gain', min(max(float(self._ui.sbGain.value()), 0), 22))
+
+            view_x, view_y, view_w, view_h = self._get_picture_size()
+
+            self._camera_device.save_settings('viewX', view_x)
+            self._camera_device.save_settings('viewY', view_y)
+            self._camera_device.save_settings('viewW', view_w)
+            self._camera_device.save_settings('viewH', view_h)
+
+            self.log.debug("Settings saved")
+
+        except Exception as err:
+            report_error(err, self.log, self)
+
 
     # ----------------------------------------------------------------------
     def _blockSignals(self, flag):
@@ -557,150 +569,28 @@ class SettingsWidget(QtGui.QWidget):
         self._ui.sbRoiWidth.blockSignals(flag)
         self._ui.sbRoiHeight.blockSignals(flag)
         self._ui.chbShowRoi.blockSignals(flag)
-
-        for marker in range(self.NUM_MARKERS):
-            getattr(self._ui, "sbMarkerX_{:d}".format(marker)).blockSignals(flag)
-            getattr(self._ui, "sbMarkerY_{:d}".format(marker)).blockSignals(flag)
-            getattr(self._ui, "chbShowMarker_{:d}".format(marker)).blockSignals(flag)
-
         self._ui.sbExposureTime.blockSignals(flag)
         self._ui.sbGain.blockSignals(flag)
 
     # ----------------------------------------------------------------------
-
     def _autoLevelsChanged(self):
+
         if self._ui.chkAutoLevels.isChecked():
             self._ui.sbMinLevel.setEnabled(False)
             self._ui.sbMaxLevel.setEnabled(False)
-            self.enableAutoLevels.emit(True)
+            self.enable_auto_levels.emit(True)
         else:
             self._ui.sbMinLevel.setEnabled(True)
             self._ui.sbMaxLevel.setEnabled(True)
-            self.enableAutoLevels.emit(False)
+            self.enable_auto_levels.emit(False)
             self._levelsChanged()
 
     # ----------------------------------------------------------------------
-
     def _levelsChanged(self):
-        min = self._ui.sbMinLevel.value()
-        max = self._ui.sbMaxLevel.value()
-        self.levelsChanged.emit(min, max)
+
+        self.levels_changed.emit(self._ui.sbMinLevel.value(), self._ui.sbMaxLevel.value())
 
     # ----------------------------------------------------------------------
-
     def _colorMapChanged(self):
-        selectedMap = str(self._ui.cbColorMap.currentText()).lower()
-        self.colorMapChanged.emit(selectedMap)
 
-    # ----------------------------------------------------------------------
-
-    def close(self):
-        if hasattr(self, '_roiServer'):
-            self._roiServer.stop()
-        super(SettingsWidget, self).close()
-
-    # ----------------------------------------------------------------------
-    def _moveScreen(self):
-        if self._motorType == 'Acromag':
-            self._currentPos = list('{0:04b}'.format(int(self._valveDeviceProxy.read_attribute("Register0").value)))
-            self._newPos = self.intToBin(self._valveChannel)
-
-            if self._currentPos[3 - self._valveChannel] == "1":
-                self._ui.pbInOut.setText('In')
-                self._currentPos[3 - self._valveChannel] = '0'
-            else:
-                self._ui.pbInOut.setText('Out')
-                self._currentPos[3 - self._valveChannel] = '1'
-            new_state = int("".join(self._currentPos), 2)
-
-            self._valveDeviceProxy.write_attribute("Register0", new_state)
-
-        elif self._motorType == 'FSBT':
-            try:
-                FSBTServer = self.getConnectionToFSBT()
-                if FSBTServer:
-                    status = self.sendCommandToFSBT(FSBTServer, 'status ' + self._motorName)
-
-                    if status[1][self._motorName] == 'in':
-                        result = self.sendCommandToFSBT(FSBTServer, 'out {:s}'.format(self._motorName))
-                    else:
-                        result = self.sendCommandToFSBT(FSBTServer, 'in {:s}'.format(self._motorName))
-
-                    FSBTServer.close()
-            except Exception as err:
-                pass
-
-    # ----------------------------------------------------------------------
-    def getConnectionToFSBT(self):
-
-        FSBTSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        FSBTSocket.settimeout(self.SOCKET_TIMEOUT)
-
-        startTimeout = time.time()
-        timeOut = False
-        is_connected = False
-        while not timeOut and not is_connected:
-            err = FSBTSocket.connect_ex((self._fsbtServerHost, self._fsbtServerPort))
-            if err == 0 or err == errno.EISCONN:
-                is_connected = True
-            if time.time() - startTimeout > self.SOCKET_TIMEOUT:
-                timeOut = True
-
-        if is_connected:
-            return FSBTSocket
-        else:
-            return None
-
-    # ----------------------------------------------------------------------
-    def sendCommandToFSBT(self, FSBTSocket, command):
-
-        FSBTSocket.sendall(str(command))
-
-        startTimeout = time.time()
-        timeOut = False
-        gotAnswer = False
-        ans = ''
-        while not timeOut and not gotAnswer:
-            try:
-                ans = FSBTSocket.recv(self.DATA_BUFFER_SIZE)
-                gotAnswer = True
-            except socket.error as err:
-                if err.errno != 11:
-                    timeOut = True
-                if time.time() - startTimeout > self.SOCKET_TIMEOUT:
-                    timeOut = True
-        if not timeOut:
-            return json.load(StringIO(ans))
-        else:
-            raise RuntimeError("The FSBT server does not responsd")
-
-    # ----------------------------------------------------------------------
-    def intToBin(self, val):
-        b = '{0:04b}'.format(val)
-        l = [0] * 4
-
-        for i in range(4):
-            l[i] = int(b[i], 2)
-
-        return l
-
-    # ----------------------------------------------------------------------
-    def getCameraSettings(self):
-        return (self._ui.sbExposureTime.value(), self._ui.sbGain.value())
-
-    # ----------------------------------------------------------------------
-    def setCameraSettings(self, settings):
-
-        values = json.loads(settings)
-        self._ui.sbExposureTime.setValue(values[0])
-        self._ui.sbGain.setValue(values[1])
-        self._applySettings()
-
-        return ""
-
-    # ----------------------------------------------------------------------
-    def getValue(self, value):
-        try:
-            return getattr(self, value)
-        except:
-            return 0
+        self.color_map_changed.emit(str(self._ui.cbColorMap.currentText()).lower())

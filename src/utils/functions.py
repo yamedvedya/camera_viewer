@@ -94,6 +94,21 @@ def unique_name(base_name, used_names, max_trials=10e+6):
 
     return new_name
 
+# ----------------------------------------------------------------------
+def refresh_combo_box(comboBox, text):
+    """Auxiliary function refreshing combo box with a given text.
+    """
+    idx = comboBox.findText(text)
+    comboBox.blockSignals(True)
+    if idx != -1:
+        comboBox.setCurrentIndex(idx)
+        comboBox.blockSignals(False)
+        return True
+    else:
+        comboBox.setCurrentIndex(0)
+        comboBox.blockSignals(False)
+        return False
+
 
 # ----------------------------------------------------------------------
 # A little bit of unit testing...

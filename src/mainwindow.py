@@ -12,14 +12,12 @@
 from __future__ import print_function
 
 import getpass
-import importlib
+
 import logging
 import os
 import psutil
 import socket
 import subprocess
-import fnmatch
-import time
 
 from functools import partial
 
@@ -28,19 +26,17 @@ from PyQt4 import QtCore, QtGui
 import pyqtgraph as pg
 
 from src.aboutdialog import AboutDialog
-from src.utils.functions import (make_log_name,
-                             parse_log_level)
+from src.utils.functions import (make_log_name, parse_log_level, refresh_combo_box)
 from src.utils.xmlsettings import XmlSettings
-from src.utils.guilogger import GuiLogger
+from src.utils.errors import report_error
+from src.devices.datasource2d import DataSource2D
 
 from src.widgets.frameviewer import FrameViewer
 from src.widgets.settingswidget import SettingsWidget
-from src.widgets.logwidget import LogWidget
 
 from src.roisrv.roiserver import RoiServer
 
 from src.ui_vimbacam.MainWindow_ui import Ui_MainWindow
-from src.ui_vimbacam import CameraSettingsWidget_ui
 
 # ----------------------------------------------------------------------
 class MainWindow(QtGui.QMainWindow):
@@ -48,8 +44,8 @@ class MainWindow(QtGui.QMainWindow):
     """
     windowClosed = QtCore.Signal(str)
 
-    APP_NAME = "P22 Camera Viewer"
-    BEAMLINE_ID = "DESY_P22"
+    APP_NAME = "Camera Viewer"
+    BEAMLINE_ID = "DESY_P23"
 
     LOG_PREVIEW = "gvim"
     STATUS_TICK = 2000              # [ms]
@@ -59,47 +55,88 @@ class MainWindow(QtGui.QMainWindow):
         """
         """
         super(MainWindow, self).__init__()
+        self._ui = Ui_MainWindow()
+        self._ui.setupUi(self)
 
-        print('Current dir: {}'.format(os.getcwd()))
+        self.log, self._log_file, self._log_dir = self._init_logger("cam_logger")
 
-        self.cfgPath = './config/'
         self.options = options
-        self.generalSettings = XmlSettings(os.path.join('./config/', 'general.xml'))
-        self.settings = XmlSettings(options.config)
+        self._settings = XmlSettings('./config.xml')
+        self._device_list = self._parse_settings()
 
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
         pg.setConfigOption("leftButtonPan", False)
 
-        self.log, self._logFile, self._logDir, self._guiLogger = self._initLogger("cam_logger")
+        self._init_ui()
+        self.camera_name = self._load_ui_settings()
+        if self.camera_name == '':
+            self.camera_name = self._device_list[0]
 
-        self._ui = Ui_MainWindow()
-        self._ui.setupUi(self)
+        self._camera_device = self._init_data_source()
+        self._rois = [{}, ]  # x, y, w, h, threshold
+        self._markers = {}
+        self._statistics = [{}, ]
+        self._current_roi_index = [0]
 
-        self._initUi()
+        self._frame_viewer.set_variables(self._camera_device, self._rois, self._markers, self._statistics,
+                                         self._current_roi_index)
+        self._settings_widget.set_variables(self._camera_device, self._rois, self._markers, self._statistics,
+                                            self._current_roi_index)
 
-        self.loadUiSettings()
+        self.change_cam(self.camera_name)
+        refresh_combo_box(self._cb_cam_selector, self.camera_name)
 
         self._statusTimer = QtCore.QTimer(self)
-        self._statusTimer.timeout.connect(self._refreshStatusBar)
+        self._statusTimer.timeout.connect(self._refresh_status_bar)
         self._statusTimer.start(self.STATUS_TICK)
 
-        self._roiServer = []
-        if self.generalSettings.option("roi_server", "enable").lower() == "true":
+        self._roi_server = []
+        if self._settings.option("roi_server", "enable").lower() == "true":
             try:
-                self._roiServer = RoiServer(self.generalSettings.option("roi_server", "host"),
-                                            self.generalSettings.option("roi_server", "port"))
+                self._roi_server = RoiServer(self._settings.option("roi_server", "host"),
+                                             self._settings.option("roi_server", "port"))
 
-                self._roiServer.settingWidget = self._settingsWidget
-                self._roiServer.start()
+                self._roi_server.set_variables(self._rois, self._markers, self._statistics, self._device_list,
+                                               self._current_roi_index)
+                self._roi_server.start()
+                self._roi_server.change_camera.connect(lambda name: self.change_cam(str(name)))
             except Exception as err:
                 self.log.exception(err)
 
-        self._refreshTitle()
+        self._refresh_title()
         self.log.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
-    def _initUi(self):
+    def _parse_settings(self):
+
+        cam_list = []
+        for device in self._settings.getNodes('vimbacam', 'camera'):
+            cam_list.append(device.getAttribute('name'))
+
+        if not cam_list:
+            raise RuntimeError('No camera profile was found')
+
+        cam_list.sort()
+
+        return cam_list
+
+    # ----------------------------------------------------------------------
+    def _init_data_source(self):
+        """
+        """
+        try:
+            data_source = DataSource2D(self._settings, self)
+            data_source.newFrame.connect(self._frame_viewer.refresh_view)
+            data_source.gotError.connect(lambda err_msg: report_error(err_msg, self.log, self, True))
+            return data_source
+
+        except Exception as err:
+            report_error(err, self.log, self)
+            return None
+
+    # ----------------------------------------------------------------------
+    def _init_ui(self):
         """
         """
         self.setCentralWidget(None)
@@ -108,37 +145,53 @@ class MainWindow(QtGui.QMainWindow):
                             QtGui.QMainWindow.AllowNestedDocks |
                             QtGui.QMainWindow.AllowTabbedDocks)
 
-        self._frameViewer, self._frameViewerDock = \
-            self._addDock(FrameViewer, "Frame", QtCore.Qt.LeftDockWidgetArea,
-                          self.generalSettings, self.settings, self)
+        self._frame_viewer, self._frameViewerDock = \
+            self._addDock(FrameViewer, "Frame", QtCore.Qt.LeftDockWidgetArea, self._settings, self)
 
-        self._settingsWidget, self._settingsDock = \
-            self._addDock(SettingsWidget, "General",
-                          QtCore.Qt.RightDockWidgetArea,
-                          self.settings, self)
+        self._settings_widget, self._settingsDock = \
+            self._addDock(SettingsWidget, "General", QtCore.Qt.RightDockWidgetArea, self._settings, self)
 
-        self._frameViewer.statusChanged.connect(self._displayCameraStatus)
-        self._frameViewer.roiChanged.connect(self._settingsWidget.updateRoi)
-        self._frameViewer.cursorMoved.connect(self._viewerCursorMoved)
-        self._frameViewer.roiStats.connect(self._settingsWidget.updateStats)
+        self._frame_viewer.status_changed.connect(self._display_camera_status)
+        self._frame_viewer.roi_changed.connect(self._settings_widget.update_roi)
+        self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
+        self._frame_viewer.roi_stats_ready.connect(self._settings_widget.update_roi_statistics)
 
+        self._settings_widget.marker_changed.connect(self._frame_viewer.update_marker)
+        self._settings_widget.markers_changed.connect(self._frame_viewer.markers_changed)
+        self._settings_widget.roi_changed.connect(self._frame_viewer.update_roi)
+        self._settings_widget.roi_marker_selected.connect(self._frame_viewer.roi_marker_selected)
+        self._settings_widget.enable_auto_levels.connect(self._frame_viewer.enable_auto_levels)
+        self._settings_widget.levels_changed.connect(self._frame_viewer.levels_changed)
+        self._settings_widget.color_map_changed.connect(self._frame_viewer.color_map_changed)
+        self._settings_widget.set_dark_image.connect(self._frame_viewer.set_dark_image)
+        self._settings_widget.remove_dark_image.connect(self._frame_viewer.remove_dark_image)
+        self._settings_widget.image_size_changed.connect(self._frame_viewer.move_image)
 
-        self._settingsWidget.markerChanged.connect(self._frameViewer.updateMarker)
-        self._settingsWidget.roiChanged.connect(self._frameViewer.updateRoi)
-        self._settingsWidget.roiMarkerSelected.connect(self._frameViewer.roiMarkerSelected)
-        self._settingsWidget.enableAutoLevels.connect(self._frameViewer.enableAutoLevels)
-        self._settingsWidget.levelsChanged.connect(self._frameViewer.levelsChanged)
-        self._settingsWidget.colorMapChanged.connect(self._frameViewer.colorMapChanged)
-        self._settingsWidget.set_dark_image.connect(self._frameViewer.set_dark_image)
-        self._settingsWidget.remove_dark_image.connect(self._frameViewer.remove_dark_image)
-        self._settingsWidget.image_size_changed.connect(self._frameViewer.move_image)
-        self._settingsWidget._applySettings()
-        self._initActions()
-
-        self._toolBar = self._initToolBar()
+        self._init_actions()
+        self._toolBar = self._init_tool_bar()
         self.addToolBar(self._toolBar)
-        self._initStatusBar()
+        self._init_status_bar()
 
+    # ----------------------------------------------------------------------
+    def change_cam(self, name):
+
+        self._frame_viewer.stop_live_mode()
+        self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
+
+        refresh_combo_box(self._cb_cam_selector, self.camera_name)
+        if self._camera_device.new_device_proxy(name) and \
+                self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked()):
+            self.camera_name = name
+            self.log.info("Changing camera to {}".format(self.camera_name))
+        else:
+            self._camera_device.new_device_proxy(self.camera_name)
+            self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked())
+            refresh_combo_box(self._cb_cam_selector, self.camera_name)
+
+            report_error('Cannot change camera', self.log, self, True)
+
+        self._frame_viewer.update_camera_label()
+        self._frame_viewer.start_live_mode()
     # ----------------------------------------------------------------------
     def _addDock(self, WidgetClass, label, location, *args, **kwargs):
         """
@@ -155,45 +208,41 @@ class MainWindow(QtGui.QMainWindow):
         return widget, dock
 
     # ----------------------------------------------------------------------
-    def _displayCameraStatus(self, fps):
+    def _display_camera_status(self, fps):
         """
         """
-        self._lbFps.setText("{:.2f} FPS".format(fps))
-
-            # more...
-
+        self._lb_fps.setText("{:.2f} FPS".format(fps))
 
     # ----------------------------------------------------------------------
-    def _viewerCursorMoved(self, x, y):
+    def _viewer_cursor_moved(self, x, y):
         """
         """
         self._lbCursorPos.setText("({:.2f}, {:.2f})".format(x, y))
 
     # ----------------------------------------------------------------------
-    def _refreshTitle(self):
+    def _refresh_title(self):
         """
         """
-        deviceID = self.settings.option("device", "name")
-        self.setWindowTitle("{} ({}@{})".format(deviceID,       #self.options.cameraID,
+        self.setWindowTitle("{} ({}@{})".format(self.camera_name,       #self.options.cameraID,
                                                 getpass.getuser(),
                                                 socket.gethostname()))
 
     # ----------------------------------------------------------------------
-    def showSettingsDialog(self):
+    def show_settings_dialog(self):
         """
         """
-        self._frameViewer.stopLiveMode()
+        self._frame_viewer.stop_live_mode()
         print("Not yet implemented")
 
     # ----------------------------------------------------------------------
-    def _showLogFile(self, logType="main"):
+    def _show_log_file(self, logType="main"):
         """
 
         logType: main, stdout, stderr
         """
-        camera = self.settings.option("device", "name")     #self.options.cameraID
+        camera = self._settings.option("device", "name")     #self.options.cameraID
 
-        f = self._logFile
+        f = self._log_file
         if logType == "stdout":
             f = os.path.join("logs", "stdout_{}.log".format(camera))
         elif logType == "stderr":
@@ -202,37 +251,37 @@ class MainWindow(QtGui.QMainWindow):
         subprocess.Popen([self.LOG_PREVIEW, f])
 
     # ----------------------------------------------------------------------
-    def showAbout(self):
+    def _show_about(self):
         """
         """
-        self._frameViewer.stopLiveMode()
+        self._frame_viewer.stop_live_mode()
         AboutDialog(self).exec_()
 
     # ----------------------------------------------------------------------
     def closeEvent(self, event):
         """
         """
-        if self.cleanClose():
+        if self.clean_close():
             event.accept()
         else:
             event.ignore()
 
     # ----------------------------------------------------------------------
-    def cleanClose(self):
+    def clean_close(self):
         """
         """
-        self._frameViewer.stopLiveMode()
+        self._frame_viewer.stop_live_mode()
 
         if self._reallyQuit() == QtGui.QMessageBox.Yes:
             self.log.info("Closing the app...")
 
-            self._frameViewer.close()
-            if self._roiServer:
-                self._roiServer.stop()
-            self._settingsWidget.close()
+            self._frame_viewer.close()
+            if self._roi_server:
+                self._roi_server.stop()
+            self._settings_widget.close()
             self._statusTimer.stop()
 
-            self.saveUiSettings()
+            self._save_ui_settings()
 
             QtGui.qApp.clipboard().clear()
             self.log.info("Closed properly")
@@ -244,84 +293,84 @@ class MainWindow(QtGui.QMainWindow):
         return False
 
     # ----------------------------------------------------------------------
-    def quitProgram(self):
+    def _quit_program(self):
         """
         """
-        if self.cleanClose():
+        if self.clean_close():
             QtGui.qApp.quit()
 
     # ----------------------------------------------------------------------
     def _reallyQuit(self):
         """Make sure that the user wants to quit this program.
         """
-        deviceID = self.settings.option("device", "name")
-        appID = "{} viewer".format(deviceID)        #self.options.cameraID)
         return QtGui.QMessageBox.question(self, "Quit",
-                                          "Do you really want to quit {}?".format(appID),
+                                          "Do you really want to quit?",
                                           QtGui.QMessageBox.Yes,
                                           QtGui.QMessageBox.No)
 
     # ----------------------------------------------------------------------
-    def saveUiSettings(self):
+    def _save_ui_settings(self):
         """Save basic GUI settings.
         """
-        deviceID = self.settings.option("device", "name")
-        
-        settingsID = "VimbaCamera_{}".format(deviceID)      #:self.options.cameraID)
-        settings = QtCore.QSettings(self.BEAMLINE_ID + "_CAM", settingsID)
+        settings = QtCore.QSettings("VimbaViewer", self.options.beamlineID)
 
-        settings.setValue("CamWindow/geometry", self.saveGeometry())
-        settings.setValue("CamWindow/state", self.saveState())
+        settings.setValue("MainWindow/geometry", self.saveGeometry())
+        settings.setValue("MainWindow/state", self.saveState())
 
-        self._frameViewer.saveUiSettings(settings)
-        self._settingsWidget.saveUiSettings(settings)
+        settings.setValue("LastCamera", self.camera_name)
+        settings.setValue("AutoScreen", self._chk_auto_screens.isChecked())
+
+        self._frame_viewer.save_ui_settings(settings)
+        self._settings_widget.save_ui_settings(settings)
 
     # ----------------------------------------------------------------------
-    def loadUiSettings(self):
+    def _load_ui_settings(self):
         """Load basic GUI settings.
         """
-        deviceID = self.settings.option("device", "name")
+        settings = QtCore.QSettings("VimbaViewer", self.options.beamlineID)
 
-        settingsID = "VimbaCamera_{}".format(deviceID)  #self.options.cameraID)
-        settings = QtCore.QSettings(self.BEAMLINE_ID + "_CAM", settingsID)
-        self._frameViewer.loadUiSettings(settings)
-        self._settingsWidget.loadUiSettings(settings)
+        self.restoreGeometry(settings.value("MainWindow/geometry").toByteArray())
+        self.restoreState(settings.value("MainWindow/state").toByteArray())
+
+        self._chk_auto_screens.setChecked(settings.value("AutoScreen").toBool())
+
+        self._frame_viewer.load_ui_settings(settings)
+        self._settings_widget.load_ui_settings(settings)
+
+        return str(settings.value("LastCamera").toString())
 
     # ----------------------------------------------------------------------
-    def _initActions(self):
+    def _init_actions(self):
         """
         """
-        self._ui.actionQuit.triggered.connect(self.quitProgram)
-        self._ui.actionAbout.triggered.connect(self.showAbout)
+        self._ui.actionQuit.triggered.connect(self._quit_program)
+        self._ui.actionAbout.triggered.connect(self._show_about)
 
         self._actionStartStop = QtGui.QAction(QtGui.QIcon(":/ico/play_16px.png"),
                                               "Start/Stop", self,
-                                              triggered=self._frameViewer.startStopLiveMode)
+                                              triggered=self._frame_viewer.start_stop_live_mode)
 
 
         self._actionPrintImage = QtGui.QAction(QtGui.QIcon(":/ico/print.png"),
                                                "Print Image", self,
-                                               triggered=self._frameViewer.printImage)
+                                               triggered=self._frame_viewer.print_image)
         self._actionPrintImage.setEnabled(False)
 
         self._actionCopyImage = QtGui.QAction(QtGui.QIcon(":/ico/copy.png"),
                                               "Copy to Clipboard", self,
-                                              triggered=self._frameViewer.toClipboard)
+                                              triggered=self._frame_viewer.to_clipboard)
 
         self._actionShowSettings = QtGui.QAction(QtGui.QIcon(":/ico/settings.png"),
                                                  "Settings", self,
-                                                 triggered=self.showSettingsDialog)
-        self._actionMoveScreen = QtGui.QAction(QtGui.QIcon(":/ico/crosshair-transparent-black.png"),
-                                              "Screen In/Out", self,
-                                              triggered=self._settingsWidget._moveScreen)
+                                                 triggered=self.show_settings_dialog)
 
-        self._frameViewer.deviceStarted.connect(lambda: self._actionStartStop.setIcon(
+        self._frame_viewer.device_started.connect(lambda: self._actionStartStop.setIcon(
                                                     QtGui.QIcon(":/ico/stop.png")))
-        self._frameViewer.deviceStopped.connect(lambda: self._actionStartStop.setIcon(
+        self._frame_viewer.device_stopped.connect(lambda: self._actionStartStop.setIcon(
                                                     QtGui.QIcon(":/ico/play_16px.png")))
 
     # ----------------------------------------------------------------------
-    def _makeSaveMenu(self, parent):
+    def _make_save_menu(self, parent):
         """
         Args:
             parent (QWidget)
@@ -329,20 +378,19 @@ class MainWindow(QtGui.QMainWindow):
         saveMenu = QtGui.QMenu(parent)
 
         self._saveImgAction = saveMenu.addAction("Image")
-        #self._saveImgAction.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key_H))
-        self._saveImgAction.triggered.connect(self._frameViewer.saveToImage)
+        self._saveImgAction.triggered.connect(self._frame_viewer.save_to_image)
 
         self._saveAsciiAction = saveMenu.addAction("ASCII")
-        self._saveAsciiAction.triggered.connect(partial(self._frameViewer.saveToFile,
+        self._saveAsciiAction.triggered.connect(partial(self._frame_viewer.save_to_file,
                                                         fmt="csv"))
 
         self._saveNumpyAction = saveMenu.addAction("Numpy")
-        self._saveNumpyAction.triggered.connect(partial(self._frameViewer.saveToFile,
+        self._saveNumpyAction.triggered.connect(partial(self._frame_viewer.save_to_file,
                                                         fmt="npy"))
         return saveMenu
 
     # ----------------------------------------------------------------------
-    def _makeLogPreviewMenu(self, parent):
+    def _make_log_preview_menu(self, parent):
         """
         Args:
             parent (QWidget)
@@ -350,21 +398,21 @@ class MainWindow(QtGui.QMainWindow):
         logMenu = QtGui.QMenu(parent)
 
         self._mainLogAction = logMenu.addAction("Logfile")
-        self._mainLogAction.triggered.connect(partial(self._showLogFile,
+        self._mainLogAction.triggered.connect(partial(self._show_log_file,
                                                       logType="main"))
         logMenu.addSeparator()
 
         self._stdoutLogAction = logMenu.addAction("Stdout")
-        self._stdoutLogAction.triggered.connect(partial(self._showLogFile,
+        self._stdoutLogAction.triggered.connect(partial(self._show_log_file,
                                                         logType="stdout"))
 
         self._stderrLogAction = logMenu.addAction("Stderr")
-        self._stderrLogAction.triggered.connect(partial(self._showLogFile,
+        self._stderrLogAction.triggered.connect(partial(self._show_log_file,
                                                         logType="stderr"))
         return logMenu
 
     # ----------------------------------------------------------------------
-    def _initToolBar(self):
+    def _init_tool_bar(self):
         """
         """
         if hasattr(self, '_toolBar'):
@@ -373,9 +421,12 @@ class MainWindow(QtGui.QMainWindow):
             toolBar = QtGui.QToolBar("Main toolbar", self)
             toolBar.setObjectName("VimbaCam_ToolBar")
 
+        self._cb_cam_selector = QtGui.QComboBox()
+        self._cb_cam_selector.addItems(self._device_list)
+        self._cb_cam_selector.currentIndexChanged.connect(lambda: self.change_cam(self._cb_cam_selector.currentText()))
+        toolBar.addWidget(self._cb_cam_selector)
+
         toolBar.addAction(self._actionStartStop)
-        if self.settings.option("device", "tango_server"):
-            toolBar.addAction(self._actionMoveScreen)
         toolBar.addSeparator()
 
             # image saving
@@ -383,7 +434,7 @@ class MainWindow(QtGui.QMainWindow):
         self._tbSaveScan.setIcon(QtGui.QIcon(":/ico/save.png"))
         self._tbSaveScan.setToolTip("Save")
 
-        self._saveMenu = self._makeSaveMenu(self._tbSaveScan)
+        self._saveMenu = self._make_save_menu(self._tbSaveScan)
         self._tbSaveScan.setMenu(self._saveMenu)
         self._tbSaveScan.setPopupMode(QtGui.QToolButton.InstantPopup)
         toolBar.addWidget(self._tbSaveScan)
@@ -395,24 +446,26 @@ class MainWindow(QtGui.QMainWindow):
         toolBar.addAction(self._actionShowSettings)
 
         toolBar.addSeparator()
-        self._cbCamSelector = QtGui.QComboBox()
-        self.populateCamSelector()
-        self._cbCamSelector.activated[str].connect(self.change_cam)
-        toolBar.addWidget(self._cbCamSelector)
+
             # logs display
         self._tbShowLogs = QtGui.QToolButton(self)
         self._tbShowLogs.setIcon(QtGui.QIcon(":/ico/page.png"))
         self._tbShowLogs.setToolTip("Show logs")
 
-        self._logShowMenu = self._makeLogPreviewMenu(self._tbShowLogs)
+        self._logShowMenu = self._make_log_preview_menu(self._tbShowLogs)
         self._tbShowLogs.setMenu(self._logShowMenu)
         self._tbShowLogs.setPopupMode(QtGui.QToolButton.InstantPopup)
         toolBar.addWidget(self._tbShowLogs)
 
+        toolBar.addSeparator()
+        self._chk_auto_screens = QtGui.QCheckBox(self)
+        self._chk_auto_screens.setText('Enable auto screens')
+        toolBar.addWidget(self._chk_auto_screens)
+
         return toolBar
 
     # ----------------------------------------------------------------------
-    def _initStatusBar(self):
+    def _init_status_bar(self):
         """
         """
         self._lbCursorPos = QtGui.QLabel("")
@@ -429,30 +482,30 @@ class MainWindow(QtGui.QMainWindow):
         mem = float(process.memory_info().rss) / (1024. * 1024.)
         cpu = process.cpu_percent()
 
-        self._lbResourcesStatus = QtGui.QLabel("| {:.2f}MB | CPU {} % |".format(mem, cpu))
+        self._lb_resources_status = QtGui.QLabel("| {:.2f}MB | CPU {} % |".format(mem, cpu))
 
         self.statusBar().addPermanentWidget(self._lbCursorPos)
         self.statusBar().addPermanentWidget(lbProcessID)
-        #self.statusBar().addPermanentWidget(lbCurrentDir)
-        self.statusBar().addPermanentWidget(self._lbResourcesStatus)
+        self.statusBar().addPermanentWidget(lbCurrentDir)
+        self.statusBar().addPermanentWidget(self._lb_resources_status)
 
-        self._lbFps = QtGui.QLabel("FPS: -")
-        self._lbFps.setMinimumWidth(70)
-        self.statusBar().addPermanentWidget(self._lbFps)
+        self._lb_fps = QtGui.QLabel("FPS: -")
+        self._lb_fps.setMinimumWidth(70)
+        self.statusBar().addPermanentWidget(self._lb_fps)
 
     # ----------------------------------------------------------------------
-    def _refreshStatusBar(self):
+    def _refresh_status_bar(self):
         """
         """
         process = psutil.Process(os.getpid())
         mem = float(process.memory_info().rss) / (1024. * 1024.)
         cpu = psutil.cpu_percent()
 
-        self._lbResourcesStatus.setText("| {:.2f}MB | CPU {} % |".format(mem,
-                                                                         cpu))
+        self._lb_resources_status.setText("| {:.2f}MB | CPU {} % |".format(mem,
+                                                                           cpu))
 
     # ----------------------------------------------------------------------
-    def _initLogger(self, loggerName):
+    def _init_logger(self, loggerName):
         """Initialize logging object
 
         Args:
@@ -465,11 +518,7 @@ class MainWindow(QtGui.QMainWindow):
 
         self.formatter = logging.Formatter("%(asctime)s %(module)s %(lineno)-6d %(levelname)-6s %(message)s")
 
-            # logfile related to camera name
-#        prefix = self.options.cameraID.replace(" ", "")
-        
-        prefix = "".join(self.settings.option("device", "name").split())
-        logFile, logDir = make_log_name(prefix, "logs")
+        logFile, logDir = make_log_name("vimbaviewer", "logs")
 
         fh = logging.FileHandler(logFile)
         fh.setFormatter(self.formatter)
@@ -479,80 +528,7 @@ class MainWindow(QtGui.QMainWindow):
         ch.setFormatter(self.formatter)
         log.addHandler(ch)
 
-        gh = GuiLogger()                        # ??? better name TODO
-        gh.setFormatter(self.formatter)
-        #log.addHandler(gh)
-
         print("{}\nIn case of problems look at: {}\n{}".format(
               "=" * 100, logFile, "=" * 100))
 
-        return log, logFile, logDir, gh
-
-    # ----------------------------------------------------------------------
-    def change_logger(self):
-        prefix = "".join(self.settings.option("device", "name").split())
-        logFile, logDir = make_log_name(prefix, "logs")
-
-        for hdlr in self.log.handlers:
-            self.log.removeHandler(hdlr)
-        for hdlr in self.log.handlers:
-            self.log.removeHandler(hdlr)
-
-        fh = logging.FileHandler(logFile)
-        fh.setFormatter(self.formatter)
-        self.log.addHandler(fh)
-
-        ch = logging.StreamHandler()
-        ch.setFormatter(self.formatter)
-        self.log.addHandler(ch)
-
-        gh = GuiLogger()
-        gh.setFormatter(self.formatter)
-        return logFile, logDir, gh
-
-    # ----------------------------------------------------------------------
-    def populateCamSelector(self):
-
-        self.cam_configs = {}
-        for f in os.listdir(self.cfgPath):
-            if fnmatch.fnmatch(f,"camera_*.xml"):
-                cam_name = XmlSettings(self.cfgPath+f).option("device", "name")
-                self.cam_configs[cam_name] = f
-        cam_list = self.cam_configs.keys()
-        cam_list.sort()
-        self._cbCamSelector.addItems(cam_list)
-        self._cbCamSelector.setCurrentIndex(cam_list.index(self.settings.option("device", "name")))
-
-    # ----------------------------------------------------------------------
-    def change_cam(self, config):
-
-        self.log.info("Changing camera...")
-
-        self.saveUiSettings()
-        self._frameViewer.close()
-        time.sleep(0.5)
-        self.removeDockWidget(self._frameViewerDock)
-        self._settingsWidget.close()
-        self.removeDockWidget(self._settingsDock)
-        self._statusTimer.stop()
-        for ac in self._toolBar.actions():
-            self._toolBar.removeAction(ac)
-
-
-        self.settings = XmlSettings(self.cfgPath+self.cam_configs[str(config)])
-        self._logFile, self._logDir, self._guiLogger = self.change_logger()
-
-        self._ui = Ui_MainWindow()
-        self._ui.setupUi(self)
-        self._initUi()
-
-        self.loadUiSettings()
-
-        self._statusTimer = QtCore.QTimer(self)
-        self._statusTimer.timeout.connect(self._refreshStatusBar)
-        self._statusTimer.start(self.STATUS_TICK)
-
-        self._refreshTitle()
-        if self._roiServer:
-            self._roiServer.settingWidget = self._settingsWidget
-        self.log.info("Initialized new cam successfully")
+        return log, logFile, logDir

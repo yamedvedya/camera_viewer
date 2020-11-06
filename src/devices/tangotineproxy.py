@@ -10,6 +10,9 @@
 """
 
 import numpy as np
+from threading import Thread
+import time
+from abstract_camera import AbstractCamera
 
 try:
     import PyTango
@@ -18,7 +21,7 @@ except ImportError:
 
 
 # ----------------------------------------------------------------------
-class TangoTineProxy(object):
+class TangoTineProxy(AbstractCamera):
     """Proxy to a physical TANGO device.
     """
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...
@@ -27,66 +30,73 @@ class TangoTineProxy(object):
     START_DELAY = 1
     STOP_DELAY = 0.5
 
+    _settings_map = {"RoiX": ('roi_server', "roi_x"),
+                     "RoiY": ('roi_server', 'roi_y'),
+                     "RoiWidth": ('roi_server', 'roi_w'),
+                     "RoiHeight": ('roi_server', 'roi_h'),
+                     "Exposure": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Default')),
+                     "Gain": ("settings_proxy", ("ExposureValue.Set", 'GainValue.Default')),
+                     'FPS': (None, ),
+                     'wMax': (None, ),
+                     'hMax': (None, ),
+                     'viewX': (None, ),
+                     'viewY': (None, ),
+                     'viewW': (None, ),
+                     'viewH': (None, )
+                     }
+
     # ----------------------------------------------------------------------
-    def __init__(self, settings, generalSettings, log):
-        super(TangoTineProxy, self).__init__()
+    def __init__(self, beamline_id, settings, log):
+        super(TangoTineProxy, self).__init__(beamline_id, settings, log)
 
-        self._tangoServer = settings.option("device", "tango_server")
-        self._settingsServer = settings.option("device", "settings_server")
-        self._cid = settings.option("device", "name")
+        self._init_device()
 
-        self.log = log
-
-        self._deviceProxy = PyTango.DeviceProxy(str(self._tangoServer))
-        self._settingsProxy = PyTango.DeviceProxy(str(self._settingsServer))
-        self.log.info("Ping {} ({})".format(self._tangoServer,
-                                            self._deviceProxy.ping()))
-        self.log.info("Ping {} ({})".format(self._settingsServer,
-                                            self._settingsProxy.ping()))
-        #
-        # for k, v in self.SERVER_SETTINGS.items():
-        #     self._deviceProxy.write_attribute(k, v)
-
-        self._newFlag = False
-        self.errorFlag = False
-        self.errorMsg = ''
-        self._lastFrame = np.zeros((1, 1))
+        self._new_flag = False
+        self.error_flag = False
+        self.error_msg = ''
+        self._last_frame = np.zeros((1, 1))
         self.period = 200
-        if not self._deviceProxy.is_attribute_polled('Frame'):
-            self._deviceProxy.poll_attribute('Frame', self.period)
-        self.self_period = not self._deviceProxy.get_attribute_poll_period("Frame") == self.period
+        if not self._device_proxy.is_attribute_polled('Frame'):
+            self._device_proxy.poll_attribute('Frame', self.period)
+        self.self_period = not self._device_proxy.get_attribute_poll_period("Frame") == self.period
         if self.self_period:
-            self._deviceProxy.stop_poll_attribute("Frame")
-            self._deviceProxy.poll_attribute('Frame', self.period)
-        self._eid = self._deviceProxy.subscribe_event("Frame", PyTango.EventType.PERIODIC_EVENT, self._readoutFrame)
+            self._device_proxy.stop_poll_attribute("Frame")
+            self._device_proxy.poll_attribute('Frame', self.period)
 
     # ----------------------------------------------------------------------
-    def maybeReadFrame(self):
-        """
-        """
-        if self._newFlag == False:
-            return None
-
-        self._newFlag = False
-        return self._lastFrame
-
-    # ----------------------------------------------------------------------
-    def startAcquisition(self):
-        pass
-
-    # ----------------------------------------------------------------------
-    def stopAcquisition(self):
-        pass
+    def _init_device(self):
+        att_conf_exposure = self._settings_proxy.get_attribute_config('ExposureValue.Set')
+        att_conf_gain = self._settings_proxy.get_attribute_config('GainValue.Set')
+        exposure_max = self._settings_proxy.read_attribute('ExposureValue.Max')
+        exposure_min = self._settings_proxy.read_attribute('ExposureValue.Min')
+        gain_max = self._settings_proxy.read_attribute('GainValue.Max')
+        gain_min = self._settings_proxy.read_attribute('GainValue.Min')
+        att_conf_exposure.max_value = str(exposure_max.value)
+        att_conf_exposure.min_value = str(exposure_min.value)
+        att_conf_gain.max_value = str(gain_max.value)
+        att_conf_gain.min_value = str(gain_min.value)
+        self._settings_proxy.set_attribute_config(att_conf_exposure)
+        self._settings_proxy.set_attribute_config(att_conf_gain)
 
     # ----------------------------------------------------------------------
-    def _readoutFrame(self, event):
+    def start_acquisition(self):
+
+        self._eid = self._device_proxy.subscribe_event("Frame", PyTango.EventType.PERIODIC_EVENT, self._readout_frame)
+
+    # ----------------------------------------------------------------------
+    def stop_acquisition(self):
+
+        self._device_proxy.unsubscribe_event(self._eid)
+
+    # ----------------------------------------------------------------------
+    def _readout_frame(self, event):
         """Called each time new frame is available.
         """
-        if not self._deviceProxy:
-            self.log.error("TangoTineTango DeviceProxy error")
+        if not self._device_proxy:
+            self._log.error("TangoTineTango DeviceProxy error")
 
         # for some reason this wants the 'short' attribute name, not the fully-qualified name
         # we get in event.attr_name
         data = event.device.read_attribute(event.attr_name.split('/')[6])
-        self._lastFrame = np.transpose(data.value)
-        self._newFlag = True
+        self._last_frame = np.transpose(data.value)
+        self._new_flag = True

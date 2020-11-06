@@ -37,26 +37,28 @@ from PyQt4 import QtCore
 class RoiServer(QtCore.QObject):
     """
     """
-    INIT_TOKEN = "p22roisrv"
-    SEPARATOR = ";"
+
+    change_camera = QtCore.pyqtSignal(str)
+
     SOCKET_TIMEOUT = .5                            # [s]
     MAX_REQUEST_LEN = 256
     MAX_CLIENT_NUMBER = 32
-    CMD_MAP = {"getSum": {'location': 'settingWidget', 'function': 'getValue', 'property': 'sum'},
-               "getCoM": {'location': 'settingWidget', 'function': 'getValue', 'property': 'roiCoM'},
-               "getFWHM": {'location': 'settingWidget', 'function': 'getValue', 'property': 'roiFWHM'},
-               "getSettings": {'type': 'property', 'location': 'settingWidget', 'function': 'getValue', 'property': 'roi2ectrl'},
-               "getMarkerSettings": {'location': 'settingWidget', 'function': 'marker2ectrl'},
-               "getCameraSettings": {'location': 'settingWidget', 'function': 'getCameraSettings'},
-               "setCameraSettings": {'location': 'settingWidget', 'function': 'setCameraSettings'},
-               "getListOfCommands": {'location': 'server', 'function': 'listOfCommands'}}
+    CMD_MAP = {"get_camera_list": {'function': '_get_camera_list', "args": ''},
+               "get_sum": {'function': '_get_roi_value', 'args': 'sum'},
+               "get_fwhm": {'function': '_get_roi_value', 'args': 'fwhm'},
+               "set_camera": {'function': '_set_camera',"args": ''},
+               "get_list_of_commands": {'function': '_get_list_of_commands', "args": ''}}
 
     # ----------------------------------------------------------------------
     def __init__(self, host, port):
 
         super(RoiServer, self).__init__()
 
-        self.settingWidget = []
+        self._rois = None
+        self._markers = None
+        self._statistics = None
+        self._cameras_list = None
+        self._current_roi_index = None
 
         self.log = logging.getLogger("cam_logger")
         
@@ -77,6 +79,14 @@ class RoiServer(QtCore.QObject):
         
         self.log.info("ROI server host {}, port {}".format(self.host,
                                                            self.port))
+
+    # ----------------------------------------------------------------------
+    def set_variables(self, rois, markers, statistics, cameras_list, current_roi_index):
+        self._rois = rois
+        self._markers = markers
+        self._statistics = statistics
+        self._cameras_list = cameras_list
+        self._current_roi_index = current_roi_index
 
     # ----------------------------------------------------------------------
     def start(self):
@@ -159,26 +169,18 @@ class RoiServer(QtCore.QObject):
         response = ''
         print(__file__, "processing request '{}'".format(request))
 
-        tokens = request.split(self.SEPARATOR)
-        if tokens[0] != self.INIT_TOKEN:
-            response = self._makeResponse("err", "invalid_special_token")
-        else:
-            try:
-                if self.CMD_MAP[tokens[1]]['location'] == 'settingWidget':
-                    source = self.settingWidget
-                else:
-                    source = self
+        tokens = request.split()
 
-                if len(tokens) > 2:
-                    response = self._makeResponse("OK", getattr(source, self.CMD_MAP[tokens[1]]['function'])(tokens[2:]))
-                else:
-                    if 'property' in self.CMD_MAP[tokens[1]]:
-                        response = self._makeResponse("OK", getattr(source, self.CMD_MAP[tokens[1]]['function'])(self.CMD_MAP[tokens[1]]['property']))
-                    else:
-                        response = self._makeResponse("OK", getattr(source, self.CMD_MAP[tokens[1]]['function'])())
+        try:
+            if len(tokens)> 1:
+                response = self._makeResponse("OK", getattr(self, self.CMD_MAP[tokens[0]]['function'])(
+                    self.CMD_MAP[tokens[0]]['args'], tokens[1:]))
+            else:
+                response = self._makeResponse("OK", getattr(self, self.CMD_MAP[tokens[0]]['function'])(
+                    self.CMD_MAP[tokens[0]]['args'], []))
 
-            except Exception as err:
-                response = self._makeResponse("err", 'request unknown') # this works  'request unknown'
+        except Exception as err:
+            response = self._makeResponse("err", 'request unknown')
 
         return response
 
@@ -192,7 +194,23 @@ class RoiServer(QtCore.QObject):
     def _makeResponse(self, flag, message):
         """
         """
-        return "{};{};{}".format(self.INIT_TOKEN, flag, json.dumps(message))
+        return "{};{}".format(flag, json.dumps(message))
+
+    # ----------------------------------------------------------------------
+    def _get_camera_list(self, args, tockens):
+        return ';'.join(self._cameras_list)
+
+    # ----------------------------------------------------------------------
+    def _set_camera(self, args, tockens):
+        self.change_camera.emit(str(tockens[0]))
+
+    # ----------------------------------------------------------------------
+    def _get_roi_value(self, args, tockens):
+        return self._statistics[self._current_roi_index][args]
+
+    # ----------------------------------------------------------------------
+    def get_list_of_commands(self, args, tockens):
+        return ';'.join(self.CMD_MAP.keys())
 
 # ----------------------------------------------------------------------
 class KillConnection(Exception):

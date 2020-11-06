@@ -20,26 +20,20 @@ from PyQt4 import QtCore, QtGui
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.GradientEditorItem import Gradients
-
-from src.utils.errors import report_error
 from src.utils.functions import roi_text
 
-from src.devices.datasource2d import DataSource2D
-
 from src.ui_vimbacam.FrameViewer_ui import Ui_FrameViewer
-from settingswidget import SettingsWidget
-
 
 # ----------------------------------------------------------------------
 class FrameViewer(QtGui.QWidget):
     """
     """
-    statusChanged = QtCore.Signal(float)
-    roiChanged = QtCore.Signal(int, int, int, int, float, bool)
-    roiStats = QtCore.Signal(tuple, tuple, int, tuple, int)
-    cursorMoved = QtCore.Signal(float, float)
-    deviceStarted = QtCore.Signal()
-    deviceStopped = QtCore.Signal()
+    status_changed = QtCore.Signal(float)
+    roi_changed = QtCore.Signal(int)
+    roi_stats_ready = QtCore.Signal(int)
+    cursor_moved = QtCore.Signal(float, float)
+    device_started = QtCore.Signal()
+    device_stopped = QtCore.Signal()
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -48,42 +42,40 @@ class FrameViewer(QtGui.QWidget):
     LABEL_BRUSH = (30, 144, 255, 170)
     LABEL_COLOR = (255, 255, 255)
 
-    MINLEVEL = 0
-    MAXLEVEL = 1
-    AUTORANGE = True
-    COLORMAP = 'grey'
+    min_level = 0
+    max_level = 1
+    auto_levels = True
+    colormap = 'grey'
 
     MAXFPS = 2
 
     # ----------------------------------------------------------------------
-    def __init__(self, generalSettings, settings, parent):
+    def __init__(self, settings, parent):
         """
         """
         super(FrameViewer, self).__init__(parent)
 
         self.log = logging.getLogger("cam_logger")
 
-        self.generalSettings = generalSettings
-        self.settings = settings
+        self._settings = settings
 
-        self._deviceID = self.settings.option("device", "name")
+        self._saveDataFolder = self._settings.option("save_folder", "default")
+        self._saveImageFolder = self._settings.option("save_folder", "default")
 
-        self._saveDataFolder = self.generalSettings.option("save_folder", "default")
-        self._saveImageFolder = self.generalSettings.option("save_folder", "default")
-
-        self._dataSource = None  # should frameviewer be the owner of the datasource?
+        self._camera_device = None
+        self._rois, self._markers, self._statistics = None, None, None
+        self._current_roi_index = None
 
         self._ui = Ui_FrameViewer()
         self._ui.setupUi(self)
 
-        self._initUi()
+        self._init_ui()
 
-        self._isFirstFrame = True  # temp TODO
-        self._lastFrame = None
-        self._darkFrame = None
+        self._is_first_frame = True  # temp TODO
+        self._last_frame = None
+        self._dark_frame = None
 
         self._fps = 2.0
-        self.threshold = 0
 
         self._acqStarted = time.time()
         self._nFrames = 0
@@ -91,123 +83,127 @@ class FrameViewer(QtGui.QWidget):
 
         self._liveModeStatus = "idle"
 
-        self._rectRoi = pg.RectROI([100, 100], [50, 50], pen=(0, 9))
-        self._ui.imageView.view.addItem(self._rectRoi)
-        self._rectRoi.sigRegionChanged.connect(self._roiChanged)
+        self._rectRoi = pg.RectROI([0, 0], [50, 50], pen=(0, 9))
+        self._ui.imageView.view.addItem(self._rectRoi, ignoreBounds=True)
+        self._rectRoi.sigRegionChanged.connect(self._roi_changed)
         self._rectRoi.hide()
 
-        self.markers = []
-        for marker in range(SettingsWidget.NUM_MARKERS):
-            self.markers.append(ImageMarker(0, 0, self._ui.imageView))
-            self.markers[marker].setVisible(False)
+        self._marker_widget = {}
 
         self.crossItem = LineSegmentItem([0, 0], [0, 0])
         self.crossItem.setVisible(True)
-        self._ui.imageView.view.addItem(self.crossItem)
+        self._ui.imageView.view.addItem(self.crossItem, ignoreBounds=True)
 
-        self.roiIntegral = 0.0
-
-        self._ui.wiProfileX.cursorMoved.connect(lambda x, y: self.cursorMoved.emit(x, y))
-        self._ui.wiProfileY.cursorMoved.connect(lambda x, y: self.cursorMoved.emit(x, y))
+        self._ui.wiProfileX.cursor_moved.connect(lambda x, y: self.cursor_moved.emit(x, y))
+        self._ui.wiProfileY.cursor_moved.connect(lambda x, y: self.cursor_moved.emit(x, y))
 
         #
-        self._ui.wiProfileY.asProjectionY()
+        self._ui.wiProfileY.as_projection_y()
 
-        self._ui.imageView.scene.sigMouseMoved.connect(self._mouseMoved)
-        self._ui.imageView.scene.sigMouseClicked.connect(self._mouseClicked)
-        self._ui.imageView.scene.sigMouseHover.connect(self._mouseHover)
+        self._ui.imageView.scene.sigMouseMoved.connect(self._mouse_moved)
+        self._ui.imageView.scene.sigMouseClicked.connect(self._mouse_clicked)
+        self._ui.imageView.scene.sigMouseHover.connect(self._mouse_hover)
 
-        self._ui.imageView.view.sigRangeChanged.connect(self._visibleRangeChanged)
+        self._ui.imageView.view.sigRangeChanged.connect(self._visible_range_changed)
         self._ui.imageView.view.setMenuEnabled(False)
 
-        # self._viewRect = viewBox.viewRect()
-
-        self.visibleMarker = 'none'
+        self.visible_marker = 'none'
 
         # a few info labels
-        self._deviceLabel = self._addLabel(self._deviceID,
-                                           self.generalSettings.node("vimbacam/title_label"),
-                                           visible=True)
-        self._datetimeLabel = self._addLabel("Time",
-                                             self.generalSettings.node("vimbacam/datetime_label"),
-                                             visible=True)
-        self._roiLabel = self._addLabel("ROI",
-                                        self.generalSettings.node("vimbacam/roi_label"),
-                                        visible=False)
+        self._deviceLabel = self._add_label('', self._settings.node("vimbacam/title_label"), visible=True)
+        self._datetimeLabel = self._add_label("Time", self._settings.node("vimbacam/datetime_label"), visible=True)
+        self._roiLabel = self._add_label("ROI", self._settings.node("vimbacam/roi_label"), visible=False)
 
-        self.x = 0
-        self.y = 0
+        self.image_x_pos = 0
+        self.image_y_pos = 0
         self.log.info("Initialized successfully")
 
-        # self._refreshTimer = QtCore.QTimer(self)
-        # self._refreshTimer.timeout.connect(self._refreshView)
-        # self._refreshTimer.start(1/self.MAXFPS)
-
-        self.startStopLiveMode()
-
     # ----------------------------------------------------------------------
-    def _initUi(self):
+    def _init_ui(self):
         """
         """
         self._ui.imageView.ui.histogram.hide()
         self._ui.imageView.ui.roiBtn.hide()
         self._ui.imageView.ui.menuBtn.hide()
+        pass
 
     # ----------------------------------------------------------------------
-    def updateMarker(self, num, x, y, visible):
-        """
-        Refresh marker's position (possibly many markers? TODO)
-        """
-        self.markers[num].setPos(x, y)
-        self.markers[num].setVisible(visible)
+    def set_variables(self, camera_device, rois, markers, statistics,current_roi_index):
+        self._camera_device = camera_device
+        self._rois = rois
+        self._markers = markers
+        self._statistics = statistics
+        self._current_roi_index = current_roi_index
 
     # ----------------------------------------------------------------------
-    def updateRoi(self, x, y, w, h, threshold, visible):  # CS
+    def update_camera_label(self):
+
+        self._deviceLabel.setText(self._camera_device.device_id)
+
+    # ----------------------------------------------------------------------
+    def markers_changed(self):
+        for ind, widget in self._marker_widget.items():
+            widget.delete_me()
+            del self._marker_widget[ind]
+
+        for ind, marker in self._markers.items():
+            self._marker_widget[ind] = ImageMarker(self._markers[ind]['x'], self._markers[ind]['y'], self._ui.imageView)
+
+    # ----------------------------------------------------------------------
+    def update_marker(self, ind):
+
+        self._marker_widget[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
+
+    # ----------------------------------------------------------------------
+    def update_roi(self, roi_index):  # CS
         """ROI coords changed elsewhere.
         """
-        self.blockSignals(True)
-        self.roiVisible = visible
-        self._rectRoi.setPos([x, y])
-        self._rectRoi.setSize([w, h])
+        self._rectRoi.blockSignals(True)
 
-        self._rectRoi.setVisible(visible)
-        self._roiLabel.setVisible(visible)
+        self._rectRoi.setVisible(self._rois[roi_index]['Roi_Visible'])
+        self._roiLabel.setVisible(self._rois[roi_index]['Roi_Visible'])
 
-        self.threshold = threshold
+        self._rectRoi.setPos([self._rois[roi_index]['RoiX'], self._rois[roi_index]['RoiY']])
+        self._rectRoi.setSize([self._rois[roi_index]['RoiWidth'], self._rois[roi_index]['RoiHeight']])
 
-        self.blockSignals(False)
+        self._rectRoi.blockSignals(False)
 
     # ----------------------------------------------------------------------
-    def _roiChanged(self, roiRect):
+    def _roi_changed(self, roiRect):
         """Called when ROI emits sigRegionChanged signal.
         """
-        if self._lastFrame is not None:
+        if self._last_frame is not None:
             pos, size = roiRect.pos(), roiRect.size()
-            x, y, w, h = pos.x(), pos.y(), size.x(), size.y()
+            x = max(pos.x(), 0)
+            y = max(pos.y(), 0)
+            max_w, max_h = self._last_frame.shape
 
-            self.roiChanged.emit(x, y, w, h, self.threshold, self.roiVisible)
+            w = min(size.x(), max_w - x)
+            h = min(size.y(), max_h - y)
 
-            self._redrawRoiLabel()
+            self._rois[self._current_roi_index[0]]['RoiX'], self._rois[self._current_roi_index[0]]['RoiY']  = x, y
+            self._rois[self._current_roi_index[0]]['RoiWidth'], self._rois[self._current_roi_index[0]]['RoiHeight'] = w, h
+
+            self._redraw_roi_label()
+            self.update_roi(self._current_roi_index[0])
+            self.roi_changed.emit(self._current_roi_index[0])
 
     # ----------------------------------------------------------------------
-    def _visibleRangeChanged(self, viewBox):
+    def _visible_range_changed(self, viewBox):
         """
         """
         self._viewRect = viewBox.viewRect()
 
-        if self._lastFrame is not None:
-            start = time.time()
+        if self._last_frame is not None:
 
-            self._redrawProjections()
+            self._redraw_projections()
 
-            self._showTitle()
-            self._showDatetime()
-            self._redrawRoiLabel()
-            # self.image_size_changed.emit(self._viewRect.x(), self._viewRect.y(), self._viewRect.width(),
-            #                              self._viewRect.height())
+            self._show_title()
+            self._show_datetime()
+            self._redraw_roi_label()
 
     # ----------------------------------------------------------------------
-    def _redrawProjections(self):
+    def _redraw_projections(self):
         """
         """
         epsilon = 10
@@ -215,252 +211,226 @@ class FrameViewer(QtGui.QWidget):
                 self._ui.wiProfileY.frameSize().width() < epsilon):
             return
 
-            # take into account current view range
+        # take into account current view range
         x, y = self._viewRect.x(), self._viewRect.y()
         w, h = self._viewRect.width(), self._viewRect.height()
 
-        frameW, frameH = self._lastFrame.shape
+        frameW, frameH = self._last_frame.shape
         x, y = int(max(0, x)), int(max(0, y))
         w, h = int(min(w, frameW)), int(min(h, frameH))
 
-        dataSlice = self._lastFrame[x:x + w, y:y + h]
+        dataSlice = self._last_frame[x:x + w, y:y + h]
 
         if self._ui.wiProfileX.frameSize().height() > epsilon:
-            self._ui.wiProfileX.rangeChanged(dataSlice, 1, (x, y, w, h))
+            self._ui.wiProfileX.range_changed(dataSlice, 1, (x, y, w, h))
 
         if self._ui.wiProfileY.frameSize().width() > epsilon:
-            self._ui.wiProfileY.rangeChanged(dataSlice, 0, (x, y, w, h))
+            self._ui.wiProfileY.range_changed(dataSlice, 0, (x, y, w, h))
 
     # ----------------------------------------------------------------------
-    def startStopLiveMode(self):
+    def start_stop_live_mode(self):
         """
         """
-        if not self._dataSource:
-            self._dataSource = self._initDataSource()
 
-        if (self._dataSource and
-                self._dataSource.state() in ["idle", "abort"]):
-            self.startLiveMode()
+        if (self._camera_device and
+                self._camera_device.state() in ["idle", "abort"]):
+            self.start_live_mode()
 
             self._acqStarted = time.time()
             self._nFrames = 0
         else:
-            self.stopLiveMode()
+            self.stop_live_mode()
 
     # ----------------------------------------------------------------------
-    def startLiveMode(self):
+    def start_live_mode(self):
         """
         """
-        if self._dataSource:
-            self._isFirstFrame = True  # TMP TODO
+        if self._camera_device:
+            self._is_first_frame = True  # TMP TODO
 
-            self._dataSource.start()
-            self.deviceStarted.emit()
+            self._camera_device.start()
+            self.device_started.emit()
         else:
             QtGui.QMessageBox.warning(self, "Initialization Error",
-                                      "{} not yet initialized".format(self._deviceID))
+                                      "{} not yet initialized".format(self._camera_device.device_id))
 
     # ----------------------------------------------------------------------
-    def stopLiveMode(self):
+    def stop_live_mode(self):
         """
         """
-        if self._dataSource:
-            self._dataSource.stop()
-            self.log.debug("{} stopped".format(self._deviceID))
+        if self._camera_device:
+            self._camera_device.stop()
+            self.log.debug("{} stopped".format(self._camera_device.device_id))
 
-        self.deviceStopped.emit()
-
-    # ----------------------------------------------------------------------
-    def _initDataSource(self):
-        """
-        """
-        try:
-            dataSource = DataSource2D(self.generalSettings, self.settings, self)
-            # self.image_size_changed.connect(dataSource.change_image_size)
-            dataSource.newFrame.connect(self._refreshView)
-            dataSource.gotError.connect(lambda errMsg: self._gotAnError(errMsg))
-            return dataSource
-
-        except Exception as err:
-            report_error(err, self.log, self)
-            return None
+        self.device_stopped.emit()
 
     # ----------------------------------------------------------------------
     def close(self):
         """
         """
-        self.log.debug("Closing {0}".format(self._deviceID))
+        self.log.debug("Closing {0}".format(self._camera_device.device_id))
 
-        if self._dataSource:
-            self._dataSource.stop()
-
-    def move_image(self, x,y,w,h):
-        self.x = x
-        self.y = y
+        if self._camera_device:
+            self._camera_device.stop()
 
     # ----------------------------------------------------------------------
-    def _refreshView(self):
-        """
-        """
-        spectrumColormap = pg.ColorMap(*zip(*Gradients[self.COLORMAP]["ticks"]))
-        if self._isFirstFrame:
-            # self._lastFrame = np.array(self._dataSource.getFrame("copy"), dtype=np.float)
-            self._lastFrame = self._dataSource.getFrame("copy")
-            self._ui.imageView.setImage(self._lastFrame, autoLevels=self.AUTORANGE,
-                                        levels=(self.MINLEVEL, self.MAXLEVEL))
-            self._ui.imageView.imageItem.setLookupTable(spectrumColormap.getLookupTable())
-            self._isFirstFrame = False
-        else:
-            self._lastFrame = self._dataSource.getFrame("copy")
-            if self._darkFrame is not None:
-                valid_idx = self._lastFrame > self._darkFrame
-                self._lastFrame[valid_idx] -= self._darkFrame[valid_idx]
-                self._lastFrame[~valid_idx] = 0
-            self._ui.imageView.imageItem.setImage(self._lastFrame, autoLevels=self.AUTORANGE,
-                                                  levels=(self.MINLEVEL, self.MAXLEVEL))
-            self._ui.imageView.imageItem.setX(self.x)
-            self._ui.imageView.imageItem.setY(self.y)
-            self._ui.imageView.imageItem.setLookupTable(spectrumColormap.getLookupTable())
+    def move_image(self, x, y, w, h):
 
+        self.image_x_pos = x
+        self.image_y_pos = y
+
+    # ----------------------------------------------------------------------
+    def refresh_view(self):
+        """
+        """
+        spectrum_colormap = pg.ColorMap(*zip(*Gradients[self.colormap]["ticks"]))
+
+        self._last_frame = self._camera_device.get_frame("copy")
+        if self._dark_frame is not None:
+            valid_idx = self._last_frame > self._dark_frame
+            self._last_frame[valid_idx] -= self._dark_frame[valid_idx]
+            self._last_frame[~valid_idx] = 0
+
+        self._ui.imageView.setImage(self._last_frame, autoLevels=self.auto_levels,
+                                    levels=(self.min_level, self.max_level), autoRange=False)
+        self._ui.imageView.imageItem.setLookupTable(spectrum_colormap.getLookupTable())
+        self._ui.imageView.imageItem.setX(self.image_x_pos)
+        self._ui.imageView.imageItem.setY(self.image_y_pos)
+
+        if self._is_first_frame:
+            self._is_first_frame = False
+        else:
             self._ui.imageView.repaint()
 
-        # gotImage = time.time() - self._acqStarted
-
-        self._showTitle()
-        self._showDatetime()
-        self._redrawRoiLabel()
-        # roi = time.time() - self._acqStarted
-
-        self._redrawProjections()
-
-        # projections = time.time() - self._acqStarted
-
-        # print('gotImage ' + '{:.2f}'.format(gotImage) + ' roi ' + '{:.2f}'.format(roi) + ' projections ' + '{:.2f}'.format(projections))
+        self._show_title()
+        self._show_datetime()
+        self._redraw_roi_label()
+        self._redraw_projections()
 
         self._nFrames += 1
         self._fps = 1. / (time.time() - self._acqStarted)
-        self.statusChanged.emit(self._fps)
+        self.status_changed.emit(self._fps)
 
         self._acqStarted = time.time()
-        # use recent measurement
 
     # ----------------------------------------------------------------------
-    def _gotAnError(self, msg):
-        mb = QtGui.QMessageBox("ERROR !", "Camera error: {}".format(msg),
-                               QtGui.QMessageBox.Warning, QtGui.QMessageBox.Ok, 0, 0)
-        mb.exec_()
-        return
-        # ----------------------------------------------------------------------
-
-    # ----------------------------------------------------------------------
-    def _showTitle(self):
+    def _show_title(self):
         """
         """
         if hasattr(self, "_deviceLabel"):
-            self._showLabel(0.5, 0.04, self._deviceLabel)
+            self._show_label(0.5, 0.04, self._deviceLabel)
 
     # ----------------------------------------------------------------------
-    def _showDatetime(self):
+    def _show_datetime(self):
         """
         """
         if hasattr(self, "_datetimeLabel"):
             msg = datetime.now().strftime(self.DATETIME)
             self._datetimeLabel.setText(msg)
 
-            self._showLabel(0.85, 0.9, self._datetimeLabel)
+            self._show_label(0.85, 0.9, self._datetimeLabel)
 
     # ----------------------------------------------------------------------
-    def FWHM(self, Y):
+    def FWHM(self, data):
         try:
-            X = range(Y.size)
-            half_max = (np.amax(Y) - np.amin(Y)) / 2
-            # find when function crosses line half_max (when sign of diff flips)
-            # take the 'derivative' of signum(half_max - Y[])
-            diff = np.sign(Y - half_max)
+            half_max = (np.amax(data) - np.amin(data)) / 2
+
+            diff = np.sign(data - half_max)
             left_idx = np.where(diff > 0)[0][0]
             right_idx = np.where(diff > 0)[0][-1]
-            # find the left and right most indexes
-
             return right_idx - left_idx  # return the difference (full width)
         except:
             return 0
 
     # ----------------------------------------------------------------------
-    def roiMarkerSelected(self, visibleMarker):
-        self.visibleMarker = visibleMarker
+    def roi_marker_selected(self, visible_marker):
+        self.visible_marker = visible_marker
 
     # ----------------------------------------------------------------------
-    def _redrawRoiLabel(self):
+    def _redraw_roi_label(self):
         """
         """
-        if self._rectRoi.isVisible():
+        if self._rois[self._current_roi_index[0]]['Roi_Visible']:
             pos, size = self._rectRoi.pos(), self._rectRoi.size()
             x, y, w, h = int(pos.x()), int(pos.y()), int(size.x()), int(size.y())
 
-            array = self._lastFrame[x:x + w, y:y + h]
+            array = self._last_frame[x:x + w, y:y + h]
             if array != []:
-                low_values_flags = array < self.threshold  # Where values are low
-                array[low_values_flags] = 0  # All low values set to 0
-                self.roiIntegral = np.sum(array)
-                self.roiExtrema = scipymeasure.extrema(array)  # all in one!
-                self.roiMinVal = self.roiExtrema[0]
-                self.roiMaxVal = self.roiExtrema[1]
-                self.roiCoM = scipymeasure.center_of_mass(array)
+                array[array < self._rois[self._current_roi_index[0]]['Threshold']] = 0  # All low values set to 0
+
+                roi_sum = np.sum(array)
+
                 try:
-                    self.roiCoMval = array[int(round(self.roiCoM[0])), int(round(self.roiCoM[1]))]
+                    roiExtrema = scipymeasure.extrema(array)  # all in one!
                 except:
-                    self.roiCoMval = [0, 0]
+                    roiExtrema = (0, 0, (0, 0), (0, 0))
 
-                Y = np.sum(array, axis=0)
-                X = np.sum(array, axis=1)
-                self.roiFWHM = (self.FWHM(X), self.FWHM(Y))
+                roi_max = (roiExtrema[3][0] + x, roiExtrema[3][1] + y)
+                roi_min = (roiExtrema[2][0] + x, roiExtrema[2][1] + y)
 
-                if self.visibleMarker == 'max':
+                try:
+                    roi_com = scipymeasure.center_of_mass(array)
+                except:
+                    roi_com = (0, 0)
+
+                roi_com = (roi_com[0] + x, roi_com[1] + y)
+
+                try:
+                    intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
+                except:
+                    intensity_at_com = [0, 0]
+
+                roi_FWHM = (self.FWHM(np.sum(array, axis=1)), self.FWHM(np.sum(array, axis=0)))
+
+                if self.visible_marker == 'max':
                     # Marker on Max
-                    self.crossItem.setPos((self.roiExtrema[3][0] + x, self.roiExtrema[3][1] + y), self.roiFWHM)
+                    self.crossItem.setPos(roi_max, roi_FWHM)
                     self.crossItem.setVisible(True)
-                elif self.visibleMarker == 'min':
+                elif self.visible_marker == 'min':
                     # Marker on Max
-                    self.crossItem.setPos((self.roiExtrema[2][0] + x, self.roiExtrema[2][1] + y), self.roiFWHM)
+                    self.crossItem.setPos(roi_min, roi_FWHM)
                     self.crossItem.setVisible(True)
-                elif self.visibleMarker == 'com':
+                elif self.visible_marker == 'com':
                     # Marker auf CoM
-                    self.crossItem.setPos((self.roiCoM[0] + x, self.roiCoM[1] + y), self.roiFWHM)
+                    self.crossItem.setPos(roi_com, roi_FWHM)
                     self.crossItem.setVisible(True)
-                elif self.visibleMarker == 'none':
+                elif self.visible_marker == 'none':
                     self.crossItem.setVisible(False)
                     # self.crossItem([0,0], [0,0])
 
-                self.roiStats.emit(self.roiExtrema, (self.roiCoM[0] + x, self.roiCoM[1] + y), self.roiCoMval,
-                                   self.roiFWHM,
-                                   self.roiIntegral)
-                self._roiLabel.setText(roi_text(self.roiIntegral, compact=False))
+                self._statistics[self._current_roi_index[0]] = {"extrema": (roiExtrema[0], roiExtrema[1], roi_min, roi_max),
+                                                              "com_pos" : roi_com,
+                                                              "intensity_at_com": intensity_at_com,
+                                                              'fwhm': roi_FWHM,
+                                                              'sum': roi_sum}
 
-                self._showLabel(0.1, 0.9, self._roiLabel)  # hotspot based
+                self.roi_stats_ready.emit(self._current_roi_index[0])
+                self._roiLabel.setText(roi_text(roi_sum, compact=False))
 
+                self._show_label(0.1, 0.9, self._roiLabel)  # hotspot based
     # ----------------------------------------------------------------------
-    def _mouseMoved(self, pos):
+    def _mouse_moved(self, pos):
         """
         """
         pos = self._ui.imageView.view.mapSceneToView(pos)
-        self.cursorMoved.emit(pos.x(), pos.y())
+        self.cursor_moved.emit(pos.x(), pos.y())
 
     # ----------------------------------------------------------------------
-    def _mouseClicked(self, event):
+    def _mouse_clicked(self, event):
         """
         """
         if event.double():
             self._ui.imageView.autoRange()
 
     # ----------------------------------------------------------------------
-    def _mouseHover(self, event):
+    def _mouse_hover(self, event):
         pass
 
         # if event.buttons():
         # self.stopLiveMode()
 
     # ----------------------------------------------------------------------
-    def _addLabel(self, text, style=None, visible=True):
+    def _add_label(self, text, style=None, visible=True):
         """
         """
         if not style:
@@ -478,12 +448,12 @@ class FrameViewer(QtGui.QWidget):
         item.setFont(font)
         item.setVisible(visible)
 
-        self._ui.imageView.view.addItem(item)
+        self._ui.imageView.view.addItem(item, ignoreBounds=True)
 
         return item
 
     # ----------------------------------------------------------------------
-    def _showLabel(self, x, y, label):
+    def _show_label(self, x, y, label):
         """
         Args:
             x, y (float), normalized to 0-1 range position
@@ -499,22 +469,22 @@ class FrameViewer(QtGui.QWidget):
         label.setPos(textX, textY)
 
     # ----------------------------------------------------------------------
-    def saveToImage(self):
+    def save_to_image(self):
         """
         """
-        self.stopLiveMode()
+        self.stop_live_mode()
 
-        fileName = self._getImageFileName("Save Image")
+        fileName = self._get_image_file_name("Save Image")
         if fileName:
             pixmap = QtGui.QPixmap.grabWidget(self._ui.imageView)
             pixmap.save(fileName)
 
     # ----------------------------------------------------------------------
 
-    def saveToFile(self, fmt):
+    def save_to_file(self, fmt):
         """Saves to text file or numpy's npy/npz.
         """
-        self.stopLiveMode()
+        self.stop_live_mode()
 
         fmt = fmt.lower()
         defaultName = "data_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
@@ -531,7 +501,7 @@ class FrameViewer(QtGui.QWidget):
         fileName = fileName.strip()
 
         if fileName:
-            data = self._dataSource.getFrame()  # sync with data acq! TODO
+            data = self._camera_device.get_frame()  # sync with data acq! TODO
 
             if fmt.lower() == "csv":
                 np.savetxt(fileName, data)
@@ -541,10 +511,10 @@ class FrameViewer(QtGui.QWidget):
                 raise ValueError("Unknown format '{}'".format(fmt))
 
     # ---------------------------------------------------------------------- 
-    def printImage(self):
+    def print_image(self):
         """
         """
-        self.stopLiveMode()
+        self.stop_live_mode()
 
         self._printer = QtGui.QPrinter()
 
@@ -555,16 +525,16 @@ class FrameViewer(QtGui.QWidget):
             self._ui.imageView.view.render(self._printPainter)
 
     # ---------------------------------------------------------------------- 
-    def toClipboard(self):
+    def to_clipboard(self):
         """NOTE that the content of the clipboard is cleared after program's exit.
         """
-        self.stopLiveMode()
+        self.stop_live_mode()
 
         pixmap = QtGui.QPixmap.grabWidget(self._ui.imageView)
         QtGui.qApp.clipboard().setPixmap(pixmap)
 
     # ----------------------------------------------------------------------
-    def _getImageFileName(self, title):
+    def _get_image_file_name(self, title):
         """
        """
         filesFilter = ";;".join(["(*.{})".format(ffilter) for ffilter in
@@ -581,7 +551,7 @@ class FrameViewer(QtGui.QWidget):
         return str(fileTuple)
 
     # ----------------------------------------------------------------------
-    def saveUiSettings(self, settings):
+    def save_ui_settings(self, settings):
         """
         Args:
             (QSettings)
@@ -593,7 +563,7 @@ class FrameViewer(QtGui.QWidget):
         settings.setValue("FrameViewer/geometry", self.saveGeometry())
 
     # ----------------------------------------------------------------------
-    def loadUiSettings(self, settings):
+    def load_ui_settings(self, settings):
         """
         Args:
             (QSettings)
@@ -604,26 +574,28 @@ class FrameViewer(QtGui.QWidget):
         self.restoreGeometry(settings.value("FrameViewer/geometry").toByteArray())
 
     # ----------------------------------------------------------------------
-    def enableAutoLevels(self, mode):
-        self.AUTORANGE = mode
+    def enable_auto_levels(self, mode):
+
+        self.auto_levels = mode
 
     # ----------------------------------------------------------------------
-    def levelsChanged(self, min, max):
-        self.MINLEVEL = min
-        self.MAXLEVEL = max
+    def levels_changed(self, min, max):
+
+        self.min_level = min
+        self.max_level = max
 
     # ----------------------------------------------------------------------
-    def colorMapChanged(self, selectedMap):
+    def color_map_changed(self, selectedMap):
         if str(selectedMap) != '':
-            self.COLORMAP = str(selectedMap)
+            self.colormap = str(selectedMap)
 
     # ----------------------------------------------------------------------
     def set_dark_image(self):
-        self._darkFrame = self._lastFrame
+        self._dark_frame = self._last_frame
 
     # ----------------------------------------------------------------------
     def remove_dark_image(self):
-        self._darkFrame = None
+        self._dark_frame = None
 
 # ----------------------------------------------------------------------
 class ImageMarker(object):
@@ -634,11 +606,13 @@ class ImageMarker(object):
     def __init__(self, x, y, imageView):
         super(ImageMarker, self).__init__()
 
+        self.imageView = imageView
+
         self._markerV = pg.InfiniteLine(pos=x)
-        imageView.addItem(self._markerV)
+        self.imageView.addItem(self._markerV, ignoreBounds=True)
 
         self._markerH = pg.InfiniteLine(pos=y, angle=0)
-        imageView.addItem(self._markerH)
+        self.imageView.addItem(self._markerH, ignoreBounds=True)
 
     # ----------------------------------------------------------------------
     def setPos(self, x, y):
@@ -666,6 +640,10 @@ class ImageMarker(object):
         """
         return self._markerV.isVisible() and self._markerH.isVisible()
 
+    # ----------------------------------------------------------------------
+    def delete_me(self):
+        self.imageView.removeItem(self._markerH)
+        self.imageView.removeItem(self._markerV)
 
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
