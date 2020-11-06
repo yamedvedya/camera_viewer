@@ -178,10 +178,10 @@ class MainWindow(QtGui.QMainWindow):
         self._frame_viewer.stop_live_mode()
         self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
 
-        refresh_combo_box(self._cb_cam_selector, self.camera_name)
         if self._camera_device.new_device_proxy(name) and \
                 self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked()):
             self.camera_name = name
+            refresh_combo_box(self._cb_cam_selector, self.camera_name)
             self.log.info("Changing camera to {}".format(self.camera_name))
         else:
             self._camera_device.new_device_proxy(self.camera_name)
