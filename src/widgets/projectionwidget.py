@@ -23,7 +23,7 @@ class ProjectionWidget(QtGui.QWidget):
     """
     PLOT_COLOR = QtGui.QColor(80, 90, 210)
    
-    cursorMoved = QtCore.Signal(float, float)
+    cursor_moved = QtCore.Signal(float, float)
     
     # ----------------------------------------------------------------------
     def __init__(self, parent):
@@ -40,7 +40,7 @@ class ProjectionWidget(QtGui.QWidget):
         self._ui.setupUi(self)
       
             # 
-        self._plotItem, self._plot = self._setupPlot()
+        self._plotItem, self._plot = self._setup_plot()
         self._ui.graphicsView.setCentralItem(self._plotItem)
 
 
@@ -48,11 +48,11 @@ class ProjectionWidget(QtGui.QWidget):
 #        self._ui.graphicsView.setYLink(self.parent._ui.imageView.view)
 
         
-        self._plotItem.scene().sigMouseMoved.connect(self._mouseMoved)
-        self._plotItem.scene().sigMouseClicked.connect(self._mouseClicked)
+        self._plotItem.scene().sigMouseMoved.connect(self._mouse_moved)
+        self._plotItem.scene().sigMouseClicked.connect(self._mouse_clicked)
  
     # ----------------------------------------------------------------------
-    def rangeChanged(self, array, axis, roiRect):
+    def range_changed(self, array, axis, roiRect):
         """
         """
         x, y, w, h = roiRect
@@ -60,14 +60,13 @@ class ProjectionWidget(QtGui.QWidget):
         yVec = array.sum(axis=axis)
         if axis == 0:           # y-profile
             xVec = np.linspace(y, y + h, len(yVec)) #* (-1)
-            #yVec = np.abs(yVec)
         else:
             xVec = np.linspace(x, x + w, len(yVec))
 
         self._plot.setData(xVec, yVec)
 
     # ----------------------------------------------------------------------
-    def asProjectionY(self):
+    def as_projection_y(self):
         """
         """
         self._plot.rotate(90)
@@ -76,22 +75,22 @@ class ProjectionWidget(QtGui.QWidget):
         #self._plot.getViewBox().invertX(True)
 
     # ----------------------------------------------------------------------
-    def _mouseMoved(self, pos):
+    def _mouse_moved(self, pos):
         """
         """
         if self._plotItem.sceneBoundingRect().contains(pos):
             pos = self._plotItem.vb.mapSceneToView(pos)
-            self.cursorMoved.emit(pos.x(), pos.y())
+            self.cursor_moved.emit(pos.x(), pos.y())
 
     # ----------------------------------------------------------------------
-    def _mouseClicked(self, event):
+    def _mouse_clicked(self, event):
         """
         """
         if event.double():
             self._plotItem.autoRange()
 
     # ----------------------------------------------------------------------
-    def _setupPlot(self):
+    def _setup_plot(self):
         """
         """
         item = pg.PlotItem()

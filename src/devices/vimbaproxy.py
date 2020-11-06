@@ -13,6 +13,8 @@ import time
 
 import numpy as np
 
+from abstract_camera import AbstractCamera
+
 try:
     import PyTango
 except ImportError:
@@ -20,7 +22,7 @@ except ImportError:
 
 
 # ----------------------------------------------------------------------
-class VimbaProxy(object):
+class VimbaProxy(AbstractCamera):
     """Proxy to a physical TANGO device.
     """
     SERVER_SETTINGS = {'low': {"PixelFormat": "Mono8", "ViewingMode": 1},
@@ -32,12 +34,32 @@ class VimbaProxy(object):
     FPS = 2.
 
     # ----------------------------------------------------------------------
-    def __init__(self, settings, generalSettings, log):
-        super(VimbaProxy, self).__init__()
+    def __init__(self, beamline_id, settings, log):
+        super(VimbaProxy, self).__init__(beamline_id, settings, log)
 
         self._tangoServer = settings.option("device", "tango_server")
         high_depth = settings.option("device", "high_depth")
         self._cid = settings.option("device", "name")
+
+        self._exposureName = "ExposureTimeAbs"
+        self._viewX_name = "OffsetX"
+        self._viewY_name = "OffsetY"
+        self._viewH_name = "Height"
+        self._viewHmax_name = "HeightMax"
+        self._viewW_name = "Width"
+        self._viewWmax_name = "WidthMax"
+        self.hMax = self._device_proxy.read_attribute(self._viewHmax_name).value
+        self.wMax = self._device_proxy.read_attribute(self._viewWmax_name).value
+        self._gainName = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
+        self._high_depth = settings.option("device", "high_depth")
+
+        if self._high_depth:
+            self._ui.sbMaxLevel.setMaximum(2 ** 12)
+            self._ui.sbMinLevel.setMaximum(2 ** 12)
+        else:
+            self._ui.sbMaxLevel.setMaximum(2 ** 8)
+            self._ui.sbMinLevel.setMaximum(2 ** 8)
+
 
         self.log = log
 
@@ -70,15 +92,37 @@ class VimbaProxy(object):
                                                       PyTango.EventType.DATA_READY_EVENT,
                                                       self._readoutFrame, [], True)
 
-    # ----------------------------------------------------------------------
-    def maybeReadFrame(self):
-        """
-        """
-        if self._newFlag == False:
-            return None
 
-        self._newFlag = False
-        return self._lastFrame
+    def get_settings(self, option, cast):
+
+
+        self._tangoServer = settings.option("device", "tango_server")
+        self._deviceProxy = PyTango.DeviceProxy(str(self._tangoServer))
+        self._exposureName = "ExposureTimeAbs"
+        self._viewX_name = "OffsetX"
+        self._viewY_name = "OffsetY"
+        self._viewH_name = "Height"
+        self._viewHmax_name = "HeightMax"
+        self._viewW_name = "Width"
+        self._viewWmax_name = "WidthMax"
+        self.hMax = self._deviceProxy.read_attribute(self._viewHmax_name).value
+        self.wMax = self._deviceProxy.read_attribute(self._viewWmax_name).value
+        # self._deviceProxy.write_attribute(self._viewX_name, 0)
+        # self._deviceProxy.write_attribute(self._viewY_name, 0)
+        # self._deviceProxy.write_attribute(self._viewW_name, self.wMax)
+        # self._deviceProxy.write_attribute(self._viewH_name, self.hMax)
+
+        self._gainName = str(self._deviceProxy.get_property('GainFeatureName')['GainFeatureName'][0])
+        self._high_depth = settings.option("device", "high_depth")
+
+        if self._high_depth:
+            self._ui.sbMaxLevel.setMaximum(2 ** 12)
+            self._ui.sbMinLevel.setMaximum(2 ** 12)
+        else:
+            self._ui.sbMaxLevel.setMaximum(2 ** 8)
+            self._ui.sbMinLevel.setMaximum(2 ** 8)
+
+        fps = self._deviceProxy.read_attribute("AcquisitionFrameRateAbs").value
 
     # ----------------------------------------------------------------------
     def startAcquisition(self):
@@ -129,9 +173,7 @@ class VimbaProxy(object):
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
                 self._lastFrame = np.transpose(data.value)
-                # self._lastFrame = np.copy(data.value)
 
-                # lock = QtCore.QMutexLocker(self._flagMutex)             # ? TODO
                 self._newFlag = True
             except Exception as err:
                 print ('Got an error: {}'.format(err))

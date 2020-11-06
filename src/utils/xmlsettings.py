@@ -33,8 +33,6 @@ class XmlSettings(object):
 
             return node.getAttribute(attribute)
 
-        return None
-
     # ----------------------------------------------------------------------
     def getNodes(self, nodePath, nodeName):
         """
@@ -50,8 +48,6 @@ class XmlSettings(object):
 
             return node.getElementsByTagName(nodeName)
 
-        return None
-
     # ----------------------------------------------------------------------
     def node(self, nodePath):
         """
@@ -66,8 +62,7 @@ class XmlSettings(object):
 
             return node.getElementsByTagName(path[-1])[0]           # returns first matching node always...
 
-        return None
-
+    # ----------------------------------------------------------------------
     def hasattr(self, nodePath):
         try:
             self.node(nodePath)
