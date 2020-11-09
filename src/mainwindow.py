@@ -192,6 +192,7 @@ class MainWindow(QtGui.QMainWindow):
 
         self._frame_viewer.update_camera_label()
         self._frame_viewer.start_live_mode()
+        self._refresh_title()
     # ----------------------------------------------------------------------
     def _addDock(self, WidgetClass, label, location, *args, **kwargs):
         """
