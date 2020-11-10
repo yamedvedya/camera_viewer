@@ -27,9 +27,3 @@ class GuiLogger(logging.Handler):
     def emit(self, record):
         if self._widget:
             self._widget.append(record)
-        #else:
-        #    raise RuntimeError("Call setWidget function before!")
-
-    #return requests.post('http://srv.com:8080/',
-    #                     log_entry, headers={"Content-type": "application/json"}).cont
-

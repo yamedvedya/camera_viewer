@@ -18,8 +18,7 @@ class ExcThread(threading.Thread):
             else:
                 self.ret = self._target(*self._args, **self._kwargs)
         except Exception as exp:
-            print 'exception caught in propagating thread:'
-            print exp
+            print('exception caught in propagating thread:\n{}'.format(exp))
             traceback.print_tb(sys.exc_info()[2])
             self.bucket.put(sys.exc_info())
 

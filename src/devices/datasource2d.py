@@ -1,9 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
 # Author:        yury.matveev@desy.de
-
 # ----------------------------------------------------------------------
 
 """
@@ -16,15 +12,15 @@ import time
 
 import numpy as np
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 
 
 # ----------------------------------------------------------------------
 class DataSource2D(QtCore.QObject):
     """
     """
-    newFrame = QtCore.Signal()
-    gotError = QtCore.Signal(str)
+    newFrame = QtCore.pyqtSignal()
+    gotError = QtCore.pyqtSignal(str)
 
     TICK = 0.1
 

@@ -1,29 +1,11 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# ----------------------------------------------------------------------
+# Author:        yury.matveev@desy.de
+# ----------------------------------------------------------------------
 
-# ----------------------------------------------------------------------
-# Author:        sebastian.piec@mail.desy.de
-# Last modified: 2017, December 5
-# ----------------------------------------------------------------------
 
 """TCP/IP server exposing some summary statistics about the data frame.
 
-General format:
-    <init_token>;command
-
-Example session:
-    p22roisrv;getroi
-    p22roisrv;ok;42
 """
-
-from __future__ import print_function
-
-import logging
-import socket
-
-from src.utils.propagatingThread import ExcThread
-from Queue import Empty as emptyQueue
-from Queue import Queue
 
 import json
 
@@ -31,7 +13,13 @@ import select
 import traceback
 import time
 
-from PyQt4 import QtCore
+import logging
+import socket
+
+from queue import Queue
+from src.utils.propagatingThread import ExcThread
+
+from PyQt5 import QtCore
 
 # ----------------------------------------------------------------------
 class RoiServer(QtCore.QObject):

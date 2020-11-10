@@ -1,17 +1,12 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# ----------------------------------------------------------------------
+# Author:        yury.matveev@desy.de
+# ----------------------------------------------------------------------
 
-# ----------------------------------------------------------------------
-# Author:        patrick.loemker@desy.de
-# Last modified: 2018, July 10
-# ----------------------------------------------------------------------
 
 """TangotoTine camera proxy
 """
 
 import numpy as np
-from threading import Thread
-import time
 from abstract_camera import AbstractCamera
 
 try:

@@ -1,10 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# ----------------------------------------------------------------------
+# Author:        yury.matveev@desy.de
+# ----------------------------------------------------------------------
 
-# ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2018, February 2
-# ----------------------------------------------------------------------
 
 """
 """
@@ -17,14 +14,9 @@ from __future__ import print_function
 import sys
 from optparse import OptionParser
 
-from PyQt4 import QtGui
+from PyQt5 import QtWidgets
 
 from src.mainwindow import MainWindow
-
-
-# ----------------------------------------------------------------------
-def onExit(appName):
-    print(__name__, "{} closed properly".format(appName))
 
 # ----------------------------------------------------------------------
 def main():
@@ -36,10 +28,9 @@ def main():
 
     (options, _) = parser.parse_args()
 
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication(sys.argv)
 
     mainWindow = MainWindow(options)
-    mainWindow.windowClosed.connect(onExit)
     mainWindow.show()
 
     sys.exit(app.exec_())

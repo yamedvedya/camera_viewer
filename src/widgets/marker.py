@@ -2,11 +2,14 @@
 # Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
-from PyQt4 import QtGui, QtCore
+"""
+"""
+
+from PyQt5 import QtWidgets, QtCore
 from src.ui_vimbacam.Marker_ui import Ui_Marker
 
 # ----------------------------------------------------------------------
-class Marker(QtGui.QWidget):
+class Marker(QtWidgets.QWidget):
 
     marker_changed = QtCore.pyqtSignal(int, str, int)
     delete_me = QtCore.pyqtSignal(int)

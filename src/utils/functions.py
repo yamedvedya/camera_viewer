@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
+# Author:        sebastian.piec@desy.de & yury.matveev@desy.de
 # Last modified: 2017, December 12
 # ----------------------------------------------------------------------
 

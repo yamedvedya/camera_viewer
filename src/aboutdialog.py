@@ -12,12 +12,12 @@
 from datetime import datetime
 import os
 
-from PyQt4 import QtGui
+from PyQt5 import QtWidgets
 
 from src.ui_vimbacam.AboutDialog_ui import Ui_AboutDialog
 
 # ----------------------------------------------------------------------
-class AboutDialog(QtGui.QDialog):
+class AboutDialog(QtWidgets.QDialog):
     """
     """
     SOURCE_DIR = "src"

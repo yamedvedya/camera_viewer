@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
 # Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
@@ -13,7 +10,7 @@ import errno, time
 import json
 import PyTango
 
-from StringIO import StringIO
+from io import StringIO
 
 
 class MotorExecutor(object):

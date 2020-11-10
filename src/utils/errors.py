@@ -11,7 +11,7 @@
 
 import traceback
 
-from PyQt4 import QtGui
+from PyQt5 import QtWidgets
 
 # ----------------------------------------------------------------------
 def report_error(err, log=None, parent=None, simplify=False):
@@ -24,8 +24,8 @@ def report_error(err, log=None, parent=None, simplify=False):
     if parent:
         msg = str(err) if simplify else "{}\n\n{}".format(str(err).capitalize(),
                                                           str(traceback.format_exc()))
-        QtGui.QMessageBox.warning(parent, "Exception", msg,
-                                  QtGui.QMessageBox.Ok)
+        QtWidgets.QMessageBox.warning(parent, "Exception", msg,
+                                  QtWidgets.QMessageBox.Ok)
 
     # TODO
     # more user friendly ErrorDialog

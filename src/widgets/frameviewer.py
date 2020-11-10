@@ -1,9 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2017, December 5
+# Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """
@@ -16,7 +12,7 @@ from datetime import datetime
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.GradientEditorItem import Gradients
@@ -25,15 +21,15 @@ from src.utils.functions import roi_text
 from src.ui_vimbacam.FrameViewer_ui import Ui_FrameViewer
 
 # ----------------------------------------------------------------------
-class FrameViewer(QtGui.QWidget):
+class FrameViewer(QtWidgets.QWidget):
     """
     """
-    status_changed = QtCore.Signal(float)
-    roi_changed = QtCore.Signal(int)
-    roi_stats_ready = QtCore.Signal(int)
-    cursor_moved = QtCore.Signal(float, float)
-    device_started = QtCore.Signal()
-    device_stopped = QtCore.Signal()
+    status_changed = QtCore.pyqtSignal(float)
+    roi_changed = QtCore.pyqtSignal(int)
+    roi_stats_ready = QtCore.pyqtSignal(int)
+    cursor_moved = QtCore.pyqtSignal(float, float)
+    device_started = QtCore.pyqtSignal()
+    device_stopped = QtCore.pyqtSignal()
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -251,7 +247,7 @@ class FrameViewer(QtGui.QWidget):
             self._camera_device.start()
             self.device_started.emit()
         else:
-            QtGui.QMessageBox.warning(self, "Initialization Error",
+            QtWidgets.QMessageBox.warning(self, "Initialization Error",
                                       "{} not yet initialized".format(self._camera_device.device_id))
 
     # ----------------------------------------------------------------------
@@ -476,7 +472,7 @@ class FrameViewer(QtGui.QWidget):
 
         fileName = self._get_image_file_name("Save Image")
         if fileName:
-            pixmap = QtGui.QPixmap.grabWidget(self._ui.imageView)
+            pixmap = QtGui.QScreen.grabWidget(self._ui.imageView)
             pixmap.save(fileName)
 
     # ----------------------------------------------------------------------
@@ -490,7 +486,7 @@ class FrameViewer(QtGui.QWidget):
         defaultName = "data_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
                                           fmt)
 
-        fileTuple = QtGui.QFileDialog.getSaveFileName(self, "Save To File", self._saveDataFolder + defaultName,
+        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save To File", self._saveDataFolder + defaultName,
                                                       filter=(self.tr("Ascii Files (*.csv)")
                                                               if fmt == "csv" else
                                                               self.tr("Numpy Files (*.npy)")))
@@ -516,9 +512,9 @@ class FrameViewer(QtGui.QWidget):
         """
         self.stop_live_mode()
 
-        self._printer = QtGui.QPrinter()
+        self._printer = QtPrintSupport.QPrinter()
 
-        if QtGui.QPrintDialog(self._printer).exec_() == QtGui.QDialog.Accepted:
+        if QtPrintSupport.QPrintDialog(self._printer).exec_() == QtWidgets.QDialog.Accepted:
             self._printPainter = QtGui.QPainter(self._printer)
             self._printPainter.setRenderHint(QtGui.QPainter.Antialiasing)
 
@@ -530,8 +526,8 @@ class FrameViewer(QtGui.QWidget):
         """
         self.stop_live_mode()
 
-        pixmap = QtGui.QPixmap.grabWidget(self._ui.imageView)
-        QtGui.qApp.clipboard().setPixmap(pixmap)
+        pixmap = QtGui.QScreen.grabWidget(self._ui.imageView)
+        QtWidgets.qApp.clipboard().setPixmap(pixmap)
 
     # ----------------------------------------------------------------------
     def _get_image_file_name(self, title):
@@ -542,9 +538,8 @@ class FrameViewer(QtGui.QWidget):
 
         defaultName = "image_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
                                            self.DEFAULT_IMAGE_EXT)
-        fileTuple = QtGui.QFileDialog.getSaveFileName(self, title, self._saveImageFolder + defaultName,
-                                                      filesFilter,
-                                                      selectedFilter="(*.{})".format(self.DEFAULT_IMAGE_EXT))
+        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, title, self._saveImageFolder + defaultName,
+                                                      filesFilter)
 
         self._saveImageFolder = QtCore.QFileInfo(fileTuple).path() + '/'
 
@@ -568,10 +563,25 @@ class FrameViewer(QtGui.QWidget):
         Args:
             (QSettings)
         """
-        self._ui.splitter_y1.restoreState(settings.value("FrameViewer/splitterY1").toByteArray())
-        self._ui.splitter_y2.restoreState(settings.value("FrameViewer/splitterY2").toByteArray())
-        self._ui.splitter_x.restoreState(settings.value("FrameViewer/splitterX").toByteArray())
-        self.restoreGeometry(settings.value("FrameViewer/geometry").toByteArray())
+        try:
+            self._ui.splitter_y1.restoreState(settings.value("FrameViewer/splitterY1"))
+        except:
+            pass
+
+        try:
+            self._ui.splitter_y2.restoreState(settings.value("FrameViewer/splitterY2"))
+        except:
+            pass
+
+        try:
+            self._ui.splitter_x.restoreState(settings.value("FrameViewer/splitterX"))
+        except:
+            pass
+
+        try:
+            self.restoreGeometry(settings.value("FrameViewer/geometry"))
+        except:
+            pass
 
     # ----------------------------------------------------------------------
     def enable_auto_levels(self, mode):

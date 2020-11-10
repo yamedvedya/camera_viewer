@@ -1,20 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2017, July 5
+# Author:   yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
-"""Compiles ui and rcc files (works on Linux/Windows, with PyQt/PySide).
-
-Usage:
-     ./build.py [qtlib] [os]
-
-e.g.:
-     ./build.py pyqt linux
-     ./build.py pyside windows
-"""
 
 from __future__ import print_function
 
@@ -25,45 +12,30 @@ import sys
 in_dirs = ["ui"]
 out_dirs = ["src/ui_vimbacam"]
 
-ui_compilers = {"linux2": {
-                    "pyqt": "pyuic4",
-                    "pyside": "pyside-uic"
-                },
-                "win32": {
-                    "pyqt": "C:\\Python27\\lib\\site-packages\\PyQt4\\pyuic4.bat",
-                    "pyside": ""
-                }
-               }
+ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
+                "win32": "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyuic5.exe"}
 
-rc_compilers = {"linux2": {
-                    "pyqt": "pyrcc4",
-                    "pyside": "pyside-rcc"
-                },
-                "win32": {
-                    "pyqt": "C:\\Python27\\lib\\site-packages\\PyQt4\\pyrcc4.exe",
-                    "pyside": ""
-                }
-               }
-
+rc_compilers = {"linux2": "python -m PyQt5.uic.pyrcc",
+                "win32":  "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyrcc5.exe"}
 
 # ----------------------------------------------------------------------
 def compile_uis(ui_compiler, rc_compiler, in_dirs, out_dirs):
     """
-    """ 
+    """
     for in_dir, out_dir in zip(in_dirs, out_dirs):
         for f in [f for f in os.listdir(in_dir) if os.path.isfile(os.path.join(in_dir, f))
-                  and os.path.splitext(f)[-1] in [".ui", ".qrc"]]:        # simplify this loop TODO
+                                                   and os.path.splitext(f)[-1] in [".ui",
+                                                                                   ".qrc"]]:  # simplify this loop TODO
             base, ext = os.path.splitext(f)
             post, comp = ("_ui", ui_compiler) if ext == ".ui" else ("_rc", rc_compiler)
 
             cmd = "{} {}/{} -o {}/{}{}.py".format(comp, in_dir, f, out_dir, base, post)
             print(cmd)
             os.system(cmd)
-  
+
+
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-
-    lib_name, sys_name = "pyqt", sys.platform
 
     print("Removing pyc files...")
 
@@ -87,14 +59,7 @@ if __name__ == "__main__":
 
     print("All removed!")
 
-    if len(sys.argv) > 1:
-        lib_name = sys.argv[1].lower()
-    
-    if len(sys.argv) > 2:
-        sys_name = sys.argv[2].lower()
+    compile_uis(ui_compilers[sys.platform],
+                rc_compilers[sys.platform], in_dirs, out_dirs)
 
-    compile_uis(ui_compilers[sys_name][lib_name],
-                rc_compilers[sys_name][lib_name], in_dirs, out_dirs)
-    
     print("All OK!")
-

@@ -1,19 +1,19 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
 # Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """General camera class
 """
+
 import PyTango
-from distutils.util import strtobool
 import numpy as np
-from PyQt4 import QtCore
+
+from PyQt5 import QtCore
+from distutils.util import strtobool
+
 from screen_motor import MotorExecutor
 
-
+# ----------------------------------------------------------------------
 class AbstractCamera(object):
 
     def __init__(self, beamline_id, settings, log):
@@ -106,20 +106,35 @@ class AbstractCamera(object):
                 raise RuntimeError('Unknown setting source')
         else:
             if cast == int:
-                value, _ = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                    "{}/{}".format(self._cid, option)).toInt()
+                try:
+                    value, _ = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
+                        "{}/{}".format(self._cid, option)).toInt()
+                except:
+                    value = 0
             elif cast == str:
-                value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                    "{}/{}".format(self._cid, option)).toString()
+                try:
+                    value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
+                        "{}/{}".format(self._cid, option)).toString()
+                except:
+                    value = ''
             elif cast == bool:
-                value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                    "{}/{}".format(self._cid, option)).toBool()
+                try:
+                    value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
+                        "{}/{}".format(self._cid, option)).toBool()
+                except:
+                    value = False
             elif cast == float:
-                value, _ = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                    "{}/{}".format(self._cid, option)).toFloat()
+                try:
+                    value, _ = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
+                        "{}/{}".format(self._cid, option)).toFloat()
+                except:
+                    value = 0.0
             else:
-                value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                    "{}/{}".format(self._cid, option))
+                try:
+                    value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
+                        "{}/{}".format(self._cid, option))
+                except:
+                    value = None
 
         return value
 

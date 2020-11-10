@@ -1,9 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2017, December 13
+# Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """
@@ -19,7 +15,7 @@ except ImportError:
 
 from src.utils.errors import report_error
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 from src.ui_vimbacam.SettingsWidget_ui import Ui_SettingsWidget
 from src.widgets.marker import Marker
@@ -27,20 +23,20 @@ from src.widgets.marker import Marker
 from src.utils.functions import refresh_combo_box
 
 # ----------------------------------------------------------------------
-class SettingsWidget(QtGui.QWidget):
+class SettingsWidget(QtWidgets.QWidget):
     """
     """
-    marker_changed = QtCore.Signal(int)
-    markers_changed = QtCore.Signal()
-    roi_changed = QtCore.Signal(int)
-    roi_marker_selected = QtCore.Signal(str)
+    marker_changed = QtCore.pyqtSignal(int)
+    markers_changed = QtCore.pyqtSignal()
+    roi_changed = QtCore.pyqtSignal(int)
+    roi_marker_selected = QtCore.pyqtSignal(str)
 
-    color_map_changed = QtCore.Signal(str)
-    levels_changed = QtCore.Signal(float, float)
-    enable_auto_levels = QtCore.Signal(bool)
-    set_dark_image = QtCore.Signal()
-    remove_dark_image = QtCore.Signal()
-    image_size_changed = QtCore.Signal(float, float, float, float)
+    color_map_changed = QtCore.pyqtSignal(str)
+    levels_changed = QtCore.pyqtSignal(float, float)
+    enable_auto_levels = QtCore.pyqtSignal(bool)
+    set_dark_image = QtCore.pyqtSignal()
+    remove_dark_image = QtCore.pyqtSignal()
+    image_size_changed = QtCore.pyqtSignal(float, float, float, float)
 
     PARAMS_EDITOR = "atkpanel"
     SYNC_TICK = 1000  # [ms]
@@ -56,7 +52,7 @@ class SettingsWidget(QtGui.QWidget):
 
         self._ui = Ui_SettingsWidget()
         self._ui.setupUi(self)
-        self._marker_grid = QtGui.QGridLayout(self._ui.layout_markers)
+        self._marker_grid = QtWidgets.QGridLayout(self._ui.layout_markers)
         self._markers_widgets = []
 
         self._camera_device = None
@@ -207,18 +203,14 @@ class SettingsWidget(QtGui.QWidget):
         """
         """
         self._blockSignals(True)
-        if min is None:
-            min = 0
         self._ui.sbMinLevel.setValue(min)
-
-        if max is None:
-            max = 1
         self._ui.sbMaxLevel.setValue(max)
 
-        if map is None:
-            map = self._ui.cbColorMap.currentText()
+        try:
+            index = self._ui.cbColorMap.findText(map, QtCore.Qt.MatchFixedString)
+        except:
+            index = 0
 
-        index = self._ui.cbColorMap.findText(map, QtCore.Qt.MatchFixedString)
         if index >= 0:
             self._ui.cbColorMap.setCurrentIndex(index)
 
@@ -412,7 +404,10 @@ class SettingsWidget(QtGui.QWidget):
         Args:
             (QSettings)
         """
-        self.restoreGeometry(settings.value("SettingsWidget/geometry").toByteArray())
+        try:
+            self.restoreGeometry(settings.value("SettingsWidget/geometry"))
+        except:
+            pass
 
     # ----------------------------------------------------------------------
     def load_camera_settings(self):
@@ -425,16 +420,10 @@ class SettingsWidget(QtGui.QWidget):
                                self._camera_device.get_settings('level_max', int),
                                self._camera_device.get_settings('color_map', str))
 
-            auto_levels = self._camera_device.get_settings('auto_levels_set', bool)
-            if auto_levels is None:
-                auto_levels = True
-            self._ui.chkAutoLevels.setChecked(auto_levels)
+            self._ui.chkAutoLevels.setChecked(self._camera_device.get_settings('auto_levels_set', bool))
             self._autoLevelsChanged()
 
-            _auto_screen = self._camera_device.get_settings('auto_levels_set', bool)
-            if _auto_screen is None:
-                _auto_screen = False
-            self._ui.chk_auto_screen.setChecked(_auto_screen)
+            self._ui.chk_auto_screen.setChecked(self._camera_device.get_settings('auto_levels_set', bool))
 
             for roi_ui in ['RoiX', 'RoiY', 'RoiWidth', 'RoiHeight']:
                 self._rois[self._current_roi_index[0]][roi_ui] = self._camera_device.get_settings(roi_ui, int)

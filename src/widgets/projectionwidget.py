@@ -1,29 +1,24 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2017, November 20
+# Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """Displays x/y projection of a data frame.
 """
 
 import numpy as np
-
-from PyQt4 import QtCore, QtGui
-
 import pyqtgraph as pg
+
+from PyQt5 import QtCore, QtWidgets, QtGui
 
 from src.ui_vimbacam.ProjectionWidget_ui import Ui_ProjectionWidget
 
 # ----------------------------------------------------------------------
-class ProjectionWidget(QtGui.QWidget):
+class ProjectionWidget(QtWidgets.QWidget):
     """
     """
     PLOT_COLOR = QtGui.QColor(80, 90, 210)
    
-    cursor_moved = QtCore.Signal(float, float)
+    cursor_moved = QtCore.pyqtSignal(float, float)
     
     # ----------------------------------------------------------------------
     def __init__(self, parent):
@@ -39,15 +34,9 @@ class ProjectionWidget(QtGui.QWidget):
         self._ui = Ui_ProjectionWidget()
         self._ui.setupUi(self)
       
-            # 
         self._plotItem, self._plot = self._setup_plot()
         self._ui.graphicsView.setCentralItem(self._plotItem)
 
-
-            # temp? TODO
-#        self._ui.graphicsView.setYLink(self.parent._ui.imageView.view)
-
-        
         self._plotItem.scene().sigMouseMoved.connect(self._mouse_moved)
         self._plotItem.scene().sigMouseClicked.connect(self._mouse_clicked)
  
@@ -72,7 +61,6 @@ class ProjectionWidget(QtGui.QWidget):
         self._plot.rotate(90)
 
         self._plot.getViewBox().invertY(True)
-        #self._plot.getViewBox().invertX(True)
 
     # ----------------------------------------------------------------------
     def _mouse_moved(self, pos):
