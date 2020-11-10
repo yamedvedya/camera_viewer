@@ -423,7 +423,7 @@ class SettingsWidget(QtWidgets.QWidget):
             self._ui.chkAutoLevels.setChecked(self._camera_device.get_settings('auto_levels_set', bool))
             self._autoLevelsChanged()
 
-            self._ui.chk_auto_screen.setChecked(self._camera_device.get_settings('auto_levels_set', bool))
+            self._ui.chk_auto_screen.setChecked(self._camera_device.get_settings('auto_screen', bool))
 
             for roi_ui in ['RoiX', 'RoiY', 'RoiWidth', 'RoiHeight']:
                 self._rois[self._current_roi_index[0]][roi_ui] = self._camera_device.get_settings(roi_ui, int)
@@ -523,7 +523,7 @@ class SettingsWidget(QtWidgets.QWidget):
             self._camera_device.save_settings('level_max', self._ui.sbMaxLevel.value())
             self._camera_device.save_settings('color_map', str(self._ui.cbColorMap.currentText()).lower())
             self._camera_device.save_settings('auto_levels_set', self._ui.chkAutoLevels.isChecked())
-            self._camera_device.save_settings('auto_levels_set', self._ui.chk_auto_screen.isChecked())
+            self._camera_device.save_settings('auto_screen', self._ui.chk_auto_screen.isChecked())
 
             for roi_param in ['RoiX', 'RoiY', 'RoiWidth', 'RoiHeight', 'Threshold', 'Roi_Visible']:
                 self._camera_device.save_settings(roi_param, self._rois[self._current_roi_index[0]][roi_param])

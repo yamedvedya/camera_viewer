@@ -135,7 +135,7 @@ dmypy.json
 /config
 /src/logs/
 /src/ui_vimbacam
+!src/ui_vimbacam/__init__.py
 /tmp/
 /logs
 /config.xml
-start_camera*

@@ -287,8 +287,11 @@ class FrameViewer(QtWidgets.QWidget):
             self._last_frame[valid_idx] -= self._dark_frame[valid_idx]
             self._last_frame[~valid_idx] = 0
 
-        self._ui.imageView.setImage(self._last_frame, autoLevels=self.auto_levels,
-                                    levels=(self.min_level, self.max_level), autoRange=False)
+        if self.auto_levels:
+            self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False)
+        else:
+            self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False)
+
         self._ui.imageView.imageItem.setLookupTable(spectrum_colormap.getLookupTable())
         self._ui.imageView.imageItem.setX(self.image_x_pos)
         self._ui.imageView.imageItem.setY(self.image_y_pos)
