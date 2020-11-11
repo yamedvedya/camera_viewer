@@ -2,9 +2,6 @@
 # Author:   yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
-
-from __future__ import print_function
-
 import os
 import sys
 

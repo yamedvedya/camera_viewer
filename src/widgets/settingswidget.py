@@ -59,7 +59,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self._rois, self._markers, self._statistics = None, None, None
         self._current_roi_index = None
 
-        self._roiMarker = ''
+        self._statistics_marker = 'none'
 
         self._first_camera = True
 
@@ -67,8 +67,11 @@ class SettingsWidget(QtWidgets.QWidget):
         self._picture_height = None
 
         self._ui.tbAllParams.clicked.connect(self._edit_all_params)
-        for ui in ['ExposureTime', 'Gain', 'ViewX', 'ViewY', 'ViewW', 'ViewH']:
+        for ui in ['ExposureTime', 'Gain']:
             getattr(self._ui, 'sb{}'.format(ui)).editingFinished.connect(lambda x=ui: self._settings_changed(x))
+
+        for ui in ['ViewX', 'ViewY', 'ViewW', 'ViewH']:
+            getattr(self._ui, 'sb{}'.format(ui)).editingFinished.connect(lambda x=ui: self._range_changed(x))
 
         self._ui.chkAutoLevels.stateChanged.connect(self._autoLevelsChanged)
         self._ui.sbMinLevel.valueChanged.connect(self._levelsChanged)
@@ -80,7 +83,9 @@ class SettingsWidget(QtWidgets.QWidget):
         self._ui.chbShowRoi.stateChanged.connect(lambda: self._make_roi_visible(self._ui.chbShowRoi.isChecked()))
 
         self._ui.pbInOut.clicked.connect(lambda: self._camera_device.move_motor())
-        self._ui.bgRoiMarker.buttonClicked.connect(self._roi_marker_changed)
+        self._ui.chbShowCom.stateChanged.connect(lambda: self._roi_marker_changed('com'))
+        self._ui.chbShowMin.stateChanged.connect(lambda: self._roi_marker_changed('min'))
+        self._ui.chbShowMax.stateChanged.connect(lambda: self._roi_marker_changed('max'))
         self._ui.tbDarkImage.clicked.connect(self.set_dark_image)
         self._ui.tbDarkImageDelete.clicked.connect(self.remove_dark_image)
         self._ui.but_add_marker.clicked.connect(self._add_marker)
@@ -94,6 +99,11 @@ class SettingsWidget(QtWidgets.QWidget):
         self._syncTimer = QtCore.QTimer(self)
         self._syncTimer.timeout.connect(self._sync_settings)
         self._syncTimer.start(self.SYNC_TICK)
+
+    # ----------------------------------------------------------------------
+    def close(self):
+        self._syncTimer.stop()
+        super(SettingsWidget, self).close()
 
     # ----------------------------------------------------------------------
     def _sync_settings(self):
@@ -190,6 +200,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self._ui.sbViewH.setMaximum(self._picture_height - view_y)
 
         self.image_size_changed.emit(view_x, view_y, view_w, view_h)
+        self._camera_device.change_picture_size([view_x, view_y, view_w, view_h])
 
     # ----------------------------------------------------------------------
     def _save_one_setting(self, name, value):
@@ -202,21 +213,17 @@ class SettingsWidget(QtWidgets.QWidget):
     def update_levels(self, min, max, map):
         """
         """
-        self._blockSignals(True)
+        self._block_signals(True)
         self._ui.sbMinLevel.setValue(min)
         self._ui.sbMaxLevel.setValue(max)
 
-        try:
-            index = self._ui.cbColorMap.findText(map, QtCore.Qt.MatchFixedString)
-        except:
-            index = 0
-
+        index = self._ui.cbColorMap.findText(map, QtCore.Qt.MatchFixedString)
         if index >= 0:
             self._ui.cbColorMap.setCurrentIndex(index)
 
         self.levels_changed.emit(min, max)
-        self.color_map_changed.emit(map)
-        self._blockSignals(False)
+        self.color_map_changed.emit(str(self._ui.cbColorMap.currentText()).lower())
+        self._block_signals(False)
 
     # ----------------------------------------------------------------------
     def update_marker(self, num):
@@ -230,18 +237,17 @@ class SettingsWidget(QtWidgets.QWidget):
     def update_roi(self, index):
         """
         """
-        self._blockSignals(True)
+        self._block_signals(True)
         for ui in ["RoiX", "RoiY", "RoiWidth", "RoiHeight"]:
             getattr(self._ui, 'sb{}'.format(ui)).setValue(self._rois[index][ui])
             self._camera_device.save_settings(ui, self._rois[index][ui])
-        self._blockSignals(False)
+        self._block_signals(False)
 
     # CS
     # ----------------------------------------------------------------------
     def update_roi_statistics(self, roi_index):
 
         """Stats changed     """
-
 
         try:
             self._ui.leMaxVal.setText('{:2.2f}'.format(self._statistics[roi_index]["extrema"][1]))
@@ -312,44 +318,33 @@ class SettingsWidget(QtWidgets.QWidget):
         self.marker_changed.emit(num)
 
     # ----------------------------------------------------------------------
-    def _roi_marker_changed(self):
+    def _roi_marker_changed(self, button):
         """
         """
-        if self._ui.chbShowMax.isChecked():
-            if self._roiMarker != 'max':
-                self._ui.chbShowMin.setChecked(False)
-                self._ui.chbShowCom.setChecked(False)
-                self._roiMarker = 'max'
-        else:
-            if self._roiMarker == 'max':
-                self._roiMarker = ''
 
-        if self._ui.chbShowMin.isChecked():
-            if self._roiMarker != 'min':
-                self._ui.chbShowMax.setChecked(False)
-                self._ui.chbShowCom.setChecked(False)
-                self._roiMarker = 'min'
-        else:
-            if self._roiMarker == 'min':
-                self._roiMarker = ''
+        if button == 'max':
+            if self._statistics_marker == 'max':
+                self._statistics_marker = 'none'
+            else:
+                self._statistics_marker = 'max'
+        elif button == 'min':
+            if self._statistics_marker == 'min':
+                self._statistics_marker = 'none'
+            else:
+                self._statistics_marker = 'min'
+        elif button == 'com':
+            if self._statistics_marker == 'com':
+                self._statistics_marker = 'none'
+            else:
+                self._statistics_marker = 'com'
 
-        if self._ui.chbShowCom.isChecked():
-            if self._roiMarker != 'com':
-                self._ui.chbShowMax.setChecked(False)
-                self._ui.chbShowMin.setChecked(False)
-                self._roiMarker = 'com'
-        else:
-            if self._roiMarker == 'com':
-                self._roiMarker = ''
+        self._block_signals(True)
+        self._ui.chbShowMax.setChecked(self._statistics_marker == 'max')
+        self._ui.chbShowMin.setChecked(self._statistics_marker == 'min')
+        self._ui.chbShowCom.setChecked(self._statistics_marker == 'com')
+        self._block_signals(False)
 
-        visible = 'none'
-        if self._ui.chbShowMax.isChecked():
-            visible = 'max'
-        elif self._ui.chbShowMin.isChecked():
-            visible = 'min'
-        elif self._ui.chbShowCom.isChecked():
-            visible = 'com'
-        self.roi_marker_selected.emit(visible)
+        self.roi_marker_selected.emit(self._statistics_marker)
 
     # ----------------------------------------------------------------------
     def _roi_changed(self, name, value):
@@ -377,6 +372,14 @@ class SettingsWidget(QtWidgets.QWidget):
         """
         with QtCore.QMutexLocker(self._tangoMutex):
             self._camera_device.save_settings(name, getattr(self._ui, 'sb{}'.format(name)).value())
+
+    # ----------------------------------------------------------------------
+    def _range_changed(self, name):
+
+        with QtCore.QMutexLocker(self._tangoMutex):
+            self._camera_device.save_settings(name, getattr(self._ui, 'sb{}'.format(name)).value())
+
+        self._change_picture_size()
 
     # ----------------------------------------------------------------------
     def _edit_all_params(self):
@@ -412,7 +415,7 @@ class SettingsWidget(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def load_camera_settings(self):
 
-        self._blockSignals(True)
+        self._block_signals(True)
         result = True
 
         try:
@@ -422,6 +425,13 @@ class SettingsWidget(QtWidgets.QWidget):
 
             self._ui.chkAutoLevels.setChecked(self._camera_device.get_settings('auto_levels_set', bool))
             self._autoLevelsChanged()
+
+            max_level_limit = self._camera_device.get_settings('max_level_limit', int)
+            if max_level_limit is None:
+                max_level_limit = 10000
+
+            self._ui.sbMaxLevel.setMaximum(max_level_limit)
+            self._ui.sbMinLevel.setMaximum(max_level_limit)
 
             self._ui.chk_auto_screen.setChecked(self._camera_device.get_settings('auto_screen', bool))
 
@@ -464,42 +474,28 @@ class SettingsWidget(QtWidgets.QWidget):
                 if viewX is not None:
                     self._ui.sbViewX.setDisabled(False)
                     self._ui.sbViewX.setValue(viewX)
-                    if self._picture_width is not None and viewW is not None:
-                        self._ui.sbViewX.setMaximum(self._picture_width - viewW)
-                    else:
-                        self._ui.sbViewX.setMaximum(10000)
                 else:
                     self._ui.sbViewX.setDisabled(True)
 
                 if viewY is not None:
                     self._ui.sbViewY.setDisabled(False)
                     self._ui.sbViewY.setValue(viewY)
-                    if self._picture_height is not None and viewH is not None:
-                        self._ui.sbViewY.setMaximum(self._picture_height - viewH)
-                    else:
-                        self._ui.sbViewY.setMaximum(10000)
                 else:
                     self._ui.sbViewY.setDisabled(True)
 
                 if viewW is not None:
                     self._ui.sbViewW.setDisabled(False)
                     self._ui.sbViewW.setValue(viewW)
-                    if self._picture_width is not None:
-                        self._ui.sbViewW.setMaximum(self._picture_width - viewX)
-                    else:
-                        self._ui.sbViewW.setMaximum(10000)
                 else:
                     self._ui.sbViewW.setDisabled(True)
 
                 if viewH is not None:
                     self._ui.sbViewH.setDisabled(False)
                     self._ui.sbViewH.setValue(viewH)
-                    if self._picture_height is not None:
-                        self._ui.sbViewH.setMaximum(self._picture_height - viewY)
-                    else:
-                        self._ui.sbViewH.setMaximum(10000)
                 else:
                     self._ui.sbViewH.setDisabled(True)
+
+                self._change_picture_size()
 
                 fps = self._camera_device.get_settings('FPS', int)
                 if fps is not None:
@@ -507,12 +503,14 @@ class SettingsWidget(QtWidgets.QWidget):
                 else:
                     self._ui.lbFps.setText("")
 
+                self._roi_marker_changed(self._camera_device.get_settings('Statistics_Marker', str))
+
         except Exception as err:
             report_error(err, self.log, self)
             result = False
 
         finally:
-            self._blockSignals(False)
+            self._block_signals(False)
             return result
 
     # ----------------------------------------------------------------------
@@ -533,6 +531,8 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._camera_device.save_settings('marker_{:d}_x'.format(num), values['x'])
                 self._camera_device.save_settings('marker_{:d}_y'.format(num), values['y'])
 
+            self._camera_device.save_settings('Statistics_Marker', self._statistics_marker)
+
             self._camera_device.save_settings('ExposureTime', min(max(float(self._ui.sbExposureTime.value()), 50), 1e6))
             self._camera_device.save_settings('Gain', min(max(float(self._ui.sbGain.value()), 0), 22))
 
@@ -550,7 +550,7 @@ class SettingsWidget(QtWidgets.QWidget):
 
 
     # ----------------------------------------------------------------------
-    def _blockSignals(self, flag):
+    def _block_signals(self, flag):
         """
         """
         self._ui.sbRoiX.blockSignals(flag)
@@ -560,6 +560,11 @@ class SettingsWidget(QtWidgets.QWidget):
         self._ui.chbShowRoi.blockSignals(flag)
         self._ui.sbExposureTime.blockSignals(flag)
         self._ui.sbGain.blockSignals(flag)
+
+        self._ui.chbShowMax.blockSignals(flag)
+        self._ui.chbShowMin.blockSignals(flag)
+        self._ui.chbShowCom.blockSignals(flag)
+        self._ui.chbShowRoi.blockSignals(flag)
 
     # ----------------------------------------------------------------------
     def _autoLevelsChanged(self):

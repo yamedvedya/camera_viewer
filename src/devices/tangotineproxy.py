@@ -32,12 +32,7 @@ class TangoTineProxy(AbstractCamera):
                      "ExposureTime": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
                      "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
                      'FPS': (None, ),
-                     'wMax': (None, ),
-                     'hMax': (None, ),
-                     'viewX': (None, ),
-                     'viewY': (None, ),
-                     'viewW': (None, ),
-                     'viewH': (None, )
+                     'max_level_limit': (None, )
                      }
 
     # ----------------------------------------------------------------------
@@ -46,8 +41,8 @@ class TangoTineProxy(AbstractCamera):
 
         self._init_device()
 
-        self._new_flag = False
         self.error_flag = False
+        self._picture_size = []
         self.error_msg = ''
         self._last_frame = np.zeros((1, 1))
         self.period = 200
@@ -82,6 +77,7 @@ class TangoTineProxy(AbstractCamera):
     def stop_acquisition(self):
 
         self._device_proxy.unsubscribe_event(self._eid)
+        self._log.debug("TangoTineTango Event unsubscribed")
 
     # ----------------------------------------------------------------------
     def _readout_frame(self, event):
@@ -93,5 +89,50 @@ class TangoTineProxy(AbstractCamera):
         # for some reason this wants the 'short' attribute name, not the fully-qualified name
         # we get in event.attr_name
         data = event.device.read_attribute(event.attr_name.split('/')[6])
-        self._last_frame = np.transpose(data.value)
-        self._new_flag = True
+        if self._picture_size:
+            self._last_frame = np.transpose(data.value)[self._picture_size[0]:self._picture_size[2],
+                                                        self._picture_size[1]:self._picture_size[3]]
+        else:
+            self._last_frame = np.transpose(data.value)
+
+        self._new_frame_flag = True
+
+    # ----------------------------------------------------------------------
+    def get_settings(self, option, cast):
+        if option in ['wMax', 'hMax']:
+            h, w = self._device_proxy.Frame.shape
+            if option == 'wMax':
+                return w
+            else:
+                return h
+
+        elif option in ['viewW', 'viewH']:
+            value = super(TangoTineProxy, self).get_settings(option, cast)
+            if value == 0:
+                if option == 'viewW':
+                    return self.get_settings('wMax', int)
+                else:
+                    return self.get_settings('hMax', int)
+            else:
+                return value
+        elif option in ['ExposureTime', 'Gain']:
+            try:
+                value = self._settings_proxy.read_attribute(self._settings_map[option][1][0]).value
+            except:
+                value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
+                self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
+            return cast(value)
+        else:
+            return super(TangoTineProxy, self).get_settings(option, cast)
+
+    # ----------------------------------------------------------------------
+    def save_settings(self, setting, value):
+        if setting in ['ExposureTime', 'Gain']:
+            self._settings_proxy.write_attribute(self._settings_map[setting][1][0], value)
+        else:
+            super(TangoTineProxy, self).save_settings(setting, value)
+
+    # ----------------------------------------------------------------------
+    def change_picture_size(self, size):
+
+        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]

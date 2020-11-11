@@ -5,7 +5,7 @@
 """
 """
 
-from __future__ import print_function
+APP_NAME = "CameraViewer"
 
 import getpass
 
@@ -18,6 +18,8 @@ import subprocess
 from functools import partial
 
 from PyQt5 import QtWidgets, QtCore, QtGui
+
+from distutils.util import strtobool
 
 import pyqtgraph as pg
 
@@ -38,11 +40,6 @@ from src.ui_vimbacam.MainWindow_ui import Ui_MainWindow
 class MainWindow(QtWidgets.QMainWindow):
     """
     """
-    windowClosed = QtCore.pyqtSignal(str)
-
-    APP_NAME = "Camera Viewer"
-    BEAMLINE_ID = "DESY_P23"
-
     LOG_PREVIEW = "gvim"
     STATUS_TICK = 2000              # [ms]
 
@@ -66,7 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._init_ui()
         self.camera_name = self._load_ui_settings()
-        if self.camera_name == '' or self.camera_name is None:
+        if self.camera_name == '':
             self.camera_name = self._device_list[0]
 
         self._camera_device = self._init_data_source()
@@ -107,7 +104,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _parse_settings(self):
 
         cam_list = []
-        for device in self._settings.getNodes('vimbacam', 'camera'):
+        for device in self._settings.getNodes('camera_viewer', 'camera'):
             cam_list.append(device.getAttribute('name'))
 
         if not cam_list:
@@ -267,27 +264,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def clean_close(self):
         """
         """
-        self._frame_viewer.stop_live_mode()
+        self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
 
-        if self._reallyQuit() == QtWidgets.QMessageBox.Yes:
-            self.log.info("Closing the app...")
+        self.log.info("Closing the app...")
 
-            self._frame_viewer.close()
-            if self._roi_server:
-                self._roi_server.stop()
-            self._settings_widget.close()
-            self._statusTimer.stop()
+        self._frame_viewer.close()
+        if self._roi_server:
+            self._roi_server.stop()
+        self._settings_widget.close()
+        self._statusTimer.stop()
 
-            self._save_ui_settings()
+        self._save_ui_settings()
 
-            QtWidgets.qApp.clipboard().clear()
-            self.log.info("Closed properly")
+        QtWidgets.qApp.clipboard().clear()
+        self.log.info("Closed properly")
 
-            if not self.signalsBlocked():
-                self.windowClosed.emit(self.APP_NAME)
-
-            return True
-        return False
+        return True
 
     # ----------------------------------------------------------------------
     def _quit_program(self):
@@ -295,21 +287,13 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         if self.clean_close():
             QtWidgets.qApp.quit()
-
-    # ----------------------------------------------------------------------
-    def _reallyQuit(self):
-        """Make sure that the user wants to quit this program.
-        """
-        return QtWidgets.QMessageBox.question(self, "Quit",
-                                          "Do you really want to quit?",
-                                          QtWidgets.QMessageBox.Yes,
-                                          QtWidgets.QMessageBox.No)
+            # pass
 
     # ----------------------------------------------------------------------
     def _save_ui_settings(self):
         """Save basic GUI settings.
         """
-        settings = QtCore.QSettings("VimbaViewer", self.options.beamlineID)
+        settings = QtCore.QSettings(APP_NAME, self.options.beamlineID)
 
         settings.setValue("MainWindow/geometry", self.saveGeometry())
         settings.setValue("MainWindow/state", self.saveState())
@@ -324,7 +308,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _load_ui_settings(self):
         """Load basic GUI settings.
         """
-        settings = QtCore.QSettings("CameraViewer", self.options.beamlineID)
+        settings = QtCore.QSettings(APP_NAME, self.options.beamlineID)
 
         try:
             self.restoreGeometry(settings.value("MainWindow/geometry"))
@@ -337,7 +321,7 @@ class MainWindow(QtWidgets.QMainWindow):
             pass
 
         try:
-            self._chk_auto_screens.setChecked(settings.value("AutoScreen").toBool())
+            self._chk_auto_screens.setChecked(strtobool(settings.value("AutoScreen")))
         except:
             self._chk_auto_screens.setChecked(False)
 
@@ -345,7 +329,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._settings_widget.load_ui_settings(settings)
 
         try:
-            return str(settings.value("LastCamera").toString())
+            return settings.value("LastCamera")
         except:
             return None
 

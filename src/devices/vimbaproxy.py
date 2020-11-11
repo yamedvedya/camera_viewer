@@ -1,9 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2017, December 13
+# Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """Vimba camera proxy
@@ -14,6 +10,8 @@ import time
 import numpy as np
 
 from abstract_camera import AbstractCamera
+
+from distutils.util import strtobool
 
 try:
     import PyTango
@@ -33,128 +31,91 @@ class VimbaProxy(AbstractCamera):
     STOP_DELAY = 0.5
     FPS = 2.
 
+    _settings_map = {"ExposureTime": ("device_proxy", "ExposureTimeAbs"),
+                     "Gain": ["device_proxy", ""],
+                     'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
+                     'viewX': ("device_proxy", "OffsetX"),
+                     'viewY': ("device_proxy", "OffsetY"),
+                     'viewH': ("device_proxy", "Height"),
+                     'viewW': ("device_proxy", "Width"),
+                     'wMax': ("device_proxy", "WidthMax"),
+                     'hMax': ("device_proxy", "HeightMax")
+                     }
+
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(VimbaProxy, self).__init__(beamline_id, settings, log)
 
-        self._tangoServer = settings.option("device", "tango_server")
-        high_depth = settings.option("device", "high_depth")
-        self._cid = settings.option("device", "name")
-
-        self._exposureName = "ExposureTimeAbs"
-        self._viewX_name = "OffsetX"
-        self._viewY_name = "OffsetY"
-        self._viewH_name = "Height"
-        self._viewHmax_name = "HeightMax"
-        self._viewW_name = "Width"
-        self._viewWmax_name = "WidthMax"
-        self.hMax = self._device_proxy.read_attribute(self._viewHmax_name).value
-        self.wMax = self._device_proxy.read_attribute(self._viewWmax_name).value
-        self._gainName = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
-        self._high_depth = settings.option("device", "high_depth")
+        self._settings_map["Gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
+        self._high_depth = strtobool(settings.getAttribute("high_depth"))
 
         if self._high_depth:
-            self._ui.sbMaxLevel.setMaximum(2 ** 12)
-            self._ui.sbMinLevel.setMaximum(2 ** 12)
-        else:
-            self._ui.sbMaxLevel.setMaximum(2 ** 8)
-            self._ui.sbMinLevel.setMaximum(2 ** 8)
-
-
-        self.log = log
-
-        self._deviceProxy = PyTango.DeviceProxy(str(self._tangoServer))
-        self.log.info("Ping {} ({})".format(self._tangoServer,
-                                            self._deviceProxy.ping()))
-        if high_depth == "True":
-            valid_formats = self._deviceProxy.read_attribute('PixelFormat#Values').value
+            valid_formats = self._device_proxy.read_attribute('PixelFormat#Values').value
             if "Mono12" in valid_formats:
                 settings = 'high'
-                depth = 16
+                self._depth = 16
             elif 'BayerGR12' in valid_formats:
                 settings = 'bhigh'
-                depth = 16
+                self._depth = 16
+            else:
+                raise RuntimeError('Unknown pixel format')
         else:
             settings = 'low'
-            depth = 8
-        self._newFlag = False
-        self.errorMsg = ''
-        self.errorFlag = False
+            self._depth = 8
+
+        self.error_msg = ''
+        self.error_flag = False
         self._lastFrame = np.zeros((1, 1))
 
-        if self._deviceProxy.state() == PyTango.DevState.RUNNING:
-            self._deviceProxy.StopAcquisition()
+        if self._device_proxy.state() == PyTango.DevState.RUNNING:
+            self._device_proxy.StopAcquisition()
+
         for k, v in self.SERVER_SETTINGS[settings].items():
-            print(k,v)
-            self._deviceProxy.write_attribute(k, v)
-
-        self._eid = self._deviceProxy.subscribe_event("Image{:d}".format(depth),
-                                                      PyTango.EventType.DATA_READY_EVENT,
-                                                      self._readoutFrame, [], True)
-
-
-    def get_settings(self, option, cast):
-
-
-        self._tangoServer = settings.option("device", "tango_server")
-        self._deviceProxy = PyTango.DeviceProxy(str(self._tangoServer))
-        self._exposureName = "ExposureTimeAbs"
-        self._viewX_name = "OffsetX"
-        self._viewY_name = "OffsetY"
-        self._viewH_name = "Height"
-        self._viewHmax_name = "HeightMax"
-        self._viewW_name = "Width"
-        self._viewWmax_name = "WidthMax"
-        self.hMax = self._deviceProxy.read_attribute(self._viewHmax_name).value
-        self.wMax = self._deviceProxy.read_attribute(self._viewWmax_name).value
-        # self._deviceProxy.write_attribute(self._viewX_name, 0)
-        # self._deviceProxy.write_attribute(self._viewY_name, 0)
-        # self._deviceProxy.write_attribute(self._viewW_name, self.wMax)
-        # self._deviceProxy.write_attribute(self._viewH_name, self.hMax)
-
-        self._gainName = str(self._deviceProxy.get_property('GainFeatureName')['GainFeatureName'][0])
-        self._high_depth = settings.option("device", "high_depth")
-
-        if self._high_depth:
-            self._ui.sbMaxLevel.setMaximum(2 ** 12)
-            self._ui.sbMinLevel.setMaximum(2 ** 12)
-        else:
-            self._ui.sbMaxLevel.setMaximum(2 ** 8)
-            self._ui.sbMinLevel.setMaximum(2 ** 8)
-
-        fps = self._deviceProxy.read_attribute("AcquisitionFrameRateAbs").value
+            self._device_proxy.write_attribute(k, v)
 
     # ----------------------------------------------------------------------
-    def startAcquisition(self):
-        """
-        """
-        self.log.info("Start camera...")
+    def get_settings(self, option, cast):
+        if option == 'max_level_limit':
+            if self._high_depth:
+                return 2 ** 12
+            else:
+                return 2 ** 8
+        else:
+            return super(VimbaProxy, self).get_settings(option, cast)
 
-        if self._deviceProxy.state() == PyTango.DevState.ON:
-            self._deviceProxy.write_attribute('TriggerSource','FixedRate')
-            self._deviceProxy.command_inout("StartAcquisition")
+    # ----------------------------------------------------------------------
+    def start_acquisition(self):
+        """
+        """
+
+        if self._device_proxy.state() == PyTango.DevState.ON:
+
+            self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
+                                                           PyTango.EventType.DATA_READY_EVENT,
+                                                           self._readout_frame, [], True)
+
+            self._device_proxy.write_attribute('TriggerSource','FixedRate')
+            self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
         else:
-            self.log.warning("Camera should be in ON state (is it running already?)")
+            self._log.warning("Camera should be in ON state (is it running already?)")
 
     # ----------------------------------------------------------------------
-    def stopAcquisition(self):
+    def stop_acquisition(self):
         """
         """
-        self.log.info("Stop camera...")
-
-        if self._deviceProxy.state() == PyTango.DevState.RUNNING:
-            self._deviceProxy.unsubscribe_event(self._eid)
-            self._deviceProxy.command_inout("StopAcquisition")
+        if self._device_proxy.state() == PyTango.DevState.RUNNING:
+            self._device_proxy.unsubscribe_event(self._eid)
+            self._device_proxy.command_inout("StopAcquisition")
 
             time.sleep(self.STOP_DELAY)  # ? TODO
 
     # ----------------------------------------------------------------------
-    def _readoutFrame(self, event):
+    def _readout_frame(self, event):
         """Called each time new frame is available.
         """
-        if not self._deviceProxy:
-            self.log.error("VimbaTango DeviceProxy error")
+        if self._device_proxy is None:
+            self._log.error("VimbaTango error: no DeviceProxy")
 
         # we do this on every frame since we had problems in the past with this value getting reset
         # it's possible that this has to do with TriggerSource not being set to FixedRate in some cases before
@@ -174,12 +135,13 @@ class VimbaProxy(AbstractCamera):
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
                 self._lastFrame = np.transpose(data.value)
 
-                self._newFlag = True
+                self._new_frame_flag = True
+
             except Exception as err:
-                print ('Got an error: {}'.format(err))
-                self.errorFlag = True
-                self.errorMsg = str(err)
+                self._log.error('Vimba error: {}'.format(err))
+                self.error_flag = True
+                self.error_msg = str(err)
         else:
-            print ('Got an error: {}'.format(self.errorMsg))
-            self.errorFlag = True
-            self.errorMsg = event.errors
+            self._log.error('Vimba error: {}'.format(self.error_msg))
+            self.error_flag = True
+            self.error_msg = event.errors

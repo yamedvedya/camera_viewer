@@ -68,9 +68,7 @@ class DataSource2D(QtCore.QObject):
         """
         self._start_acquisition()
 
-        while self.state() == "running":
-            if self.state() in ["abort", "idle"]:
-                break
+        while self._state == "running":
 
             frame = self._device_proxy.maybe_read_frame()
             if frame is not None:
@@ -88,7 +86,7 @@ class DataSource2D(QtCore.QObject):
         if self._device_proxy:
             self._device_proxy.stop_acquisition()
 
-        self._change_state("idle")
+        self._state = "idle"
 
     # ----------------------------------------------------------------------
     def _start_acquisition(self):
@@ -96,7 +94,7 @@ class DataSource2D(QtCore.QObject):
         """
         if self._device_proxy:
             self._device_proxy.start_acquisition()
-            self._change_state("running")
+            self._state = "running"
 
     # ----------------------------------------------------------------------
     def stop(self):
@@ -104,8 +102,13 @@ class DataSource2D(QtCore.QObject):
         """
         self.log.info("Stop {}...".format(self.device_id))
 
-        self._change_state("abort")
-        time.sleep(2 * self.TICK)
+        if self._state != 'idle':
+            self._state = "abort"
+
+        while self._state != 'idle':
+            time.sleep(self.TICK)
+
+        self.log.debug('CameraDevice stopped')
 
     # ----------------------------------------------------------------------
     def get_settings(self, setting, cast):
@@ -128,7 +131,7 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def new_device_proxy(self, name):
 
-        for device in self.settings.getNodes('vimbacam', 'camera'):
+        for device in self.settings.getNodes('camera_viewer', 'camera'):
             if device.getAttribute('name') == name:
 
                 self.device_id = name
@@ -149,19 +152,8 @@ class DataSource2D(QtCore.QObject):
         return False
 
     # ----------------------------------------------------------------------
-    def state(self):
-        """
-        Args:
-        """
-        return self._state  # return proxy's state! TODO
-
-    # ----------------------------------------------------------------------
-    def _change_state(self, newState):
-        """
-        Args:
-            (str) newState
-        """
-        self._state = newState
+    def is_running(self):
+        return self._state == 'running'
 
     # ----------------------------------------------------------------------
     def has_motor(self):
@@ -188,3 +180,7 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def set_counter(self, value):
         self._device_proxy.set_counter(value)
+
+    # ----------------------------------------------------------------------
+    def change_picture_size(self, size):
+        self._device_proxy.change_picture_size(size)

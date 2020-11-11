@@ -6,17 +6,13 @@
 """
 """
 
-# TODO:
-# - rename the software
-
-from __future__ import print_function
-
 import sys
 from optparse import OptionParser
 
 from PyQt5 import QtWidgets
 
 from src.mainwindow import MainWindow
+
 
 # ----------------------------------------------------------------------
 def main():
@@ -33,9 +29,9 @@ def main():
     mainWindow = MainWindow(options)
     mainWindow.show()
 
-    sys.exit(app.exec_())
+    return app.exec_()
+
 
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    main()
-
+    sys.exit(main())

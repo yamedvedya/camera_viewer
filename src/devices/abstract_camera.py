@@ -11,7 +11,9 @@ import numpy as np
 from PyQt5 import QtCore
 from distutils.util import strtobool
 
-from screen_motor import MotorExecutor
+from src.devices.screen_motor import MotorExecutor
+
+from src.mainwindow import APP_NAME
 
 # ----------------------------------------------------------------------
 class AbstractCamera(object):
@@ -23,12 +25,14 @@ class AbstractCamera(object):
         self._log = log
         self._beamline_id = beamline_id
 
+        self._new_frame_flag = False
+        self._eid = None
+
         self._cid = settings.getAttribute("name")
 
         self.flip_v = bool(strtobool(settings.getAttribute("flip_vertical")))
         self.flip_h = bool(strtobool(settings.getAttribute("flip_horizontal")))
         self.rotate_angle = int(settings.getAttribute("rotate"))
-
 
         self._device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("tango_server")))
         if settings.hasAttribute('settings_server'):
@@ -62,14 +66,15 @@ class AbstractCamera(object):
             self._motor_worker = MotorExecutor(settings, log)
         else:
             self._motor_worker = None
+
     # ----------------------------------------------------------------------
     def maybe_read_frame(self):
         """
         """
-        if self._new_flag == False:
+        if not self._new_frame_flag:
             return None
 
-        self._new_flag = False
+        self._new_frame_flag = False
         return self.rotate()
 
     # ----------------------------------------------------------------------
@@ -93,50 +98,42 @@ class AbstractCamera(object):
         if option in self._settings_map.keys():
             if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:
                 return cast(getattr(self._roi_server, self._settings_map[option][1]))
+
             elif self._settings_map[option][0] == 'settings_proxy' and self._settings_proxy is not None:
                 try:
-                    value = self._settings_proxy.read_attribute(self._settings_map[option][1][0]).value
+                    value = self._settings_proxy.read_attribute(self._settings_map[option][1]).value
                 except:
-                    value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
-                    self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
+                    value = None
                 return cast(value)
+
+            elif self._settings_map[option][0] == 'device_proxy' and self._device_proxy is not None:
+                try:
+                    value = self._device_proxy.read_attribute(self._settings_map[option][1]).value
+                except:
+                    value = None
+                return cast(value)
+
             elif self._settings_map[option][0] is None:
                 return None
             else:
                 raise RuntimeError('Unknown setting source')
         else:
-            if cast == int:
-                try:
-                    value, _ = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                        "{}/{}".format(self._cid, option)).toInt()
-                except:
-                    value = 0
-            elif cast == str:
-                try:
-                    value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                        "{}/{}".format(self._cid, option)).toString()
-                except:
-                    value = ''
-            elif cast == bool:
-                try:
-                    value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                        "{}/{}".format(self._cid, option)).toBool()
-                except:
-                    value = False
-            elif cast == float:
-                try:
-                    value, _ = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                        "{}/{}".format(self._cid, option)).toFloat()
-                except:
-                    value = 0.0
+            if cast == str:
+                value = QtCore.QSettings(APP_NAME, self._beamline_id).value("{}/{}".format(self._cid, option))
+                if value is None:
+                    return ''
+                else:
+                    return str(value)
             else:
                 try:
-                    value = QtCore.QSettings("VimbaViewer", self._beamline_id).value(
-                        "{}/{}".format(self._cid, option))
+                    return cast(QtCore.QSettings(APP_NAME, self._beamline_id).value("{}/{}".format(self._cid, option)))
                 except:
-                    value = None
-
-        return value
+                    if cast in [int, float]:
+                        return cast(0)
+                    elif cast == bool:
+                        return False
+                    else:
+                        return None
 
     # ----------------------------------------------------------------------
     def save_settings(self, setting, value):
@@ -145,13 +142,15 @@ class AbstractCamera(object):
             if self._settings_map[setting][0] == 'roi_server' and self._roi_server is not None:
                 setattr(self._roi_server, self._settings_map[setting][1], value)
             elif self._settings_map[setting][0] == 'settings_proxy' and self._settings_proxy is not None:
-                self._settings_proxy.write_attribute(self._settings_map[setting][1][0], value)
+                self._settings_proxy.write_attribute(self._settings_map[setting][1], value)
+            elif self._settings_map[setting][0] == 'device_proxy' and self._device_proxy is not None:
+                self._device_proxy.write_attribute(self._settings_map[setting][1], value)
             elif self._settings_map[setting][0] is None:
                 pass
             else:
                 raise RuntimeError('Unknown setting source')
         else:
-            QtCore.QSettings("VimbaViewer", self._beamline_id).setValue("{}/{}".format(self._cid, setting), value)
+            QtCore.QSettings(APP_NAME, self._beamline_id).setValue("{}/{}".format(self._cid, setting), value)
 
     # ----------------------------------------------------------------------
     def has_motor(self):
@@ -187,3 +186,7 @@ class AbstractCamera(object):
     def set_counter(self, value):
         if self._roi_server is not None:
              self._roi_server.scan_parameter = str(value)
+
+    # ----------------------------------------------------------------------
+    def change_picture_size(self, size):
+        pass

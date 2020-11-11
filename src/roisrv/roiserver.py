@@ -87,8 +87,6 @@ class RoiServer(QtCore.QObject):
         """
         """
         self._state = "run"
-        print("V2D server on port {}".format(self.port))
-
         self._socket.listen(self.MAX_CLIENT_NUMBER)
 
         read_list = [self._socket]
@@ -99,7 +97,7 @@ class RoiServer(QtCore.QObject):
                     connection, address = self._socket.accept()
                     connection.setblocking(False)
                     self._connectionMap.append([connection, address])
-                    print('New client added: {:s}'.format(address))
+                    self.log.info('New client added: {:s}'.format(address))
 
             for connection, address in self._connectionMap:
                 try:
@@ -107,7 +105,7 @@ class RoiServer(QtCore.QObject):
                     if request:
                         connection.sendall(self._processRequest(request))
                     else:
-                        print('Client closed: {:s}'.format(address))
+                        self.log.info('Client closed: {:s}'.format(address))
                         connection.close()
                         self._connectionMap.remove([connection, address])
 
@@ -118,27 +116,25 @@ class RoiServer(QtCore.QObject):
                     elif err.errno == 11:
                         time.sleep(0.1)
                     elif err.errno == 10054:
-                        print('Client closed: {:s}'.format(address))
+                        self.log.info('Client closed: {:s}'.format(address))
                         connection.close()
                         self._connectionMap.remove([connection, address])
                     else:
                         pass
 
                 except KillConnection as _:
-                    print(traceback.format_exc())
-                    print('Client closed: {:s}'.format(address))
+                    self.log.error(traceback.format_exc())
+                    self.log.info('Client closed: {:s}'.format(address))
                     connection.close()
                     self._connectionMap.remove([connection, address])
 
                 except Exception as _:
-                    print(traceback.format_exc())
+                    self.log.error(traceback.format_exc())
                     self.stopServerBucket.put('1')
                     break
 
         self._socket.close()
         self._state = 'aborted'
-        
-        print(__file__, "closed!")
 
     # ----------------------------------------------------------------------
     def stop(self):
@@ -147,6 +143,8 @@ class RoiServer(QtCore.QObject):
         self._serverWorker.stop()
         while self._state != 'aborted':
             time.sleep(0.1)
+
+        self.log.debug('ROI server stopped')
 
     # ----------------------------------------------------------------------
     def _processRequest(self, request):

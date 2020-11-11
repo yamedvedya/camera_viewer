@@ -13,6 +13,7 @@ import numpy as np
 import scipy.ndimage.measurements as scipymeasure
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
+from functions import rotate
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.GradientEditorItem import Gradients
@@ -30,6 +31,7 @@ class FrameViewer(QtWidgets.QWidget):
     cursor_moved = QtCore.pyqtSignal(float, float)
     device_started = QtCore.pyqtSignal()
     device_stopped = QtCore.pyqtSignal()
+    range_changed = QtCore.pyqtSignal(float, float, float, float)
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -67,11 +69,26 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._init_ui()
 
+        self._action_first_point = QtWidgets.QAction('Center search start', self)
+        # self._action_second_point = QtWidgets.QAction('Set second point', self)
+        # self._action_second_point.setEnabled(False)
+        self._action_clear_points = QtWidgets.QAction('Clear points', self)
+        self._action_clear_points.setEnabled(False)
+
+        self._context_menu = QtWidgets.QMenu()
+        self._context_menu.addAction(self._action_first_point)
+        # self._context_menu.addAction(self._action_second_point)
+        self._context_menu.addAction(self._action_clear_points)
+
+        self._center_search_points = [None, None]
+        self._search_in_progress = False
+
         self._is_first_frame = True  # temp TODO
         self._last_frame = None
         self._dark_frame = None
 
         self._fps = 2.0
+        self._viewRect = None
 
         self._acqStarted = time.time()
         self._nFrames = 0
@@ -86,9 +103,13 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._marker_widget = {}
 
-        self.crossItem = LineSegmentItem([0, 0], [0, 0])
-        self.crossItem.setVisible(True)
-        self._ui.imageView.view.addItem(self.crossItem, ignoreBounds=True)
+        self._cross_item = LineSegmentItem('cross')
+        self._cross_item.setVisible(False)
+        self._ui.imageView.view.addItem(self._cross_item, ignoreBounds=True)
+
+        self._center_search_item = LineSegmentItem('center')
+        self._center_search_item.setVisible(False)
+        self._ui.imageView.view.addItem(self._center_search_item, ignoreBounds=True)
 
         self._ui.wiProfileX.cursor_moved.connect(lambda x, y: self.cursor_moved.emit(x, y))
         self._ui.wiProfileY.cursor_moved.connect(lambda x, y: self.cursor_moved.emit(x, y))
@@ -106,9 +127,9 @@ class FrameViewer(QtWidgets.QWidget):
         self.visible_marker = 'none'
 
         # a few info labels
-        self._deviceLabel = self._add_label('', self._settings.node("vimbacam/title_label"), visible=True)
-        self._datetimeLabel = self._add_label("Time", self._settings.node("vimbacam/datetime_label"), visible=True)
-        self._roiLabel = self._add_label("ROI", self._settings.node("vimbacam/roi_label"), visible=False)
+        self._deviceLabel = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
+        self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
+        self._roiLabel = self._add_label("ROI", self._settings.node("camera_viewer/roi_label"), visible=False)
 
         self.image_x_pos = 0
         self.image_y_pos = 0
@@ -151,7 +172,7 @@ class FrameViewer(QtWidgets.QWidget):
         self._marker_widget[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
 
     # ----------------------------------------------------------------------
-    def update_roi(self, roi_index):  # CS
+    def update_roi(self, roi_index):
         """ROI coords changed elsewhere.
         """
         self._rectRoi.blockSignals(True)
@@ -228,10 +249,8 @@ class FrameViewer(QtWidgets.QWidget):
         """
         """
 
-        if (self._camera_device and
-                self._camera_device.state() in ["idle", "abort"]):
+        if self._camera_device and not self._camera_device.is_running():
             self.start_live_mode()
-
             self._acqStarted = time.time()
             self._nFrames = 0
         else:
@@ -254,20 +273,21 @@ class FrameViewer(QtWidgets.QWidget):
     def stop_live_mode(self):
         """
         """
-        if self._camera_device:
+        if self._camera_device and self._camera_device.is_running():
             self._camera_device.stop()
             self.log.debug("{} stopped".format(self._camera_device.device_id))
-
-        self.device_stopped.emit()
+            self.device_stopped.emit()
 
     # ----------------------------------------------------------------------
     def close(self):
         """
         """
-        self.log.debug("Closing {0}".format(self._camera_device.device_id))
+        self.log.debug("Closing FrameViewer")
 
-        if self._camera_device:
+        if self._camera_device and self._camera_device.is_running():
             self._camera_device.stop()
+            
+        super(FrameViewer, self).close()
 
     # ----------------------------------------------------------------------
     def move_image(self, x, y, w, h):
@@ -351,7 +371,7 @@ class FrameViewer(QtWidgets.QWidget):
         """
         if self._rois[self._current_roi_index[0]]['Roi_Visible']:
             pos, size = self._rectRoi.pos(), self._rectRoi.size()
-            x, y, w, h = int(pos.x()), int(pos.y()), int(size.x()), int(size.y())
+            x, y, w, h = int(pos.x() - self.image_x_pos), int(pos.y() - self.image_y_pos), int(size.x()), int(size.y())
 
             array = self._last_frame[x:x + w, y:y + h]
             if array != []:
@@ -364,15 +384,15 @@ class FrameViewer(QtWidgets.QWidget):
                 except:
                     roiExtrema = (0, 0, (0, 0), (0, 0))
 
-                roi_max = (roiExtrema[3][0] + x, roiExtrema[3][1] + y)
-                roi_min = (roiExtrema[2][0] + x, roiExtrema[2][1] + y)
+                roi_max = (roiExtrema[3][0] + x + self.image_x_pos, roiExtrema[3][1] + y + self.image_y_pos)
+                roi_min = (roiExtrema[2][0] + x + self.image_x_pos, roiExtrema[2][1] + y + self.image_y_pos)
 
                 try:
                     roi_com = scipymeasure.center_of_mass(array)
                 except:
                     roi_com = (0, 0)
 
-                roi_com = (roi_com[0] + x, roi_com[1] + y)
+                roi_com = (roi_com[0] + x + self.image_x_pos, roi_com[1] + y + self.image_y_pos)
 
                 try:
                     intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
@@ -383,18 +403,18 @@ class FrameViewer(QtWidgets.QWidget):
 
                 if self.visible_marker == 'max':
                     # Marker on Max
-                    self.crossItem.setPos(roi_max, roi_FWHM)
-                    self.crossItem.setVisible(True)
+                    self._cross_item.set_pos(roi_max, roi_FWHM)
+                    self._cross_item.setVisible(True)
                 elif self.visible_marker == 'min':
                     # Marker on Max
-                    self.crossItem.setPos(roi_min, roi_FWHM)
-                    self.crossItem.setVisible(True)
+                    self._cross_item.set_pos(roi_min, roi_FWHM)
+                    self._cross_item.setVisible(True)
                 elif self.visible_marker == 'com':
                     # Marker auf CoM
-                    self.crossItem.setPos(roi_com, roi_FWHM)
-                    self.crossItem.setVisible(True)
+                    self._cross_item.set_pos(roi_com, roi_FWHM)
+                    self._cross_item.setVisible(True)
                 elif self.visible_marker == 'none':
-                    self.crossItem.setVisible(False)
+                    self._cross_item.setVisible(False)
                     # self.crossItem([0,0], [0,0])
 
                 self._statistics[self._current_roi_index[0]] = {"extrema": (roiExtrema[0], roiExtrema[1], roi_min, roi_max),
@@ -413,6 +433,9 @@ class FrameViewer(QtWidgets.QWidget):
         """
         pos = self._ui.imageView.view.mapSceneToView(pos)
         self.cursor_moved.emit(pos.x(), pos.y())
+        if self._search_in_progress:
+            self._center_search_points[1] = pos
+            self._display_center_search()
 
     # ----------------------------------------------------------------------
     def _mouse_clicked(self, event):
@@ -420,6 +443,34 @@ class FrameViewer(QtWidgets.QWidget):
         """
         if event.double():
             self._ui.imageView.autoRange()
+        elif event.button() == 2:
+            action = self._context_menu.exec_(event._screenPos)
+            if action == self._action_first_point:
+                self._center_search_points[0] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+                self._search_in_progress = True
+                # self._action_second_point.setEnabled(True)
+                self._action_clear_points.setEnabled(True)
+                self._center_search_item.setVisible(True)
+            # elif action == self._action_second_point:
+            #     self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+            #     self._action_second_point.setEnabled(False)
+            #     self._search_in_progress = False
+            else:
+                self._center_search_points = [None, None]
+                # self._action_second_point.setEnabled(False)
+                self._action_clear_points.setEnabled(False)
+                self._center_search_item.setVisible(False)
+                self._search_in_progress = False
+        elif event.button() == 1 and self._search_in_progress:
+            self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+            # self._action_second_point.setEnabled(False)
+            self._search_in_progress = False
+
+        self._display_center_search()
+
+    # ----------------------------------------------------------------------
+    def _display_center_search(self):
+        self._center_search_item.set_pos(self._center_search_points)
 
     # ----------------------------------------------------------------------
     def _mouse_hover(self, event):
@@ -658,33 +709,104 @@ class ImageMarker(object):
         self.imageView.removeItem(self._markerH)
         self.imageView.removeItem(self._markerV)
 
+
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
-    def __init__(self, CoM, fwhm):
+
+    CENTER_CROSS = 0.1
+
+    def __init__(self, mode):
         pg.GraphicsObject.__init__(self)
-        self.COM = CoM
-        self.width = np.array(fwhm) / 2
-        self.generatePicture()
+        self._mode = mode
+        self._picture = QtGui.QPicture()
 
-    def setPos(self, CoM, fwhm):
-        self.COM = CoM
-        self.width = np.array(fwhm) / 2
-        self.generatePicture()
+        self._line1_end1 = QtCore.QPoint(0, 0)
+        self._line1_end2 = QtCore.QPoint(0, 0)
+        self._line2_end1 = QtCore.QPoint(0, 0)
+        self._line2_end2 = QtCore.QPoint(0, 0)
 
-    def generatePicture(self):
-        self.picture = QtGui.QPicture()
-        p = QtGui.QPainter(self.picture)
-        p.setPen(pg.mkPen('r', width=2))
-        # Horizontal
-        p.drawLine(QtCore.QPoint(self.COM[0] - self.width[0], self.COM[1]),
-                   QtCore.QPoint(self.COM[0] + self.width[0], self.COM[1]))
-        # Vertical
-        p.drawLine(QtCore.QPoint(self.COM[0], self.COM[1] - self.width[1]),
-                   QtCore.QPoint(self.COM[0], self.COM[1] + self.width[1]))
+        self._draw_lines = False
+        self._draw_point1 = False
+        self._draw_point2 = False
+
+        self.generate_picture()
+
+    # ----------------------------------------------------------------------
+    def set_pos(self, *argin):
+        if self._mode == 'cross':
+            # here we get argin[0] - center position
+            # here we get argin[1] - line length
+
+            self._line1_end1 = QtCore.QPoint(argin[0][0] - argin[1][0]/2, argin[0][1])
+            self._line1_end2 = QtCore.QPoint(argin[0][0] + argin[1][0]/2, argin[0][1])
+
+            self._line2_end1 = QtCore.QPoint(argin[0][0], argin[0][1] - argin[1][1]/2)
+            self._line2_end2 = QtCore.QPoint(argin[0][0], argin[0][1] + argin[1][1]/2)
+
+            self._draw_lines = True
+            self._draw_point1 = False
+            self._draw_point2 = False
+
+        else:
+            self._draw_lines = True
+            self._draw_point1 = False
+            self._draw_point2 = False
+
+            if argin[0][0] is not None:
+                self._line1_end1 = argin[0][0]
+                self._draw_point1 = True
+            else:
+                self._draw_lines = False
+
+            if argin[0][1] is not None:
+                self._line1_end2 = argin[0][1]
+                self._draw_point2 = True
+            else:
+                self._draw_lines = False
+
+            if self._draw_lines:
+                center = ((self._line1_end1.x() + self._line1_end2.x()) / 2,
+                          (self._line1_end1.y() + self._line1_end2.y()) / 2)
+
+                point = (self._line1_end1.x() * (0.5 + self.CENTER_CROSS) + self._line1_end2.x() * (0.5 - self.CENTER_CROSS),
+                         self._line1_end1.y() * (0.5 + self.CENTER_CROSS) + self._line1_end2.y() * (0.5 - self.CENTER_CROSS))
+
+                p1 = rotate(center, point, 1.57)
+                p2 = rotate(center, point, -1.57)
+
+                self._line2_end1 = QtCore.QPoint(p1[0], p1[1])
+                self._line2_end2 = QtCore.QPoint(p2[0], p2[1])
+
+        self.generate_picture()
+
+    # ----------------------------------------------------------------------
+    def generate_picture(self):
+
+        p = QtGui.QPainter(self._picture)
+        p.setPen(pg.mkPen('r', width=2, style=QtCore.Qt.DotLine))
+
+        if self._draw_lines:
+            # Horizontal
+            p.drawLine(self._line1_end1, self._line1_end2)
+
+            # Vertical
+            p.drawLine(self._line2_end1, self._line2_end2)
+
+        p.setPen(QtCore.Qt.NoPen)
+        p.setBrush(pg.mkBrush('r'))
+
+        if self._draw_point1:
+            p.drawEllipse(self._line1_end1, 1, 1)
+
+        if self._draw_point2:
+            p.drawEllipse(self._line1_end2, 1, 1)
+
         p.end()
 
+    # ----------------------------------------------------------------------
     def paint(self, p, *args):
-        p.drawPicture(0, 0, self.picture)
+        p.drawPicture(0, 0, self._picture)
 
+    # ----------------------------------------------------------------------
     def boundingRect(self):
-        return QtCore.QRectF(self.picture.boundingRect())
+        return QtCore.QRectF(self._picture.boundingRect())

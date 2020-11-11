@@ -3,13 +3,13 @@
 
 # ----------------------------------------------------------------------
 # Author:        sebastian.piec@desy.de
-# Last modified: 2016, April 7
 # ----------------------------------------------------------------------
 
 """Parse settings given in xml files
 """
 
-from xml.dom.minidom import Document, parseString
+from xml.dom.minidom import parseString
+
 
 # ----------------------------------------------------------------------
 class XmlSettings(object):
@@ -23,11 +23,9 @@ class XmlSettings(object):
         """Retrieve option's value from a config file.
         """
         with open(self.fileName, "r") as inFile:        # read over-and-over??? TODO
-            dom = parseString(inFile.read())
-
             path = nodePath.split("/")
 
-            node = dom
+            node = parseString(inFile.read())
             for nodeName in path:
                 node = node.getElementsByTagName(nodeName)[0]     # take first node always...
 
@@ -38,11 +36,9 @@ class XmlSettings(object):
         """
         """
         with open(self.fileName, "r") as inFile:
-            dom = parseString(inFile.read())
-
             path = nodePath.split("/")[:-1]
 
-            node = dom
+            node = parseString(inFile.read())
             for nodeName in path:
                 node = node.getElementsByTagName(nodeName)[0]
 
@@ -53,10 +49,9 @@ class XmlSettings(object):
         """
         """
         with open(self.fileName, "r") as f:
-            dom = parseString(f.read())
             path = nodePath.split("/")
 
-            node = dom
+            node = parseString(f.read())
             for nodeName in path[:-1]:
                 node = node.getElementsByTagName(nodeName)[0]
 
