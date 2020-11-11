@@ -164,10 +164,17 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="8" colspan="2">
+      <item row="2" column="8">
        <widget class="QLabel" name="lbFps">
         <property name="text">
          <string>&lt;FPS&gt;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="9">
+       <widget class="QSpinBox" name="sbFPS">
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
        </widget>
       </item>

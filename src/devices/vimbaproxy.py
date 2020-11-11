@@ -25,14 +25,15 @@ class VimbaProxy(AbstractCamera):
     """
     SERVER_SETTINGS = {'low': {"PixelFormat": "Mono8", "ViewingMode": 1},
                        'high': {"PixelFormat": "Mono12", "ViewingMode": 2},
-                       'bhigh': {"PixelFormat": "BayerGR12", "ViewingMode": 2}}
+                       'brhigh': {"PixelFormat": "BayerGR12", "ViewingMode": 2},
+                       'bbhigh': {"PixelFormat": "BayerGB12", "ViewingMode": 2}}
 
     START_DELAY = 1
     STOP_DELAY = 0.5
-    FPS = 2.
 
     _settings_map = {"ExposureTime": ("device_proxy", "ExposureTimeAbs"),
                      "Gain": ["device_proxy", ""],
+                     'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
                      'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
                      'viewX': ("device_proxy", "OffsetX"),
                      'viewY': ("device_proxy", "OffsetY"),
@@ -55,7 +56,10 @@ class VimbaProxy(AbstractCamera):
                 settings = 'high'
                 self._depth = 16
             elif 'BayerGR12' in valid_formats:
-                settings = 'bhigh'
+                settings = 'brhigh'
+                self._depth = 16
+            elif 'BayerGB12' in valid_formats:
+                settings = 'bbhigh'
                 self._depth = 16
             else:
                 raise RuntimeError('Unknown pixel format')
@@ -65,7 +69,7 @@ class VimbaProxy(AbstractCamera):
 
         self.error_msg = ''
         self.error_flag = False
-        self._lastFrame = np.zeros((1, 1))
+        self._last_frame = np.zeros((1, 1))
 
         if self._device_proxy.state() == PyTango.DevState.RUNNING:
             self._device_proxy.StopAcquisition()
@@ -94,7 +98,6 @@ class VimbaProxy(AbstractCamera):
                                                            PyTango.EventType.DATA_READY_EVENT,
                                                            self._readout_frame, [], True)
 
-            self._device_proxy.write_attribute('TriggerSource','FixedRate')
             self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
         else:
@@ -117,23 +120,12 @@ class VimbaProxy(AbstractCamera):
         if self._device_proxy is None:
             self._log.error("VimbaTango error: no DeviceProxy")
 
-        # we do this on every frame since we had problems in the past with this value getting reset
-        # it's possible that this has to do with TriggerSource not being set to FixedRate in some cases before
-        exp = event.device.read_attribute("ExposureTimeAbs").value * 1e-6
-        max_fps = event.device.read_attribute("AcquisitionFrameRateLimit").value
-        if 1. / exp < self.FPS or self.FPS > max_fps:
-            event.device.write_attribute("AcquisitionFrameRateAbs", max_fps)
-            # print("FPS determined by external factor")
-        else:
-            event.device.write_attribute("AcquisitionFrameRateAbs", self.FPS)
-            # print("FPS determined by internal factor")
-
         # for some reason this wants the 'short' attribute name, not the fully-qualified name
         # we get in event.attr_name
         if not event.err:
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
-                self._lastFrame = np.transpose(data.value)
+                self._last_frame = np.transpose(data.value)
 
                 self._new_frame_flag = True
 

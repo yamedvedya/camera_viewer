@@ -32,6 +32,7 @@ class FrameViewer(QtWidgets.QWidget):
     device_started = QtCore.pyqtSignal()
     device_stopped = QtCore.pyqtSignal()
     range_changed = QtCore.pyqtSignal(float, float, float, float)
+    center_search_modified = QtCore.pyqtSignal(list)
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -70,14 +71,14 @@ class FrameViewer(QtWidgets.QWidget):
         self._init_ui()
 
         self._action_first_point = QtWidgets.QAction('Center search start', self)
-        # self._action_second_point = QtWidgets.QAction('Set second point', self)
-        # self._action_second_point.setEnabled(False)
+        self._action_second_point = QtWidgets.QAction('Set second point', self)
+        self._action_second_point.setVisible(False)
         self._action_clear_points = QtWidgets.QAction('Clear points', self)
         self._action_clear_points.setEnabled(False)
 
         self._context_menu = QtWidgets.QMenu()
         self._context_menu.addAction(self._action_first_point)
-        # self._context_menu.addAction(self._action_second_point)
+        self._context_menu.addAction(self._action_second_point)
         self._context_menu.addAction(self._action_clear_points)
 
         self._center_search_points = [None, None]
@@ -444,29 +445,50 @@ class FrameViewer(QtWidgets.QWidget):
         if event.double():
             self._ui.imageView.autoRange()
         elif event.button() == 2:
+
             action = self._context_menu.exec_(event._screenPos)
+
             if action == self._action_first_point:
                 self._center_search_points[0] = self._ui.imageView.view.mapSceneToView(event.scenePos())
                 self._search_in_progress = True
-                # self._action_second_point.setEnabled(True)
+                self._action_second_point.setVisible(True)
                 self._action_clear_points.setEnabled(True)
                 self._center_search_item.setVisible(True)
-            # elif action == self._action_second_point:
-            #     self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
-            #     self._action_second_point.setEnabled(False)
-            #     self._search_in_progress = False
+            elif action == self._action_second_point:
+                self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+                self._action_second_point.setVisible(False)
+                self._search_in_progress = False
+                self.center_search_modified.emit(self._center_search_points)
             else:
+
                 self._center_search_points = [None, None]
-                # self._action_second_point.setEnabled(False)
+                self._action_second_point.setVisible(False)
                 self._action_clear_points.setEnabled(False)
                 self._center_search_item.setVisible(False)
                 self._search_in_progress = False
+                self.center_search_modified.emit(self._center_search_points)
+
         elif event.button() == 1 and self._search_in_progress:
             self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
-            # self._action_second_point.setEnabled(False)
+            self._action_second_point.setVisible(False)
             self._search_in_progress = False
+            self.center_search_modified.emit(self._center_search_points)
 
         self._display_center_search()
+
+    # ----------------------------------------------------------------------
+    def reset_center_search(self, search_points):
+        self._center_search_points = search_points
+        if self._center_search_points[0] is not None and self._center_search_points[1] is not None:
+            self._action_second_point.setVisible(False)
+            self._action_clear_points.setEnabled(True)
+            self._center_search_item.setVisible(True)
+            self._display_center_search()
+        else:
+            self._action_second_point.setVisible(False)
+            self._action_clear_points.setEnabled(False)
+            self._center_search_item.setVisible(False)
+            self._display_center_search()
 
     # ----------------------------------------------------------------------
     def _display_center_search(self):

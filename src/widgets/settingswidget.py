@@ -7,6 +7,7 @@
 
 import logging
 import subprocess
+import json
 
 try:
     import PyTango
@@ -14,7 +15,6 @@ except ImportError:
     pass
 
 from src.utils.errors import report_error
-
 from PyQt5 import QtCore, QtWidgets
 
 from src.ui_vimbacam.SettingsWidget_ui import Ui_SettingsWidget
@@ -37,6 +37,7 @@ class SettingsWidget(QtWidgets.QWidget):
     set_dark_image = QtCore.pyqtSignal()
     remove_dark_image = QtCore.pyqtSignal()
     image_size_changed = QtCore.pyqtSignal(float, float, float, float)
+    reset_center_search = QtCore.pyqtSignal(list)
 
     PARAMS_EDITOR = "atkpanel"
     SYNC_TICK = 1000  # [ms]
@@ -67,7 +68,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self._picture_height = None
 
         self._ui.tbAllParams.clicked.connect(self._edit_all_params)
-        for ui in ['ExposureTime', 'Gain']:
+        for ui in ['ExposureTime', 'Gain', 'FPS']:
             getattr(self._ui, 'sb{}'.format(ui)).editingFinished.connect(lambda x=ui: self._settings_changed(x))
 
         for ui in ['ViewX', 'ViewY', 'ViewW', 'ViewH']:
@@ -413,6 +414,11 @@ class SettingsWidget(QtWidgets.QWidget):
             pass
 
     # ----------------------------------------------------------------------
+    def save_search_center(self, coordinates):
+        coordinates = [coordinates[0].x(), coordinates[0].y(), coordinates[1].x(), coordinates[1].y()]
+        self._camera_device.save_settings('center_search', json.dumps(coordinates))
+
+    # ----------------------------------------------------------------------
     def load_camera_settings(self):
 
         self._block_signals(True)
@@ -450,6 +456,12 @@ class SettingsWidget(QtWidgets.QWidget):
             self._ui.sbRoiHeight.setEnabled(roi_visible)
 
             self.roi_changed.emit(self._current_roi_index[0])
+
+            center_search = self._camera_device.get_settings('center_search', str)
+            if center_search != '':
+                coordinates = json.loads(center_search)
+                self.reset_center_search.emit([QtCore.QPointF(coordinates[0], coordinates[1]),
+                                               QtCore.QPointF(coordinates[2], coordinates[3])])
 
             for key in self._markers.keys():
                 del self._markers[key]
@@ -498,10 +510,16 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._change_picture_size()
 
                 fps = self._camera_device.get_settings('FPS', int)
+                fps_limit = self._camera_device.get_settings('FPSmax', int)
                 if fps is not None:
-                    self._ui.lbFps.setText("FPS limit: {:.2f}".format(fps))
+                    self._ui.sbFPS.setEnabled(True)
+                    self._ui.sbFPS.setValue(fps)
+                    if fps_limit is not None:
+                        self._ui.sbFPS.setMaximum(fps_limit)
+                    else:
+                        self._ui.sbFPS.setMaximum(100)
                 else:
-                    self._ui.lbFps.setText("")
+                    self._ui.sbFPS.setEnabled(False)
 
                 self._roi_marker_changed(self._camera_device.get_settings('Statistics_Marker', str))
 
@@ -533,8 +551,9 @@ class SettingsWidget(QtWidgets.QWidget):
 
             self._camera_device.save_settings('Statistics_Marker', self._statistics_marker)
 
-            self._camera_device.save_settings('ExposureTime', min(max(float(self._ui.sbExposureTime.value()), 50), 1e6))
-            self._camera_device.save_settings('Gain', min(max(float(self._ui.sbGain.value()), 0), 22))
+            self._camera_device.save_settings('ExposureTime', int(self._ui.sbExposureTime.value()))
+            self._camera_device.save_settings('Gain', int(self._ui.sbGain.value()))
+            self._camera_device.save_settings('FPS', int(self._ui.sbFPS.value()))
 
             view_x, view_y, view_w, view_h = self._get_picture_size()
 

@@ -31,7 +31,8 @@ class TangoTineProxy(AbstractCamera):
                      "RoiHeight": ('roi_server', 'roi_h'),
                      "ExposureTime": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
                      "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
-                     'FPS': (None, ),
+                     'FPS_limit': (None, ),
+                     'FPS_max_limit': (None, ),
                      'max_level_limit': (None, )
                      }
 
