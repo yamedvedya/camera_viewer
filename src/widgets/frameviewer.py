@@ -8,6 +8,7 @@
 import logging
 import time
 from datetime import datetime
+import json
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
@@ -32,7 +33,6 @@ class FrameViewer(QtWidgets.QWidget):
     device_started = QtCore.pyqtSignal()
     device_stopped = QtCore.pyqtSignal()
     range_changed = QtCore.pyqtSignal(float, float, float, float)
-    center_search_modified = QtCore.pyqtSignal(list)
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -153,6 +153,29 @@ class FrameViewer(QtWidgets.QWidget):
         self._statistics = statistics
         self._current_roi_index = current_roi_index
 
+    # ----------------------------------------------------------------------
+    def set_new_camera(self):
+        center_search = self._camera_device.get_settings('center_search', str)
+        if center_search != '':
+            coordinates = json.loads(center_search)
+            if coordinates[0] is not None and coordinates[1] is not None and \
+                coordinates[2] is not None and coordinates[3] is not None:
+
+                self._center_search_points = [QtCore.QPointF(coordinates[0], coordinates[1]),
+                                              QtCore.QPointF(coordinates[2], coordinates[3])]
+                self._action_second_point.setVisible(False)
+                self._action_clear_points.setEnabled(True)
+                self._center_search_item.setVisible(True)
+                self._display_center_search()
+
+                return True
+
+        self._action_second_point.setVisible(False)
+        self._action_clear_points.setEnabled(False)
+        self._center_search_item.setVisible(False)
+        self._display_center_search()
+
+        return True
     # ----------------------------------------------------------------------
     def update_camera_label(self):
 
@@ -458,7 +481,7 @@ class FrameViewer(QtWidgets.QWidget):
                 self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
                 self._action_second_point.setVisible(False)
                 self._search_in_progress = False
-                self.center_search_modified.emit(self._center_search_points)
+                self._save_center_search()
             else:
 
                 self._center_search_points = [None, None]
@@ -466,29 +489,24 @@ class FrameViewer(QtWidgets.QWidget):
                 self._action_clear_points.setEnabled(False)
                 self._center_search_item.setVisible(False)
                 self._search_in_progress = False
-                self.center_search_modified.emit(self._center_search_points)
+                self._save_center_search()
 
         elif event.button() == 1 and self._search_in_progress:
             self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
             self._action_second_point.setVisible(False)
             self._search_in_progress = False
-            self.center_search_modified.emit(self._center_search_points)
+            self._save_center_search()
 
         self._display_center_search()
 
     # ----------------------------------------------------------------------
-    def reset_center_search(self, search_points):
-        self._center_search_points = search_points
+    def _save_center_search(self):
         if self._center_search_points[0] is not None and self._center_search_points[1] is not None:
-            self._action_second_point.setVisible(False)
-            self._action_clear_points.setEnabled(True)
-            self._center_search_item.setVisible(True)
-            self._display_center_search()
+            coordinates = [self._center_search_points[0].x(), self._center_search_points[0].y(),
+                           self._center_search_points[1].x(), self._center_search_points[1].y()]
         else:
-            self._action_second_point.setVisible(False)
-            self._action_clear_points.setEnabled(False)
-            self._center_search_item.setVisible(False)
-            self._display_center_search()
+            coordinates = [None, None]
+        self._camera_device.save_settings('center_search', json.dumps(coordinates))
 
     # ----------------------------------------------------------------------
     def _display_center_search(self):

@@ -148,7 +148,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._frame_viewer.roi_changed.connect(self._settings_widget.update_roi)
         self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
         self._frame_viewer.roi_stats_ready.connect(self._settings_widget.update_roi_statistics)
-        self._frame_viewer.center_search_modified.connect(self._settings_widget.save_search_center)
 
         self._settings_widget.marker_changed.connect(self._frame_viewer.update_marker)
         self._settings_widget.markers_changed.connect(self._frame_viewer.markers_changed)
@@ -160,7 +159,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._settings_widget.set_dark_image.connect(self._frame_viewer.set_dark_image)
         self._settings_widget.remove_dark_image.connect(self._frame_viewer.remove_dark_image)
         self._settings_widget.image_size_changed.connect(self._frame_viewer.move_image)
-        self._settings_widget.reset_center_search.connect(self._frame_viewer.reset_center_search)
 
         self._init_actions()
         self._toolBar = self._init_tool_bar()
@@ -174,13 +172,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
 
         if self._camera_device.new_device_proxy(name) and \
-                self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked()):
+                self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked()) and \
+                self._frame_viewer.set_new_camera():
             self.camera_name = name
             refresh_combo_box(self._cb_cam_selector, self.camera_name)
             self.log.info("Changing camera to {}".format(self.camera_name))
         else:
             self._camera_device.new_device_proxy(self.camera_name)
             self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked())
+            self._frame_viewer.set_new_camera()
             refresh_combo_box(self._cb_cam_selector, self.camera_name)
 
             report_error('Cannot change camera', self.log, self, True)

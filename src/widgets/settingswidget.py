@@ -414,11 +414,6 @@ class SettingsWidget(QtWidgets.QWidget):
             pass
 
     # ----------------------------------------------------------------------
-    def save_search_center(self, coordinates):
-        coordinates = [coordinates[0].x(), coordinates[0].y(), coordinates[1].x(), coordinates[1].y()]
-        self._camera_device.save_settings('center_search', json.dumps(coordinates))
-
-    # ----------------------------------------------------------------------
     def load_camera_settings(self):
 
         self._block_signals(True)
@@ -457,12 +452,6 @@ class SettingsWidget(QtWidgets.QWidget):
 
             self.roi_changed.emit(self._current_roi_index[0])
 
-            center_search = self._camera_device.get_settings('center_search', str)
-            if center_search != '':
-                coordinates = json.loads(center_search)
-                self.reset_center_search.emit([QtCore.QPointF(coordinates[0], coordinates[1]),
-                                               QtCore.QPointF(coordinates[2], coordinates[3])])
-
             for key in self._markers.keys():
                 del self._markers[key]
 
@@ -482,6 +471,11 @@ class SettingsWidget(QtWidgets.QWidget):
                 viewY = self._camera_device.get_settings('viewY', int)
                 viewW = self._camera_device.get_settings('viewW', int)
                 viewH = self._camera_device.get_settings('viewH', int)
+
+                self._ui.sbViewX.setMaximum(1e5)
+                self._ui.sbViewY.setMaximum(1e5)
+                self._ui.sbViewW.setMaximum(1e5)
+                self._ui.sbViewH.setMaximum(1e5)
 
                 if viewX is not None:
                     self._ui.sbViewX.setDisabled(False)

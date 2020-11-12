@@ -110,7 +110,7 @@ class MotorExecutor(object):
     # ----------------------------------------------------------------------
     def send_command_to_fsbt(self, FSBTSocket, command):
 
-        FSBTSocket.sendall(str(command))
+        FSBTSocket.sendall(str(command).encode())
 
         start_timeout = time.time()
         time_out = False
@@ -118,7 +118,7 @@ class MotorExecutor(object):
         ans = ''
         while not time_out and not got_answer:
             try:
-                ans = FSBTSocket.recv(self.DATA_BUFFER_SIZE)
+                ans = str(FSBTSocket.recv(self.DATA_BUFFER_SIZE).decode())
                 got_answer = True
             except socket.error as err:
                 if err.errno != 11:
