@@ -13,7 +13,7 @@ import numpy as np
 import scipy.ndimage.measurements as scipymeasure
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
-from functions import rotate
+from src.utils.functions import rotate
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.GradientEditorItem import Gradients

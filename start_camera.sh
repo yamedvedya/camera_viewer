@@ -3,4 +3,4 @@ cd $BASEDIR
 
 export VIEWERPATH=$PWD/
 export PYTHONPATH=$PYTHONPATH:$VIEWERPATH
-python ./src/main.py 
+python3 ./src/main.py

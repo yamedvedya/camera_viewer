@@ -47,5 +47,5 @@ class Ui_FrameViewer(object):
         _translate = QtCore.QCoreApplication.translate
         FrameViewer.setWindowTitle(_translate("FrameViewer", "Form"))
 from pyqtgraph import ImageView
-from widgets.projectionwidget import ProjectionWidget
-import icons_rc
+from src.widgets.projectionwidget import ProjectionWidget
+import src.ui_vimbacam.icons_rc
