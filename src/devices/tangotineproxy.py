@@ -7,7 +7,7 @@
 """
 
 import numpy as np
-from abstract_camera import AbstractCamera
+from src.devices.abstract_camera import AbstractCamera
 
 try:
     import PyTango
