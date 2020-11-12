@@ -196,10 +196,10 @@ class FrameViewer(QtWidgets.QWidget):
             y = max(pos.y(), 0)
             max_w, max_h = self._last_frame.shape
 
-            w = min(size.x(), max_w - x)
-            h = min(size.y(), max_h - y)
+            w = min(size.x(), max_w)
+            h = min(size.y(), max_h)
 
-            self._rois[self._current_roi_index[0]]['RoiX'], self._rois[self._current_roi_index[0]]['RoiY']  = x, y
+            self._rois[self._current_roi_index[0]]['RoiX'], self._rois[self._current_roi_index[0]]['RoiY'] = x, y
             self._rois[self._current_roi_index[0]]['RoiWidth'], self._rois[self._current_roi_index[0]]['RoiHeight'] = w, h
 
             self._redraw_roi_label()
