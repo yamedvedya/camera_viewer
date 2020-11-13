@@ -55,4 +55,4 @@ class Ui_MainWindow(object):
         self.actionQuit.setText(_translate("MainWindow", "Quit..."))
         self.actionQuit.setShortcut(_translate("MainWindow", "Ctrl+Q"))
         self.actionAbout.setText(_translate("MainWindow", "About..."))
-import src.ui_vimbacam.icons_rc
+import icons_rc

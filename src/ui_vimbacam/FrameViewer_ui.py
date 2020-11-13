@@ -23,7 +23,7 @@ class Ui_FrameViewer(object):
         self.splitter_y1 = QtWidgets.QSplitter(self.splitter_x)
         self.splitter_y1.setOrientation(QtCore.Qt.Vertical)
         self.splitter_y1.setObjectName("splitter_y1")
-        self.imageView = ImageView(self.splitter_y1)
+        self.imageView = ImageViewNoKeyboard(self.splitter_y1)
         self.imageView.setObjectName("imageView")
         self.wiProfileX = ProjectionWidget(self.splitter_y1)
         self.wiProfileX.setMaximumSize(QtCore.QSize(16777215, 16777215))
@@ -46,6 +46,6 @@ class Ui_FrameViewer(object):
     def retranslateUi(self, FrameViewer):
         _translate = QtCore.QCoreApplication.translate
         FrameViewer.setWindowTitle(_translate("FrameViewer", "Form"))
-from pyqtgraph import ImageView
-from src.widgets.projectionwidget import ProjectionWidget
-import src.ui_vimbacam.icons_rc
+from widgets.image_view import ImageViewNoKeyboard
+from widgets.projectionwidget import ProjectionWidget
+import icons_rc
