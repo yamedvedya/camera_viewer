@@ -46,6 +46,6 @@ class Ui_FrameViewer(object):
     def retranslateUi(self, FrameViewer):
         _translate = QtCore.QCoreApplication.translate
         FrameViewer.setWindowTitle(_translate("FrameViewer", "Form"))
-from widgets.image_view import ImageViewNoKeyboard
-from widgets.projectionwidget import ProjectionWidget
-import icons_rc
+from src.widgets.image_view import ImageViewNoKeyboard
+from src.widgets.projectionwidget import ProjectionWidget
+import src.ui_vimbacam.icons_rc
