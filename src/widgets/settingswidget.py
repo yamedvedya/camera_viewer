@@ -147,8 +147,7 @@ class SettingsWidget(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def _add_marker(self):
-        new_ind = len(self._markers) + 1
-        self._markers[new_ind] = {'x': 0, 'y': 0}
+        self._markers.append({'x': 0, 'y': 0})
         self._update_marker_layout()
 
     # ----------------------------------------------------------------------
@@ -170,7 +169,7 @@ class SettingsWidget(QtWidgets.QWidget):
                     w.setVisible(False)
 
         self._markers_widgets = []
-        for ind, values in self._markers.items():
+        for ind, values in enumerate(self._markers):
             widget = Marker(ind)
             widget.marker_changed.connect(self._marker_changed)
             widget.delete_me.connect(self._delete_marker)
@@ -452,12 +451,12 @@ class SettingsWidget(QtWidgets.QWidget):
 
             self.roi_changed.emit(self._current_roi_index[0])
 
-            for key in self._markers.keys():
-                del self._markers[key]
+            for ind in range(len(self._markers))[::-1]:
+                del self._markers[ind]
 
             for ind in range(self._camera_device.get_settings('num_markers', int)):
-                self._markers[ind] = {'x': self._camera_device.get_settings('marker_{:d}_x'.format(ind), int),
-                                      'y': self._camera_device.get_settings('marker_{:d}_y'.format(ind), int)}
+                self._markers.append({'x': self._camera_device.get_settings('marker_{:d}_x'.format(ind), int),
+                                      'y': self._camera_device.get_settings('marker_{:d}_y'.format(ind), int)})
             self._update_marker_layout(False)
 
             with QtCore.QMutexLocker(self._tangoMutex):
@@ -539,7 +538,7 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._camera_device.save_settings(roi_param, self._rois[self._current_roi_index[0]][roi_param])
 
             self._camera_device.save_settings('num_markers', len(self._markers))
-            for num, values in self._markers.items():
+            for num, values in enumerate(self._markers):
                 self._camera_device.save_settings('marker_{:d}_x'.format(num), values['x'])
                 self._camera_device.save_settings('marker_{:d}_y'.format(num), values['y'])
 

@@ -68,7 +68,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._camera_device = self._init_data_source()
         self._rois = [{}, ]  # x, y, w, h, threshold
-        self._markers = {}
+        self._markers = [{},]
         self._statistics = [{}, ]
         self._current_roi_index = [0]
 

@@ -102,7 +102,7 @@ class FrameViewer(QtWidgets.QWidget):
         self._rectRoi.sigRegionChanged.connect(self._roi_changed)
         self._rectRoi.hide()
 
-        self._marker_widget = {}
+        self._marker_widgets = []
 
         self._cross_item = LineSegmentItem('cross')
         self._cross_item.setVisible(False)
@@ -183,17 +183,17 @@ class FrameViewer(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def markers_changed(self):
-        for ind, widget in self._marker_widget.items():
+        for widget in self._marker_widgets:
             widget.delete_me()
-            del self._marker_widget[ind]
 
-        for ind, marker in self._markers.items():
-            self._marker_widget[ind] = ImageMarker(self._markers[ind]['x'], self._markers[ind]['y'], self._ui.imageView)
+        self._marker_widgets = []
+        for ind, marker in enumerate(self._markers):
+            self._marker_widgets.append(ImageMarker(marker['x'], marker['y'], self._ui.imageView))
 
     # ----------------------------------------------------------------------
     def update_marker(self, ind):
 
-        self._marker_widget[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
+        self._marker_widgets[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
 
     # ----------------------------------------------------------------------
     def update_roi(self, roi_index):
@@ -748,7 +748,6 @@ class ImageMarker(object):
     def delete_me(self):
         self.imageView.removeItem(self._markerH)
         self.imageView.removeItem(self._markerV)
-
 
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
