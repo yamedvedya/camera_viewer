@@ -37,3 +37,7 @@ class Marker(QtWidgets.QWidget):
         self._ui.sb_x.setValue(values['x'])
         self._ui.sb_y.setValue(values['y'])
         self._block_signals(False)
+
+    # ----------------------------------------------------------------------
+    def disable_button(self, flag):
+        self._ui.but_delete.setEnabled(flag)

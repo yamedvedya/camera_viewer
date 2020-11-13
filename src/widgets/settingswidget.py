@@ -146,16 +146,27 @@ class SettingsWidget(QtWidgets.QWidget):
             return False
 
     # ----------------------------------------------------------------------
+    def _block_new_markers(self, flag):
+        self._ui.but_add_marker.setEnabled(not flag)
+        for widget in self._markers_widgets:
+            widget.disable_button(not flag)
+
+    # ----------------------------------------------------------------------
     def _add_marker(self):
+
+        self._block_new_markers(True)
         new_ind = len(self._markers) + 1
         self._markers[new_ind] = {'x': 0, 'y': 0}
         self._update_marker_layout()
+        self._block_new_markers(False)
 
     # ----------------------------------------------------------------------
     def _delete_marker(self, id):
 
+        self._block_new_markers(True)
         del self._markers[id]
         self._update_marker_layout()
+        self._block_new_markers(False)
 
     # ----------------------------------------------------------------------
     def _update_marker_layout(self, save=True):
