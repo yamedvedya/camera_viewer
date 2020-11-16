@@ -47,5 +47,5 @@ class Ui_CameraWidget(object):
         _translate = QtCore.QCoreApplication.translate
         CameraWidget.setWindowTitle(_translate("CameraWidget", "Form"))
 from pyqtgraph import ImageView
-from src.widgets.projectionwidget import ProjectionWidget
-import src.ui_vimbacam.icons_rc
+from widgets.projectionwidget import ProjectionWidget
+import icons_rc

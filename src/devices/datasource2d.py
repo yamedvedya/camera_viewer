@@ -22,7 +22,7 @@ class DataSource2D(QtCore.QObject):
     newFrame = QtCore.pyqtSignal()
     gotError = QtCore.pyqtSignal(str)
 
-    TICK = 0.1
+    TICK = 0.01
 
     # ----------------------------------------------------------------------
     def __init__(self, settings, parent):

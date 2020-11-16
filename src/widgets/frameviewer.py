@@ -44,7 +44,6 @@ class FrameViewer(QtWidgets.QWidget):
     min_level = 0
     max_level = 1
     auto_levels = True
-    colormap = 'grey'
 
     MAXFPS = 2
 
@@ -70,15 +69,15 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._init_ui()
 
-        # self._action_first_point = QtWidgets.QAction('Center search start', self)
-        # self._action_second_point = QtWidgets.QAction('Set second point', self)
-        # self._action_second_point.setVisible(False)
+        self._action_first_point = QtWidgets.QAction('Center search start', self)
+        self._action_second_point = QtWidgets.QAction('Set second point', self)
+        self._action_second_point.setVisible(False)
         self._action_clear_points = QtWidgets.QAction('Clear points', self)
         self._action_clear_points.setEnabled(False)
 
         self._context_menu = QtWidgets.QMenu()
-        # self._context_menu.addAction(self._action_first_point)
-        # self._context_menu.addAction(self._action_second_point)
+        self._context_menu.addAction(self._action_first_point)
+        self._context_menu.addAction(self._action_second_point)
         self._context_menu.addAction(self._action_clear_points)
 
         self._center_search_points = [None, None]
@@ -88,14 +87,13 @@ class FrameViewer(QtWidgets.QWidget):
         self._last_frame = None
         self._dark_frame = None
 
+        self.color_map_changed('grey')
+
         self._fps = 2.0
         self._viewRect = None
 
-        self._acqStarted = time.time()
-        self._nFrames = 0
-        self.isAccumulating = True
-
-        self._liveModeStatus = "idle"
+        self._acq_started = None
+        self._n_frames = 0
 
         self._rectRoi = pg.RectROI([0, 0], [50, 50], pen=(0, 9))
         self._ui.imageView.view.addItem(self._rectRoi, ignoreBounds=True)
@@ -272,21 +270,19 @@ class FrameViewer(QtWidgets.QWidget):
     def start_stop_live_mode(self):
         """
         """
-
         if self._camera_device and not self._camera_device.is_running():
-            self.start_live_mode()
-            self._acqStarted = time.time()
-            self._nFrames = 0
+            self._start_live_mode()
         else:
             self.stop_live_mode()
 
     # ----------------------------------------------------------------------
-    def start_live_mode(self):
+    def _start_live_mode(self):
         """
         """
         if self._camera_device:
             self._is_first_frame = True  # TMP TODO
-
+            self._acq_started = time.time()
+            self._n_frames = 0
             self._camera_device.start()
             self.device_started.emit()
         else:
@@ -323,8 +319,6 @@ class FrameViewer(QtWidgets.QWidget):
     def refresh_view(self):
         """
         """
-        spectrum_colormap = pg.ColorMap(*zip(*Gradients[self.colormap]["ticks"]))
-
         self._last_frame = self._camera_device.get_frame("copy")
         if self._dark_frame is not None:
             valid_idx = self._last_frame > self._dark_frame
@@ -336,7 +330,6 @@ class FrameViewer(QtWidgets.QWidget):
         else:
             self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False)
 
-        self._ui.imageView.imageItem.setLookupTable(spectrum_colormap.getLookupTable())
         self._ui.imageView.imageItem.setX(self.image_x_pos)
         self._ui.imageView.imageItem.setY(self.image_y_pos)
 
@@ -350,11 +343,11 @@ class FrameViewer(QtWidgets.QWidget):
         self._redraw_roi_label()
         self._redraw_projections()
 
-        self._nFrames += 1
-        self._fps = 1. / (time.time() - self._acqStarted)
-        self.status_changed.emit(self._fps)
-
-        self._acqStarted = time.time()
+        self._n_frames += 1
+        if time.time() - self._acq_started > 1:
+            self.status_changed.emit(self._n_frames)
+            self._n_frames = 0
+            self._acq_started = time.time()
 
     # ----------------------------------------------------------------------
     def _show_title(self):
@@ -465,33 +458,37 @@ class FrameViewer(QtWidgets.QWidget):
     def _mouse_clicked(self, event):
         """
         """
-        print('Got event: {} double {}'.format(event.button(), event.double()))
         if event.double():
             self._ui.imageView.autoRange()
         elif event.button() == 2:
 
             action = self._context_menu.exec_(event._screenPos)
 
-            if action == self._action_clear_points:
+            if action == self._action_first_point:
+                self._center_search_points[0] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+                self._search_in_progress = True
+                self._action_second_point.setVisible(True)
+                self._action_clear_points.setEnabled(True)
+                self._center_search_item.setVisible(True)
+            elif action == self._action_second_point:
+                self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+                self._action_second_point.setVisible(False)
+                self._search_in_progress = False
+                self._save_center_search()
+            else:
+
                 self._center_search_points = [None, None]
-                # self._action_second_point.setVisible(False)
+                self._action_second_point.setVisible(False)
                 self._action_clear_points.setEnabled(False)
                 self._center_search_item.setVisible(False)
                 self._search_in_progress = False
                 self._save_center_search()
 
-        elif event.button() == 1:
-            if not self._search_in_progress:
-                self._center_search_points[0] = self._ui.imageView.view.mapSceneToView(event.scenePos())
-                self._search_in_progress = True
-                # self._action_second_point.setVisible(True)
-                self._action_clear_points.setEnabled(True)
-                self._center_search_item.setVisible(True)
-            else:
-                self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
-                # self._action_second_point.setVisible(False)
-                self._search_in_progress = False
-                self._save_center_search()
+        elif event.button() == 1 and self._search_in_progress:
+            self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+            self._action_second_point.setVisible(False)
+            self._search_in_progress = False
+            self._save_center_search()
 
         self._display_center_search()
 
@@ -685,9 +682,13 @@ class FrameViewer(QtWidgets.QWidget):
         self.max_level = max
 
     # ----------------------------------------------------------------------
-    def color_map_changed(self, selectedMap):
-        if str(selectedMap) != '':
-            self.colormap = str(selectedMap)
+    def color_map_changed(self, selected_map):
+        if str(selected_map) != '':
+            colormap = str(selected_map)
+        else:
+            colormap = 'gray'
+
+        self._ui.imageView.imageItem.setLookupTable(pg.ColorMap(*zip(*Gradients[colormap]["ticks"])).getLookupTable())
 
     # ----------------------------------------------------------------------
     def set_dark_image(self):

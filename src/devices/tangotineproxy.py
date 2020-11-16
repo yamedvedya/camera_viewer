@@ -7,6 +7,7 @@
 """
 
 import numpy as np
+import time
 from src.devices.abstract_camera import AbstractCamera
 
 try:
@@ -42,14 +43,20 @@ class TangoTineProxy(AbstractCamera):
 
         self._init_device()
 
-        self.error_flag = False
         self._picture_size = []
-        self.error_msg = ''
         self._last_frame = np.zeros((1, 1))
+
+        self.error_flag = False
+        self.error_msg = ''
+
         self.period = 200
+        self._last_time = time.time()
+
         if not self._device_proxy.is_attribute_polled('Frame'):
             self._device_proxy.poll_attribute('Frame', self.period)
+
         self.self_period = not self._device_proxy.get_attribute_poll_period("Frame") == self.period
+
         if self.self_period:
             self._device_proxy.stop_poll_attribute("Frame")
             self._device_proxy.poll_attribute('Frame', self.period)
@@ -97,6 +104,9 @@ class TangoTineProxy(AbstractCamera):
             self._last_frame = np.transpose(data.value)
 
         self._new_frame_flag = True
+
+        print('New data after {}'.format(time.time() - self._last_time))
+        self._last_time = time.time()
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):

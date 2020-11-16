@@ -68,7 +68,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self._picture_height = None
 
         self._ui.tbAllParams.clicked.connect(self._edit_all_params)
-        for ui in ['ExposureTime', 'Gain', 'FPS']:
+        for ui in ['ExposureTime', 'Gain', 'FPS', 'Reduce']:
             getattr(self._ui, 'sb{}'.format(ui)).editingFinished.connect(lambda x=ui: self._settings_changed(x))
 
         for ui in ['ViewX', 'ViewY', 'ViewW', 'ViewH']:
@@ -430,6 +430,7 @@ class SettingsWidget(QtWidgets.QWidget):
             if max_level_limit is None:
                 max_level_limit = 10000
 
+            self._ui.sbReduce.setValue(self._camera_device.get_settings('Reduce', int))
             self._ui.sbMaxLevel.setMaximum(max_level_limit)
             self._ui.sbMinLevel.setMaximum(max_level_limit)
 
@@ -544,9 +545,8 @@ class SettingsWidget(QtWidgets.QWidget):
 
             self._camera_device.save_settings('Statistics_Marker', self._statistics_marker)
 
-            self._camera_device.save_settings('ExposureTime', int(self._ui.sbExposureTime.value()))
-            self._camera_device.save_settings('Gain', int(self._ui.sbGain.value()))
-            self._camera_device.save_settings('FPS', int(self._ui.sbFPS.value()))
+            for ui in ['ExposureTime', 'Gain', 'FPS', 'Reduce']:
+                self._camera_device.save_settings(ui, int(getattr(self._ui, 'sb{}'.format(ui)).value()))
 
             view_x, view_y, view_w, view_h = self._get_picture_size()
 

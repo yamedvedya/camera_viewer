@@ -62,6 +62,7 @@ class MainWindow(QtWidgets.QMainWindow):
         pg.setConfigOption("leftButtonPan", False)
 
         self._init_ui()
+
         self.camera_name = self._load_ui_settings()
         if self.camera_name == '' or self.camera_name is None:
             self.camera_name = self._device_list[0]
@@ -186,7 +187,7 @@ class MainWindow(QtWidgets.QMainWindow):
             report_error('Cannot change camera', self.log, self, True)
 
         self._frame_viewer.update_camera_label()
-        self._frame_viewer.start_live_mode()
+        self._frame_viewer.start_stop_live_mode()
         self._refresh_title()
     # ----------------------------------------------------------------------
     def _addDock(self, WidgetClass, label, location, *args, **kwargs):
