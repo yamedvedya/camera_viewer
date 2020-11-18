@@ -32,8 +32,6 @@ class TangoTineProxy(AbstractCamera):
                      "RoiHeight": ('roi_server', 'roi_h'),
                      "ExposureTime": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
                      "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
-                     'FPS_limit': (None, ),
-                     'FPS_max_limit': (None, ),
                      'max_level_limit': (None, )
                      }
 
@@ -133,6 +131,8 @@ class TangoTineProxy(AbstractCamera):
                 value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
                 self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
             return cast(value)
+        elif option == 'FPSmax':
+            return 1000/self.period
         else:
             return super(TangoTineProxy, self).get_settings(option, cast)
 

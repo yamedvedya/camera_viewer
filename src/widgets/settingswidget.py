@@ -7,7 +7,6 @@
 
 import logging
 import subprocess
-import json
 
 try:
     import PyTango
@@ -38,6 +37,7 @@ class SettingsWidget(QtWidgets.QWidget):
     remove_dark_image = QtCore.pyqtSignal()
     image_size_changed = QtCore.pyqtSignal(float, float, float, float)
     reset_center_search = QtCore.pyqtSignal(list)
+    new_image_reduction = QtCore.pyqtSignal(int)
 
     PARAMS_EDITOR = "atkpanel"
     SYNC_TICK = 1000  # [ms]
@@ -370,6 +370,9 @@ class SettingsWidget(QtWidgets.QWidget):
     def _settings_changed(self, name):
         """
         """
+        if name == 'Reduce':
+            self.new_image_reduction.emit(int(getattr(self._ui, 'sb{}'.format(name)).value()))
+
         with QtCore.QMutexLocker(self._tangoMutex):
             self._camera_device.save_settings(name, getattr(self._ui, 'sb{}'.format(name)).value())
 
@@ -430,7 +433,10 @@ class SettingsWidget(QtWidgets.QWidget):
             if max_level_limit is None:
                 max_level_limit = 10000
 
-            self._ui.sbReduce.setValue(self._camera_device.get_settings('Reduce', int))
+            reduction = self._camera_device.get_settings('Reduce', int)
+            self._ui.sbReduce.setValue(reduction)
+            self.new_image_reduction.emit(reduction)
+
             self._ui.sbMaxLevel.setMaximum(max_level_limit)
             self._ui.sbMinLevel.setMaximum(max_level_limit)
 
@@ -504,16 +510,14 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._change_picture_size()
 
                 fps = self._camera_device.get_settings('FPS', int)
-                fps_limit = self._camera_device.get_settings('FPSmax', int)
-                if fps is not None:
-                    self._ui.sbFPS.setEnabled(True)
-                    self._ui.sbFPS.setValue(fps)
-                    if fps_limit is not None:
-                        self._ui.sbFPS.setMaximum(fps_limit)
-                    else:
-                        self._ui.sbFPS.setMaximum(100)
-                else:
-                    self._ui.sbFPS.setEnabled(False)
+                fps_max = self._camera_device.get_settings('FPSmax', int)
+                if fps is None:
+                    fps = 25
+                if fps_max is None:
+                    fps_max = 100
+
+                self._ui.sbFPS.setValue(fps)
+                self._ui.sbFPS.setMaximum(fps_max)
 
                 self._roi_marker_changed(self._camera_device.get_settings('Statistics_Marker', str))
 

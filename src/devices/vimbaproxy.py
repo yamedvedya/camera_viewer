@@ -72,8 +72,6 @@ class VimbaProxy(AbstractCamera):
         self._last_frame = np.zeros((1, 1))
         self._last_time = time.time()
 
-        self._reduce_resolution = max(self.get_settings('Reduce', int), 1)
-
         if self._device_proxy.state() == PyTango.DevState.RUNNING:
             self._device_proxy.StopAcquisition()
 
@@ -89,13 +87,6 @@ class VimbaProxy(AbstractCamera):
                 return 2 ** 8
         else:
             return super(VimbaProxy, self).get_settings(option, cast)
-
-    # ----------------------------------------------------------------------
-    def save_settings(self, setting, value):
-        if setting == 'Reduce':
-            self._reduce_resolution = value
-
-        super(VimbaProxy, self).save_settings(setting, value)
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
@@ -135,7 +126,7 @@ class VimbaProxy(AbstractCamera):
         if not event.err:
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
-                self._last_frame = np.transpose(data.value)[::self._reduce_resolution, ::self._reduce_resolution]
+                self._last_frame = np.transpose(data.value)
 
                 self._new_frame_flag = True
 

@@ -22,8 +22,6 @@ class DataSource2D(QtCore.QObject):
     newFrame = QtCore.pyqtSignal()
     gotError = QtCore.pyqtSignal(str)
 
-    TICK = 0.01
-
     # ----------------------------------------------------------------------
     def __init__(self, settings, parent):
         """
@@ -44,6 +42,7 @@ class DataSource2D(QtCore.QObject):
         self._got_first_frame = False
 
         self._state = "idle"
+        self.fps = 1
 
     # ----------------------------------------------------------------------
     def _reset_worker(self):
@@ -80,7 +79,7 @@ class DataSource2D(QtCore.QObject):
                 self.gotError.emit(str(self._device_proxy.error_msg))
                 self._state = "abort"
 
-            time.sleep(self.TICK)
+            time.sleep(1/self.fps)
         self.log.info("Closing {}...".format(self.device_id))
 
         if self._device_proxy:
@@ -106,27 +105,35 @@ class DataSource2D(QtCore.QObject):
             self._state = "abort"
 
         while self._state != 'idle':
-            time.sleep(self.TICK)
+            time.sleep(self.fps)
 
         self.log.debug('CameraDevice stopped')
 
     # ----------------------------------------------------------------------
     def get_settings(self, setting, cast):
+
         if self._device_proxy:
-            return self._device_proxy.get_settings(setting, cast)
+            if setting == 'FPS':
+                self.fps = self._device_proxy.get_settings('FPS', int)
+                return self.fps
+            else:
+                return self._device_proxy.get_settings(setting, cast)
         else:
             return None
 
     # ----------------------------------------------------------------------
     def save_settings(self, setting, value):
         if self._device_proxy:
+            if setting == 'FPS':
+                self.fps = value
+
             self._device_proxy.save_settings(setting, value)
 
     # ----------------------------------------------------------------------
     def get_frame(self, mode="copy"):
         """
         """
-        return self._last_frame  #
+        return self._last_frame
 
     # ----------------------------------------------------------------------
     def new_device_proxy(self, name):

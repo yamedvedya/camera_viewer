@@ -69,6 +69,8 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._init_ui()
 
+        self._image = self._ui.imageView.imageItem
+
         self._action_first_point = QtWidgets.QAction('Center search start', self)
         self._action_second_point = QtWidgets.QAction('Set second point', self)
         self._action_second_point.setVisible(False)
@@ -312,8 +314,15 @@ class FrameViewer(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def move_image(self, x, y, w, h):
 
+        self._image.setX(x)
+        self._image.setY(y)
+
         self.image_x_pos = x
         self.image_y_pos = y
+
+    # ----------------------------------------------------------------------
+    def scale_image(self, scale):
+        self._image.scale(scale, scale)
 
     # ----------------------------------------------------------------------
     def refresh_view(self):
@@ -326,12 +335,9 @@ class FrameViewer(QtWidgets.QWidget):
             self._last_frame[~valid_idx] = 0
 
         if self.auto_levels:
-            self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False)
+            self._image.updateImage(self._last_frame, autoLevels=True, autoRange=False)
         else:
-            self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False)
-
-        self._ui.imageView.imageItem.setX(self.image_x_pos)
-        self._ui.imageView.imageItem.setY(self.image_y_pos)
+            self._image.updateImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False)
 
         if self._is_first_frame:
             self._is_first_frame = False
@@ -584,7 +590,7 @@ class FrameViewer(QtWidgets.QWidget):
         fileName = fileName.strip()
 
         if fileName:
-            data = self._camera_device.get_frame()  # sync with data acq! TODO
+            data, scale = self._camera_device.get_frame()  # sync with data acq! TODO
 
             if fmt.lower() == "csv":
                 np.savetxt(fileName, data)

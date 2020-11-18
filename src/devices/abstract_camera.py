@@ -71,6 +71,8 @@ class AbstractCamera(object):
         else:
             self._motor_worker = None
 
+        self.reduce_resolution = max(self.get_settings('Reduce', int), 1)
+
     # ----------------------------------------------------------------------
     def maybe_read_frame(self):
         """
@@ -94,7 +96,7 @@ class AbstractCamera(object):
         if self.rotate_angle:
             self._last_frame = np.rot90(self._last_frame, self.rotate_angle)
 
-        return self._last_frame
+        return self._last_frame[::self.reduce_resolution, ::self.reduce_resolution]
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
@@ -155,6 +157,9 @@ class AbstractCamera(object):
                 raise RuntimeError('Unknown setting source')
         else:
             QtCore.QSettings(APP_NAME, self._beamline_id).setValue("{}/{}".format(self._cid, setting), value)
+
+        if setting == 'Reduce':
+            self.reduce_resolution = value
 
     # ----------------------------------------------------------------------
     def has_motor(self):
