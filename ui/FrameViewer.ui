@@ -26,7 +26,7 @@
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
-      <widget class="ImageView" name="imageView" native="true"/>
+      <widget class="ImageViewNoKeyboard" name="imageView" native="true"/>
       <widget class="ProjectionWidget" name="wiProfileX" native="true">
        <property name="maximumSize">
         <size>
@@ -69,9 +69,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>ImageView</class>
+   <class>ImageViewNoKeyboard</class>
    <extends>QWidget</extends>
-   <header>pyqtgraph</header>
+   <header>widgets.image_view</header>
    <container>1</container>
   </customwidget>
   <customwidget>

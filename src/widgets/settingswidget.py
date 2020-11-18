@@ -7,7 +7,6 @@
 
 import logging
 import subprocess
-import json
 
 try:
     import PyTango
@@ -38,6 +37,7 @@ class SettingsWidget(QtWidgets.QWidget):
     remove_dark_image = QtCore.pyqtSignal()
     image_size_changed = QtCore.pyqtSignal(float, float, float, float)
     reset_center_search = QtCore.pyqtSignal(list)
+    new_image_reduction = QtCore.pyqtSignal(int)
 
     PARAMS_EDITOR = "atkpanel"
     SYNC_TICK = 1000  # [ms]
@@ -68,7 +68,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self._picture_height = None
 
         self._ui.tbAllParams.clicked.connect(self._edit_all_params)
-        for ui in ['ExposureTime', 'Gain', 'FPS']:
+        for ui in ['ExposureTime', 'Gain', 'FPS', 'Reduce']:
             getattr(self._ui, 'sb{}'.format(ui)).editingFinished.connect(lambda x=ui: self._settings_changed(x))
 
         for ui in ['ViewX', 'ViewY', 'ViewW', 'ViewH']:
@@ -146,27 +146,15 @@ class SettingsWidget(QtWidgets.QWidget):
             return False
 
     # ----------------------------------------------------------------------
-    def _block_new_markers(self, flag):
-        self._ui.but_add_marker.setEnabled(not flag)
-        for widget in self._markers_widgets:
-            widget.disable_button(not flag)
-
-    # ----------------------------------------------------------------------
     def _add_marker(self):
-
-        self._block_new_markers(True)
-        new_ind = len(self._markers) + 1
-        self._markers[new_ind] = {'x': 0, 'y': 0}
+        self._markers.append({'x': 0, 'y': 0})
         self._update_marker_layout()
-        self._block_new_markers(False)
 
     # ----------------------------------------------------------------------
     def _delete_marker(self, id):
 
-        self._block_new_markers(True)
         del self._markers[id]
         self._update_marker_layout()
-        self._block_new_markers(False)
 
     # ----------------------------------------------------------------------
     def _update_marker_layout(self, save=True):
@@ -181,7 +169,7 @@ class SettingsWidget(QtWidgets.QWidget):
                     w.setVisible(False)
 
         self._markers_widgets = []
-        for ind, values in self._markers.items():
+        for ind, values in enumerate(self._markers):
             widget = Marker(ind)
             widget.marker_changed.connect(self._marker_changed)
             widget.delete_me.connect(self._delete_marker)
@@ -382,6 +370,9 @@ class SettingsWidget(QtWidgets.QWidget):
     def _settings_changed(self, name):
         """
         """
+        if name == 'Reduce':
+            self.new_image_reduction.emit(int(getattr(self._ui, 'sb{}'.format(name)).value()))
+
         with QtCore.QMutexLocker(self._tangoMutex):
             self._camera_device.save_settings(name, getattr(self._ui, 'sb{}'.format(name)).value())
 
@@ -441,9 +432,12 @@ class SettingsWidget(QtWidgets.QWidget):
             max_level_limit = self._camera_device.get_settings('max_level_limit', int)
             if max_level_limit is None:
                 max_level_limit = 10000
-
             self._ui.sbMaxLevel.setMaximum(max_level_limit)
             self._ui.sbMinLevel.setMaximum(max_level_limit)
+
+            reduction = max(1, self._camera_device.get_settings('Reduce', int))
+            self._ui.sbReduce.setValue(reduction)
+            self.new_image_reduction.emit(reduction)
 
             self._ui.chk_auto_screen.setChecked(self._camera_device.get_settings('auto_screen', bool))
 
@@ -463,12 +457,12 @@ class SettingsWidget(QtWidgets.QWidget):
 
             self.roi_changed.emit(self._current_roi_index[0])
 
-            for key in self._markers.keys():
-                del self._markers[key]
+            for ind in range(len(self._markers))[::-1]:
+                del self._markers[ind]
 
             for ind in range(self._camera_device.get_settings('num_markers', int)):
-                self._markers[ind] = {'x': self._camera_device.get_settings('marker_{:d}_x'.format(ind), int),
-                                      'y': self._camera_device.get_settings('marker_{:d}_y'.format(ind), int)}
+                self._markers.append({'x': self._camera_device.get_settings('marker_{:d}_x'.format(ind), int),
+                                      'y': self._camera_device.get_settings('marker_{:d}_y'.format(ind), int)})
             self._update_marker_layout(False)
 
             with QtCore.QMutexLocker(self._tangoMutex):
@@ -515,16 +509,14 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._change_picture_size()
 
                 fps = self._camera_device.get_settings('FPS', int)
-                fps_limit = self._camera_device.get_settings('FPSmax', int)
-                if fps is not None:
-                    self._ui.sbFPS.setEnabled(True)
-                    self._ui.sbFPS.setValue(fps)
-                    if fps_limit is not None:
-                        self._ui.sbFPS.setMaximum(fps_limit)
-                    else:
-                        self._ui.sbFPS.setMaximum(100)
-                else:
-                    self._ui.sbFPS.setEnabled(False)
+                fps_max = self._camera_device.get_settings('FPSmax', int)
+                if fps is None:
+                    fps = 25
+                if fps_max is None:
+                    fps_max = 100
+
+                self._ui.sbFPS.setValue(fps)
+                self._ui.sbFPS.setMaximum(fps_max)
 
                 self._roi_marker_changed(self._camera_device.get_settings('Statistics_Marker', str))
 
@@ -550,15 +542,14 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._camera_device.save_settings(roi_param, self._rois[self._current_roi_index[0]][roi_param])
 
             self._camera_device.save_settings('num_markers', len(self._markers))
-            for num, values in self._markers.items():
+            for num, values in enumerate(self._markers):
                 self._camera_device.save_settings('marker_{:d}_x'.format(num), values['x'])
                 self._camera_device.save_settings('marker_{:d}_y'.format(num), values['y'])
 
             self._camera_device.save_settings('Statistics_Marker', self._statistics_marker)
 
-            self._camera_device.save_settings('ExposureTime', int(self._ui.sbExposureTime.value()))
-            self._camera_device.save_settings('Gain', int(self._ui.sbGain.value()))
-            self._camera_device.save_settings('FPS', int(self._ui.sbFPS.value()))
+            for ui in ['ExposureTime', 'Gain', 'FPS', 'Reduce']:
+                self._camera_device.save_settings(ui, int(getattr(self._ui, 'sb{}'.format(ui)).value()))
 
             view_x, view_y, view_w, view_h = self._get_picture_size()
 

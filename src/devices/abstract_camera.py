@@ -34,7 +34,11 @@ class AbstractCamera(object):
         self.flip_h = bool(strtobool(settings.getAttribute("flip_horizontal")))
         self.rotate_angle = int(settings.getAttribute("rotate"))
 
-        self._device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("tango_server")))
+        if settings.hasAttribute('tango_server'):
+            self._device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("tango_server")))
+        else:
+            self._device_proxy = None
+
         if settings.hasAttribute('settings_server'):
             self._settings_proxy = PyTango.DeviceProxy(str(settings.getAttribute("settings_server")))
         else:
@@ -67,6 +71,8 @@ class AbstractCamera(object):
         else:
             self._motor_worker = None
 
+        self.reduce_resolution = max(self.get_settings('Reduce', int), 1)
+
     # ----------------------------------------------------------------------
     def maybe_read_frame(self):
         """
@@ -90,7 +96,7 @@ class AbstractCamera(object):
         if self.rotate_angle:
             self._last_frame = np.rot90(self._last_frame, self.rotate_angle)
 
-        return self._last_frame
+        return self._last_frame[::self.reduce_resolution, ::self.reduce_resolution]
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
@@ -151,6 +157,9 @@ class AbstractCamera(object):
                 raise RuntimeError('Unknown setting source')
         else:
             QtCore.QSettings(APP_NAME, self._beamline_id).setValue("{}/{}".format(self._cid, setting), value)
+
+        if setting == 'Reduce':
+            self.reduce_resolution = value
 
     # ----------------------------------------------------------------------
     def has_motor(self):

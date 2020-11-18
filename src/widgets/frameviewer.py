@@ -9,6 +9,7 @@ import logging
 import time
 from datetime import datetime
 import json
+import math
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
@@ -44,7 +45,6 @@ class FrameViewer(QtWidgets.QWidget):
     min_level = 0
     max_level = 1
     auto_levels = True
-    colormap = 'grey'
 
     MAXFPS = 2
 
@@ -88,21 +88,20 @@ class FrameViewer(QtWidgets.QWidget):
         self._last_frame = None
         self._dark_frame = None
 
+        self.color_map_changed('grey')
+
         self._fps = 2.0
         self._viewRect = None
 
-        self._acqStarted = time.time()
-        self._nFrames = 0
-        self.isAccumulating = True
-
-        self._liveModeStatus = "idle"
+        self._acq_started = None
+        self._n_frames = 0
 
         self._rectRoi = pg.RectROI([0, 0], [50, 50], pen=(0, 9))
         self._ui.imageView.view.addItem(self._rectRoi, ignoreBounds=True)
         self._rectRoi.sigRegionChanged.connect(self._roi_changed)
         self._rectRoi.hide()
 
-        self._marker_widget = {}
+        self._marker_widgets = []
 
         self._cross_item = LineSegmentItem('cross')
         self._cross_item.setVisible(False)
@@ -132,8 +131,9 @@ class FrameViewer(QtWidgets.QWidget):
         self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
         self._roiLabel = self._add_label("ROI", self._settings.node("camera_viewer/roi_label"), visible=False)
 
-        self.image_x_pos = 0
-        self.image_y_pos = 0
+        self._image_x_pos = 0
+        self._image_y_pos = 0
+        self._image_scale = (1, 1)
         self.log.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
@@ -170,7 +170,7 @@ class FrameViewer(QtWidgets.QWidget):
 
                 return True
 
-        self._action_second_point.setVisible(False)
+        # self._action_second_point.setVisible(False)
         self._action_clear_points.setEnabled(False)
         self._center_search_item.setVisible(False)
         self._display_center_search()
@@ -183,17 +183,17 @@ class FrameViewer(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def markers_changed(self):
-        for ind, widget in self._marker_widget.items():
+        for widget in self._marker_widgets:
             widget.delete_me()
-            del self._marker_widget[ind]
 
-        for ind, marker in self._markers.items():
-            self._marker_widget[ind] = ImageMarker(self._markers[ind]['x'], self._markers[ind]['y'], self._ui.imageView)
+        self._marker_widgets = []
+        for ind, marker in enumerate(self._markers):
+            self._marker_widgets.append(ImageMarker(marker['x'], marker['y'], self._ui.imageView))
 
     # ----------------------------------------------------------------------
     def update_marker(self, ind):
 
-        self._marker_widget[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
+        self._marker_widgets[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
 
     # ----------------------------------------------------------------------
     def update_roi(self, roi_index):
@@ -272,21 +272,19 @@ class FrameViewer(QtWidgets.QWidget):
     def start_stop_live_mode(self):
         """
         """
-
         if self._camera_device and not self._camera_device.is_running():
-            self.start_live_mode()
-            self._acqStarted = time.time()
-            self._nFrames = 0
+            self._start_live_mode()
         else:
             self.stop_live_mode()
 
     # ----------------------------------------------------------------------
-    def start_live_mode(self):
+    def _start_live_mode(self):
         """
         """
         if self._camera_device:
             self._is_first_frame = True  # TMP TODO
-
+            self._acq_started = time.time()
+            self._n_frames = 0
             self._camera_device.start()
             self.device_started.emit()
         else:
@@ -316,15 +314,17 @@ class FrameViewer(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def move_image(self, x, y, w, h):
 
-        self.image_x_pos = x
-        self.image_y_pos = y
+        self._image_x_pos = x
+        self._image_y_pos = y
+
+    # ----------------------------------------------------------------------
+    def scale_image(self, scale):
+        self._image_scale = (scale, scale)
 
     # ----------------------------------------------------------------------
     def refresh_view(self):
         """
         """
-        spectrum_colormap = pg.ColorMap(*zip(*Gradients[self.colormap]["ticks"]))
-
         self._last_frame = self._camera_device.get_frame("copy")
         if self._dark_frame is not None:
             valid_idx = self._last_frame > self._dark_frame
@@ -332,13 +332,11 @@ class FrameViewer(QtWidgets.QWidget):
             self._last_frame[~valid_idx] = 0
 
         if self.auto_levels:
-            self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False)
+            self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False,
+                                        pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
         else:
-            self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False)
-
-        self._ui.imageView.imageItem.setLookupTable(spectrum_colormap.getLookupTable())
-        self._ui.imageView.imageItem.setX(self.image_x_pos)
-        self._ui.imageView.imageItem.setY(self.image_y_pos)
+            self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False,
+                                    pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
 
         if self._is_first_frame:
             self._is_first_frame = False
@@ -350,11 +348,11 @@ class FrameViewer(QtWidgets.QWidget):
         self._redraw_roi_label()
         self._redraw_projections()
 
-        self._nFrames += 1
-        self._fps = 1. / (time.time() - self._acqStarted)
-        self.status_changed.emit(self._fps)
-
-        self._acqStarted = time.time()
+        self._n_frames += 1
+        if time.time() - self._acq_started > 1:
+            self.status_changed.emit(self._n_frames)
+            self._n_frames = 0
+            self._acq_started = time.time()
 
     # ----------------------------------------------------------------------
     def _show_title(self):
@@ -395,7 +393,7 @@ class FrameViewer(QtWidgets.QWidget):
         """
         if self._rois[self._current_roi_index[0]]['Roi_Visible']:
             pos, size = self._rectRoi.pos(), self._rectRoi.size()
-            x, y, w, h = int(pos.x() - self.image_x_pos), int(pos.y() - self.image_y_pos), int(size.x()), int(size.y())
+            x, y, w, h = int(pos.x() - self._image_x_pos), int(pos.y() - self._image_y_pos), int(size.x()), int(size.y())
 
             array = self._last_frame[x:x + w, y:y + h]
             if array != []:
@@ -408,15 +406,18 @@ class FrameViewer(QtWidgets.QWidget):
                 except:
                     roiExtrema = (0, 0, (0, 0), (0, 0))
 
-                roi_max = (roiExtrema[3][0] + x + self.image_x_pos, roiExtrema[3][1] + y + self.image_y_pos)
-                roi_min = (roiExtrema[2][0] + x + self.image_x_pos, roiExtrema[2][1] + y + self.image_y_pos)
+                roi_max = (roiExtrema[3][0] + x + self._image_x_pos, roiExtrema[3][1] + y + self._image_y_pos)
+                roi_min = (roiExtrema[2][0] + x + self._image_x_pos, roiExtrema[2][1] + y + self._image_y_pos)
 
                 try:
                     roi_com = scipymeasure.center_of_mass(array)
                 except:
                     roi_com = (0, 0)
 
-                roi_com = (roi_com[0] + x + self.image_x_pos, roi_com[1] + y + self.image_y_pos)
+                if math.isnan(roi_com[0]) or math.isnan(roi_com[1]):
+                    roi_com = (0, 0)
+
+                roi_com = (roi_com[0] + x + self._image_x_pos, roi_com[1] + y + self._image_y_pos)
 
                 try:
                     intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
@@ -466,7 +467,11 @@ class FrameViewer(QtWidgets.QWidget):
         """
         """
         if event.double():
-            self._ui.imageView.autoRange()
+            try:
+                self._ui.imageView.autoRange()
+            except:
+                pass
+
         elif event.button() == 2:
 
             action = self._context_menu.exec_(event._screenPos)
@@ -591,7 +596,7 @@ class FrameViewer(QtWidgets.QWidget):
         fileName = fileName.strip()
 
         if fileName:
-            data = self._camera_device.get_frame()  # sync with data acq! TODO
+            data, scale = self._camera_device.get_frame()  # sync with data acq! TODO
 
             if fmt.lower() == "csv":
                 np.savetxt(fileName, data)
@@ -689,9 +694,13 @@ class FrameViewer(QtWidgets.QWidget):
         self.max_level = max
 
     # ----------------------------------------------------------------------
-    def color_map_changed(self, selectedMap):
-        if str(selectedMap) != '':
-            self.colormap = str(selectedMap)
+    def color_map_changed(self, selected_map):
+        if str(selected_map) != '':
+            colormap = str(selected_map)
+        else:
+            colormap = 'gray'
+
+        self._ui.imageView.imageItem.setLookupTable(pg.ColorMap(*zip(*Gradients[colormap]["ticks"])).getLookupTable())
 
     # ----------------------------------------------------------------------
     def set_dark_image(self):
@@ -749,7 +758,6 @@ class ImageMarker(object):
         self.imageView.removeItem(self._markerH)
         self.imageView.removeItem(self._markerV)
 
-
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
 
@@ -777,11 +785,11 @@ class LineSegmentItem(pg.GraphicsObject):
             # here we get argin[0] - center position
             # here we get argin[1] - line length
 
-            self._line1_end1 = QtCore.QPoint(argin[0][0] - argin[1][0]/2, argin[0][1])
-            self._line1_end2 = QtCore.QPoint(argin[0][0] + argin[1][0]/2, argin[0][1])
+            self._line1_end1 = QtCore.QPoint(int(argin[0][0] - argin[1][0]/2), int(argin[0][1]))
+            self._line1_end2 = QtCore.QPoint(int(argin[0][0] + argin[1][0]/2), int(argin[0][1]))
 
-            self._line2_end1 = QtCore.QPoint(argin[0][0], argin[0][1] - argin[1][1]/2)
-            self._line2_end2 = QtCore.QPoint(argin[0][0], argin[0][1] + argin[1][1]/2)
+            self._line2_end1 = QtCore.QPoint(int(argin[0][0]), int(argin[0][1] - argin[1][1]/2))
+            self._line2_end2 = QtCore.QPoint(int(argin[0][0]), int(argin[0][1] + argin[1][1]/2))
 
             self._draw_lines = True
             self._draw_point1 = False

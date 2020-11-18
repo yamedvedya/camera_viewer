@@ -70,6 +70,7 @@ class VimbaProxy(AbstractCamera):
         self.error_msg = ''
         self.error_flag = False
         self._last_frame = np.zeros((1, 1))
+        self._last_time = time.time()
 
         if self._device_proxy.state() == PyTango.DevState.RUNNING:
             self._device_proxy.StopAcquisition()
@@ -128,6 +129,9 @@ class VimbaProxy(AbstractCamera):
                 self._last_frame = np.transpose(data.value)
 
                 self._new_frame_flag = True
+
+                # print('New data after {}'.format(time.time() - self._last_time))
+                # self._last_time = time.time()
 
             except Exception as err:
                 self._log.error('Vimba error: {}'.format(err))

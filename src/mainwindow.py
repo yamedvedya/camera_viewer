@@ -62,13 +62,14 @@ class MainWindow(QtWidgets.QMainWindow):
         pg.setConfigOption("leftButtonPan", False)
 
         self._init_ui()
+
         self.camera_name = self._load_ui_settings()
         if self.camera_name == '' or self.camera_name is None:
             self.camera_name = self._device_list[0]
 
         self._camera_device = self._init_data_source()
         self._rois = [{}, ]  # x, y, w, h, threshold
-        self._markers = {}
+        self._markers = [{},]
         self._statistics = [{}, ]
         self._current_roi_index = [0]
 
@@ -159,6 +160,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._settings_widget.set_dark_image.connect(self._frame_viewer.set_dark_image)
         self._settings_widget.remove_dark_image.connect(self._frame_viewer.remove_dark_image)
         self._settings_widget.image_size_changed.connect(self._frame_viewer.move_image)
+        self._settings_widget.new_image_reduction.connect(self._frame_viewer.scale_image)
 
         self._init_actions()
         self._toolBar = self._init_tool_bar()
@@ -186,7 +188,7 @@ class MainWindow(QtWidgets.QMainWindow):
             report_error('Cannot change camera', self.log, self, True)
 
         self._frame_viewer.update_camera_label()
-        self._frame_viewer.start_live_mode()
+        self._frame_viewer.start_stop_live_mode()
         self._refresh_title()
     # ----------------------------------------------------------------------
     def _addDock(self, WidgetClass, label, location, *args, **kwargs):

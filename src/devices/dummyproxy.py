@@ -1,18 +1,17 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
-# Last modified: 2017, December 11
+# Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """Dummy 2D data generator.
 """
 
 import numpy as np
+from abstract_camera import AbstractCamera
+from threading import Thread
+import time
 
 # ----------------------------------------------------------------------
-class DummyProxy(object):
+class DummyProxy(AbstractCamera):
     """
     """
     FRAME_W = 2500
@@ -20,46 +19,86 @@ class DummyProxy(object):
 
     NOISE = 0.27
 
+    _settings_map = {}
+
     # ----------------------------------------------------------------------
-    def __init__(self, settings, generalSettings,  log):
-        super(DummyProxy, self).__init__()
+    def __init__(self, beamline_id, settings, log):
+        super(DummyProxy, self).__init__(beamline_id, settings, log)
 
-        clipRect = generalSettings.option("clip", "rect").split(",")
+        self._picture_size = [0, 0, self.FRAME_W, self.FRAME_H]
 
-        self.x1 = int(max(clipRect[0], 0))
-        self.y1 = int(max(clipRect[1], 0))
-        self.x2 = int(min(clipRect[2], self.FRAME_W))
-        self.y2 = int(min(clipRect[3], self.FRAME_H))
-
-        x, y = np.meshgrid(np.linspace(-4, 4, self.FRAME_W),
-                           np.linspace(-4, 4, self.FRAME_H))
+        x, y = np.meshgrid(np.linspace(-4, 4, self.FRAME_H),
+                           np.linspace(-4, 4, self.FRAME_W))
         x += 0.0
         y += -1.0
 
         mean, sigma = 0, 0.2
-        self._baseData = np.exp(-((np.sqrt(x * x + y * y * 4) - mean) ** 2 /
-                                ( 2.0 * sigma ** 2)))
-        self.errorFlag = False
-        self.errorMsg = ''
+        self._baseData = np.exp(-((np.sqrt(x * x + y * y * 4) - mean) ** 2 / (2.0 * sigma ** 2)))
+        self._data = self._baseData
+
+        self.error_flag = False
+        self.error_msg = ''
+
+        self._fps = 25
+
+        self._generator_thread = Thread(target=self._generator)
+        self._generate = False
+
+        self._new_frame_thead = Thread(target=self._new_frame)
     
     # ----------------------------------------------------------------------
-    def maybeReadFrame(self):
+    def _new_frame(self):
+        _last_time = time.time()
+        while self._generate:
+            time.sleep(1/self._fps)
+            self._last_frame = self._data[self._picture_size[0]:self._picture_size[2],
+                                    self._picture_size[1]:self._picture_size[3]]
+            self._new_frame_flag = True
+            # print('New frame after {}'.format(time.time() - _last_time))
+            _last_time = time.time()
+
+    # ----------------------------------------------------------------------
+    def _generator(self):
         """
         """
-        nPoints = self.FRAME_W * self.FRAME_H
-        data = self._baseData + np.random.uniform(0.0, self.NOISE, nPoints).reshape(self.FRAME_W, self.FRAME_H)
-
-        return data[self.x1:self.x2, self.y1:self.y2]
-
-    # ----------------------------------------------------------------------
-    def startAcquisition(self):
-        pass
+        _last_time = time.time()
+        while self._generate:
+            time.sleep(1/10)
+            nPoints = self.FRAME_W * self.FRAME_H
+            self._data = self._baseData + np.random.uniform(0.0, self.NOISE, nPoints).reshape(self.FRAME_W, self.FRAME_H)
+            _last_time = time.time()
 
     # ----------------------------------------------------------------------
-    def stopAcquisition(self):
-        pass
+    def start_acquisition(self):
+        self._generate = True
+        self._generator_thread.start()
+        self._new_frame_thead.start()
 
     # ----------------------------------------------------------------------
-    def close(self):
-        pass
+    def stop_acquisition(self):
+        self._generate = False
 
+    # ----------------------------------------------------------------------
+    def get_settings(self, option, cast):
+        if option == 'FPSmax':
+            return 200
+        elif option == 'FPS':
+            return self._fps
+        elif option == 'wMax':
+            return self.FRAME_W
+        elif option == 'hMax':
+            return self.FRAME_H
+        else:
+            return super(DummyProxy, self).get_settings(option, cast)
+
+    # ----------------------------------------------------------------------
+    def save_settings(self, option, value):
+        if option == 'FPS':
+            self._fps = value
+        else:
+            super(DummyProxy, self).save_settings(option, value)
+
+    # ----------------------------------------------------------------------
+    def change_picture_size(self, size):
+
+        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]

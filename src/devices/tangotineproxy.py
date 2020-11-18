@@ -7,6 +7,7 @@
 """
 
 import numpy as np
+import time
 from src.devices.abstract_camera import AbstractCamera
 
 try:
@@ -31,8 +32,6 @@ class TangoTineProxy(AbstractCamera):
                      "RoiHeight": ('roi_server', 'roi_h'),
                      "ExposureTime": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
                      "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
-                     'FPS_limit': (None, ),
-                     'FPS_max_limit': (None, ),
                      'max_level_limit': (None, )
                      }
 
@@ -42,14 +41,20 @@ class TangoTineProxy(AbstractCamera):
 
         self._init_device()
 
-        self.error_flag = False
         self._picture_size = []
-        self.error_msg = ''
         self._last_frame = np.zeros((1, 1))
+
+        self.error_flag = False
+        self.error_msg = ''
+
         self.period = 200
+        # self._last_time = time.time()
+
         if not self._device_proxy.is_attribute_polled('Frame'):
             self._device_proxy.poll_attribute('Frame', self.period)
+
         self.self_period = not self._device_proxy.get_attribute_poll_period("Frame") == self.period
+
         if self.self_period:
             self._device_proxy.stop_poll_attribute("Frame")
             self._device_proxy.poll_attribute('Frame', self.period)
@@ -98,6 +103,9 @@ class TangoTineProxy(AbstractCamera):
 
         self._new_frame_flag = True
 
+        # print('New data after {}'.format(time.time() - self._last_time))
+        # self._last_time = time.time()
+
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
         if option in ['wMax', 'hMax']:
@@ -123,6 +131,10 @@ class TangoTineProxy(AbstractCamera):
                 value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
                 self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
             return cast(value)
+        elif option == 'FPSmax':
+            return 1000/self.period
+        elif option == 'FPS':
+            return max(1, super(TangoTineProxy, self).get_settings(option, cast))
         else:
             return super(TangoTineProxy, self).get_settings(option, cast)
 
