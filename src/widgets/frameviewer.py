@@ -9,6 +9,7 @@ import logging
 import time
 from datetime import datetime
 import json
+import math
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
@@ -68,8 +69,6 @@ class FrameViewer(QtWidgets.QWidget):
         self._ui.setupUi(self)
 
         self._init_ui()
-
-        self._image = self._ui.imageView.imageItem
 
         self._action_first_point = QtWidgets.QAction('Center search start', self)
         self._action_second_point = QtWidgets.QAction('Set second point', self)
@@ -132,8 +131,9 @@ class FrameViewer(QtWidgets.QWidget):
         self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
         self._roiLabel = self._add_label("ROI", self._settings.node("camera_viewer/roi_label"), visible=False)
 
-        self.image_x_pos = 0
-        self.image_y_pos = 0
+        self._image_x_pos = 0
+        self._image_y_pos = 0
+        self._image_scale = (1, 1)
         self.log.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
@@ -163,7 +163,7 @@ class FrameViewer(QtWidgets.QWidget):
 
                 self._center_search_points = [QtCore.QPointF(coordinates[0], coordinates[1]),
                                               QtCore.QPointF(coordinates[2], coordinates[3])]
-                # self._action_second_point.setVisible(False)
+                self._action_second_point.setVisible(False)
                 self._action_clear_points.setEnabled(True)
                 self._center_search_item.setVisible(True)
                 self._display_center_search()
@@ -314,15 +314,12 @@ class FrameViewer(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def move_image(self, x, y, w, h):
 
-        self._image.setX(x)
-        self._image.setY(y)
-
-        self.image_x_pos = x
-        self.image_y_pos = y
+        self._image_x_pos = x
+        self._image_y_pos = y
 
     # ----------------------------------------------------------------------
     def scale_image(self, scale):
-        self._image.scale(scale, scale)
+        self._image_scale = (scale, scale)
 
     # ----------------------------------------------------------------------
     def refresh_view(self):
@@ -335,9 +332,11 @@ class FrameViewer(QtWidgets.QWidget):
             self._last_frame[~valid_idx] = 0
 
         if self.auto_levels:
-            self._image.updateImage(self._last_frame, autoLevels=True, autoRange=False)
+            self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False,
+                                        pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
         else:
-            self._image.updateImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False)
+            self._ui.imageView.updateImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False,
+                                    pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
 
         if self._is_first_frame:
             self._is_first_frame = False
@@ -394,7 +393,7 @@ class FrameViewer(QtWidgets.QWidget):
         """
         if self._rois[self._current_roi_index[0]]['Roi_Visible']:
             pos, size = self._rectRoi.pos(), self._rectRoi.size()
-            x, y, w, h = int(pos.x() - self.image_x_pos), int(pos.y() - self.image_y_pos), int(size.x()), int(size.y())
+            x, y, w, h = int(pos.x() - self._image_x_pos), int(pos.y() - self._image_y_pos), int(size.x()), int(size.y())
 
             array = self._last_frame[x:x + w, y:y + h]
             if array != []:
@@ -407,15 +406,18 @@ class FrameViewer(QtWidgets.QWidget):
                 except:
                     roiExtrema = (0, 0, (0, 0), (0, 0))
 
-                roi_max = (roiExtrema[3][0] + x + self.image_x_pos, roiExtrema[3][1] + y + self.image_y_pos)
-                roi_min = (roiExtrema[2][0] + x + self.image_x_pos, roiExtrema[2][1] + y + self.image_y_pos)
+                roi_max = (roiExtrema[3][0] + x + self._image_x_pos, roiExtrema[3][1] + y + self._image_y_pos)
+                roi_min = (roiExtrema[2][0] + x + self._image_x_pos, roiExtrema[2][1] + y + self._image_y_pos)
 
                 try:
                     roi_com = scipymeasure.center_of_mass(array)
                 except:
                     roi_com = (0, 0)
 
-                roi_com = (roi_com[0] + x + self.image_x_pos, roi_com[1] + y + self.image_y_pos)
+                if math.isnan(roi_com[0]) or math.isnan(roi_com[1]):
+                    roi_com = (0, 0)
+
+                roi_com = (roi_com[0] + x + self._image_x_pos, roi_com[1] + y + self._image_y_pos)
 
                 try:
                     intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
@@ -465,7 +467,11 @@ class FrameViewer(QtWidgets.QWidget):
         """
         """
         if event.double():
-            self._ui.imageView.autoRange()
+            try:
+                self._ui.imageView.autoRange()
+            except:
+                pass
+
         elif event.button() == 2:
 
             action = self._context_menu.exec_(event._screenPos)
@@ -779,11 +785,11 @@ class LineSegmentItem(pg.GraphicsObject):
             # here we get argin[0] - center position
             # here we get argin[1] - line length
 
-            self._line1_end1 = QtCore.QPoint(argin[0][0] - argin[1][0]/2, argin[0][1])
-            self._line1_end2 = QtCore.QPoint(argin[0][0] + argin[1][0]/2, argin[0][1])
+            self._line1_end1 = QtCore.QPoint(int(argin[0][0] - argin[1][0]/2), int(argin[0][1]))
+            self._line1_end2 = QtCore.QPoint(int(argin[0][0] + argin[1][0]/2), int(argin[0][1]))
 
-            self._line2_end1 = QtCore.QPoint(argin[0][0], argin[0][1] - argin[1][1]/2)
-            self._line2_end2 = QtCore.QPoint(argin[0][0], argin[0][1] + argin[1][1]/2)
+            self._line2_end1 = QtCore.QPoint(int(argin[0][0]), int(argin[0][1] - argin[1][1]/2))
+            self._line2_end2 = QtCore.QPoint(int(argin[0][0]), int(argin[0][1] + argin[1][1]/2))
 
             self._draw_lines = True
             self._draw_point1 = False

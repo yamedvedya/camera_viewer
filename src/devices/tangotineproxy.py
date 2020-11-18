@@ -48,7 +48,7 @@ class TangoTineProxy(AbstractCamera):
         self.error_msg = ''
 
         self.period = 200
-        self._last_time = time.time()
+        # self._last_time = time.time()
 
         if not self._device_proxy.is_attribute_polled('Frame'):
             self._device_proxy.poll_attribute('Frame', self.period)
@@ -103,8 +103,8 @@ class TangoTineProxy(AbstractCamera):
 
         self._new_frame_flag = True
 
-        print('New data after {}'.format(time.time() - self._last_time))
-        self._last_time = time.time()
+        # print('New data after {}'.format(time.time() - self._last_time))
+        # self._last_time = time.time()
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
@@ -133,6 +133,8 @@ class TangoTineProxy(AbstractCamera):
             return cast(value)
         elif option == 'FPSmax':
             return 1000/self.period
+        elif option == 'FPS':
+            return max(1, super(TangoTineProxy, self).get_settings(option, cast))
         else:
             return super(TangoTineProxy, self).get_settings(option, cast)
 
