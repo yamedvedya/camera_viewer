@@ -432,13 +432,12 @@ class SettingsWidget(QtWidgets.QWidget):
             max_level_limit = self._camera_device.get_settings('max_level_limit', int)
             if max_level_limit is None:
                 max_level_limit = 10000
-
-            reduction = self._camera_device.get_settings('Reduce', int)
-            self._ui.sbReduce.setValue(reduction)
-            self.new_image_reduction.emit(reduction)
-
             self._ui.sbMaxLevel.setMaximum(max_level_limit)
             self._ui.sbMinLevel.setMaximum(max_level_limit)
+
+            reduction = max(1, self._camera_device.get_settings('Reduce', int))
+            self._ui.sbReduce.setValue(reduction)
+            self.new_image_reduction.emit(reduction)
 
             self._ui.chk_auto_screen.setChecked(self._camera_device.get_settings('auto_screen', bool))
 

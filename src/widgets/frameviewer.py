@@ -335,7 +335,7 @@ class FrameViewer(QtWidgets.QWidget):
             self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False,
                                         pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
         else:
-            self._ui.imageView.updateImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False,
+            self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False,
                                     pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
 
         if self._is_first_frame:
