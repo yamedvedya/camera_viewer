@@ -466,8 +466,21 @@ class SettingsWidget(QtWidgets.QWidget):
             self._update_marker_layout(False)
 
             with QtCore.QMutexLocker(self._tangoMutex):
-                self._ui.sbExposureTime.setValue(self._camera_device.get_settings('ExposureTime', int))
-                self._ui.sbGain.setValue(self._camera_device.get_settings('Gain', int))
+                exposure_time = self._camera_device.get_settings('ExposureTime', int)
+                if exposure_time is not None:
+                    self._ui.sbExposureTime.setEnabled(True)
+                    self._ui.sbExposureTime.setValue(exposure_time)
+                else:
+                    self._ui.sbExposureTime.setEnabled(False)
+                    self._ui.sbExposureTime.setValue(0)
+
+                gain_value = self._camera_device.get_settings('Gain', int)
+                if gain_value is not None:
+                    self._ui.sbGain.setValue(gain_value)
+                    self._ui.sbGain.setEnabled(True)
+                else:
+                    self._ui.sbGain.setValue(0)
+                    self._ui.sbGain.setEnabled(False)
 
                 self._picture_width = self._camera_device.get_settings('wMax', int)
                 self._picture_height = self._camera_device.get_settings('hMax', int)

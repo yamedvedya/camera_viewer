@@ -48,7 +48,10 @@ class VimbaProxy(AbstractCamera):
         super(VimbaProxy, self).__init__(beamline_id, settings, log)
 
         self._settings_map["Gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
-        self._high_depth = strtobool(settings.getAttribute("high_depth"))
+        if settings.hasAttribute('high_depth'):
+            self._high_depth = strtobool(settings.getAttribute("high_depth"))
+        else:
+            self._high_depth = False
 
         if self._high_depth:
             valid_formats = self._device_proxy.read_attribute('PixelFormat#Values').value
