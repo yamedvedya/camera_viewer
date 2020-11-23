@@ -108,7 +108,8 @@ class FrameViewer(QtWidgets.QWidget):
         self._cross_item.setVisible(False)
         self._ui.imageView.view.addItem(self._cross_item, ignoreBounds=True)
 
-        self._center_search_item = LineSegmentItem('center')
+        self._center_search_item = LineSegmentItem('center', float(self._settings.option("center_search", "cross")),
+                                                    int(self._settings.option("center_search", "circle")))
         self._center_search_item.setVisible(False)
         self._ui.imageView.view.addItem(self._center_search_item, ignoreBounds=True)
 
@@ -775,9 +776,7 @@ class ImageMarker(object):
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
 
-    CENTER_CROSS = 0.1
-
-    def __init__(self, mode):
+    def __init__(self, mode, cross_size=1., circle=0):
         pg.GraphicsObject.__init__(self)
         self._mode = mode
         self._picture = QtGui.QPicture()
@@ -790,6 +789,9 @@ class LineSegmentItem(pg.GraphicsObject):
         self._draw_lines = False
         self._draw_point1 = False
         self._draw_point2 = False
+
+        self._cross_size = cross_size/2
+        self._circle = circle
 
         self.generate_picture()
 
@@ -830,8 +832,8 @@ class LineSegmentItem(pg.GraphicsObject):
                 center = ((self._line1_end1.x() + self._line1_end2.x()) / 2,
                           (self._line1_end1.y() + self._line1_end2.y()) / 2)
 
-                point = (self._line1_end1.x() * (0.5 + self.CENTER_CROSS) + self._line1_end2.x() * (0.5 - self.CENTER_CROSS),
-                         self._line1_end1.y() * (0.5 + self.CENTER_CROSS) + self._line1_end2.y() * (0.5 - self.CENTER_CROSS))
+                point = (self._line1_end1.x() * (0.5 + self._cross_size) + self._line1_end2.x() * (0.5 - self._cross_size),
+                         self._line1_end1.y() * (0.5 + self._cross_size) + self._line1_end2.y() * (0.5 - self._cross_size))
 
                 p1 = rotate(center, point, 1.57)
                 p2 = rotate(center, point, -1.57)
@@ -858,10 +860,10 @@ class LineSegmentItem(pg.GraphicsObject):
         p.setBrush(pg.mkBrush('r'))
 
         if self._draw_point1:
-            p.drawEllipse(self._line1_end1, 1, 1)
+            p.drawEllipse(self._line1_end1, self._circle, self._circle)
 
         if self._draw_point2:
-            p.drawEllipse(self._line1_end2, 1, 1)
+            p.drawEllipse(self._line1_end2, self._circle, self._circle)
 
         p.end()
 
