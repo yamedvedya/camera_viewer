@@ -30,9 +30,20 @@ class AbstractCamera(object):
 
         self._cid = settings.getAttribute("name")
 
-        self.flip_v = bool(strtobool(settings.getAttribute("flip_vertical")))
-        self.flip_h = bool(strtobool(settings.getAttribute("flip_horizontal")))
-        self.rotate_angle = int(settings.getAttribute("rotate"))
+        if settings.hasAttribute('flip_vertical'):
+            self.flip_v = bool(strtobool(settings.getAttribute("flip_vertical")))
+        else:
+            self.flip_v = False
+
+        if settings.hasAttribute('flip_horizontal'):
+            self.flip_h = bool(strtobool(settings.getAttribute("flip_horizontal")))
+        else:
+            self.flip_h = False
+
+        if settings.hasAttribute('rotate'):
+            self.rotate_angle = int(settings.getAttribute("rotate"))
+        else:
+            self.rotate_angle = 0
 
         if settings.hasAttribute('tango_server'):
             self._device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("tango_server")))

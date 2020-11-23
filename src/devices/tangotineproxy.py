@@ -61,18 +61,19 @@ class TangoTineProxy(AbstractCamera):
 
     # ----------------------------------------------------------------------
     def _init_device(self):
-        att_conf_exposure = self._settings_proxy.get_attribute_config('ExposureValue.Set')
-        att_conf_gain = self._settings_proxy.get_attribute_config('GainValue.Set')
-        exposure_max = self._settings_proxy.read_attribute('ExposureValue.Max')
-        exposure_min = self._settings_proxy.read_attribute('ExposureValue.Min')
-        gain_max = self._settings_proxy.read_attribute('GainValue.Max')
-        gain_min = self._settings_proxy.read_attribute('GainValue.Min')
-        att_conf_exposure.max_value = str(exposure_max.value)
-        att_conf_exposure.min_value = str(exposure_min.value)
-        att_conf_gain.max_value = str(gain_max.value)
-        att_conf_gain.min_value = str(gain_min.value)
-        self._settings_proxy.set_attribute_config(att_conf_exposure)
-        self._settings_proxy.set_attribute_config(att_conf_gain)
+        if self._settings_proxy is not None:
+            att_conf_exposure = self._settings_proxy.get_attribute_config('ExposureValue.Set')
+            att_conf_gain = self._settings_proxy.get_attribute_config('GainValue.Set')
+            exposure_max = self._settings_proxy.read_attribute('ExposureValue.Max')
+            exposure_min = self._settings_proxy.read_attribute('ExposureValue.Min')
+            gain_max = self._settings_proxy.read_attribute('GainValue.Max')
+            gain_min = self._settings_proxy.read_attribute('GainValue.Min')
+            att_conf_exposure.max_value = str(exposure_max.value)
+            att_conf_exposure.min_value = str(exposure_min.value)
+            att_conf_gain.max_value = str(gain_max.value)
+            att_conf_gain.min_value = str(gain_min.value)
+            self._settings_proxy.set_attribute_config(att_conf_exposure)
+            self._settings_proxy.set_attribute_config(att_conf_gain)
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
@@ -125,14 +126,19 @@ class TangoTineProxy(AbstractCamera):
             else:
                 return value
         elif option in ['ExposureTime', 'Gain']:
-            try:
-                value = self._settings_proxy.read_attribute(self._settings_map[option][1][0]).value
-            except:
-                value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
-                self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
-            return cast(value)
+            if self._settings_proxy is not None:
+                try:
+                    value = self._settings_proxy.read_attribute(self._settings_map[option][1][0]).value
+                except:
+                    value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
+                    self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
+                return cast(value)
+            else:
+                return None
+
         elif option == 'FPSmax':
             return 1000/self.period
+
         elif option == 'FPS':
             return max(1, super(TangoTineProxy, self).get_settings(option, cast))
         else:
@@ -141,7 +147,8 @@ class TangoTineProxy(AbstractCamera):
     # ----------------------------------------------------------------------
     def save_settings(self, setting, value):
         if setting in ['ExposureTime', 'Gain']:
-            self._settings_proxy.write_attribute(self._settings_map[setting][1][0], value)
+            if self._settings_proxy is not None:
+                self._settings_proxy.write_attribute(self._settings_map[setting][1][0], value)
         else:
             super(TangoTineProxy, self).save_settings(setting, value)
 

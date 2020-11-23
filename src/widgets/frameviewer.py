@@ -95,6 +95,7 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._acq_started = None
         self._n_frames = 0
+        self._need_to_refresh_image = True
 
         self._rectRoi = pg.RectROI([0, 0], [50, 50], pen=(0, 9))
         self._ui.imageView.view.addItem(self._rectRoi, ignoreBounds=True)
@@ -155,6 +156,7 @@ class FrameViewer(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def set_new_camera(self):
+        self._need_to_refresh_image = True
         center_search = self._camera_device.get_settings('center_search', str)
         if center_search != '':
             coordinates = json.loads(center_search)
@@ -285,6 +287,7 @@ class FrameViewer(QtWidgets.QWidget):
             self._is_first_frame = True  # TMP TODO
             self._acq_started = time.time()
             self._n_frames = 0
+            self._need_to_refresh_image = True
             self._camera_device.start()
             self.device_started.emit()
         else:
@@ -316,10 +319,12 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._image_x_pos = x
         self._image_y_pos = y
+        self._need_to_refresh_image = True
 
     # ----------------------------------------------------------------------
     def scale_image(self, scale):
         self._image_scale = (scale, scale)
+        self._need_to_refresh_image = True
 
     # ----------------------------------------------------------------------
     def refresh_view(self):
@@ -331,12 +336,21 @@ class FrameViewer(QtWidgets.QWidget):
             self._last_frame[valid_idx] -= self._dark_frame[valid_idx]
             self._last_frame[~valid_idx] = 0
 
+        set_kwargs = {'pos': (self._image_x_pos, self._image_y_pos),
+                      'scale': self._image_scale}
+
         if self.auto_levels:
-            self._ui.imageView.setImage(self._last_frame, autoLevels=True, autoRange=False,
-                                        pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
+            set_kwargs['autoRange'] = True
+            update_kwargs = {'autoLevels': True}
         else:
-            self._ui.imageView.setImage(self._last_frame, levels=(self.min_level, self.max_level), autoRange=False,
-                                    pos=(self._image_x_pos, self._image_y_pos), scale=self._image_scale)
+            set_kwargs['levels'] = (self.min_level, self.max_level)
+            update_kwargs = {'levels': (self._image_x_pos, self._image_y_pos)}
+
+        if self._need_to_refresh_image:
+            self._ui.imageView.setImage(self._last_frame, **set_kwargs)
+            self._need_to_refresh_image = False
+        else:
+            self._ui.imageView.imageItem.updateImage(self._last_frame, **update_kwargs)
 
         if self._is_first_frame:
             self._is_first_frame = False
