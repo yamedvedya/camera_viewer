@@ -118,7 +118,7 @@ class FrameViewer(QtWidgets.QWidget):
         self._ui.imageView.view.addItem(self._cross_item, ignoreBounds=True)
 
         self._center_search_item = LineSegmentItem('center', float(self._settings.option("center_search", "cross")),
-                                                    int(self._settings.option("center_search", "circle")))
+                                                    float(self._settings.option("center_search", "circle")))
         self._center_search_item.setVisible(False)
         self._ui.imageView.view.addItem(self._center_search_item, ignoreBounds=True)
 
