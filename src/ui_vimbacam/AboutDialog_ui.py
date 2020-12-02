@@ -81,4 +81,4 @@ class Ui_AboutDialog(object):
         self.label_4.setText(_translate("AboutDialog", "Version: 2.0"))
         self.lbEmail.setText(_translate("AboutDialog", "yury.matveev@desy.de"))
         self.pushButton.setText(_translate("AboutDialog", "OK"))
-import icons_rc
+import src.ui_vimbacam.icons_rc
