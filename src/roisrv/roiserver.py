@@ -97,15 +97,15 @@ class RoiServer(QtCore.QObject):
                     connection, address = self._socket.accept()
                     connection.setblocking(False)
                     self._connectionMap.append([connection, address])
-                    self.log.info('New client added: {:s}'.format(address))
+                    self.log.info('New client added: {}'.format(address))
 
             for connection, address in self._connectionMap:
                 try:
-                    request = connection.recv(self.MAX_REQUEST_LEN)
+                    request = connection.recv(self.MAX_REQUEST_LEN).decode()
                     if request:
-                        connection.sendall(self._processRequest(request))
+                        connection.sendall(self._processRequest(request).encode())
                     else:
-                        self.log.info('Client closed: {:s}'.format(address))
+                        self.log.info('Client closed: {}'.format(address))
                         connection.close()
                         self._connectionMap.remove([connection, address])
 
@@ -116,7 +116,7 @@ class RoiServer(QtCore.QObject):
                     elif err.errno == 11:
                         time.sleep(0.1)
                     elif err.errno == 10054:
-                        self.log.info('Client closed: {:s}'.format(address))
+                        self.log.info('Client closed: {}'.format(address))
                         connection.close()
                         self._connectionMap.remove([connection, address])
                     else:
@@ -124,13 +124,12 @@ class RoiServer(QtCore.QObject):
 
                 except KillConnection as _:
                     self.log.error(traceback.format_exc())
-                    self.log.info('Client closed: {:s}'.format(address))
+                    self.log.info('Client closed: {}'.format(address))
                     connection.close()
                     self._connectionMap.remove([connection, address])
 
                 except Exception as _:
                     self.log.error(traceback.format_exc())
-                    self.stopServerBucket.put('1')
                     break
 
         self._socket.close()

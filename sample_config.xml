@@ -1,0 +1,25 @@
+<camera_viewer version="1.0">
+<!--  General section   -->
+    <roi_server enable="false" host="" port="23358"/>
+
+    <clip rect="5,5,2400,2400" />
+
+    <title_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255" />
+    <roi_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255" />
+    <datetime_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255,255" />
+
+    <center_search cross = '0.5' circle= '15'/>
+
+    <save_folder default= "/home/p23user/Pictures/"/>
+
+<!--Cameras section-->
+        <camera name="Microscope"
+            proxy="VimbaProxy"
+            tango_server="hasep23oh:10000/p23/tangovimba/micro"
+            motor_type = 'none'
+            flip_vertical="False"
+            flip_horizontal="False"
+            rotate = '0'
+            high_depth = 'True'
+    />
+</camera_viewer>
