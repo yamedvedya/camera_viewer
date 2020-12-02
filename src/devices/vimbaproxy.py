@@ -43,6 +43,8 @@ class VimbaProxy(AbstractCamera):
                      'hMax': ("device_proxy", "HeightMax")
                      }
 
+    visible_layouts = ('FPS', 'Exposure')
+
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(VimbaProxy, self).__init__(beamline_id, settings, log)

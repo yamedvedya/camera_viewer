@@ -21,12 +21,8 @@ def report_error(err, log=None, parent=None, simplify=False):
     if log:
         log.exception(err)
 
-    if parent:
-        msg = str(err) if simplify else "{}\n\n{}".format(str(err).capitalize(),
+    msg = str(err) if simplify else "{}\n\n{}".format(str(err).capitalize(),
                                                           str(traceback.format_exc()))
-        QtWidgets.QMessageBox.warning(parent, "Exception", msg,
-                                  QtWidgets.QMessageBox.Ok)
 
-    # TODO
-    # more user friendly ErrorDialog
+    # QtWidgets.QMessageBox.warning(parent, "Exception", msg, QtWidgets.QMessageBox.Ok)
 

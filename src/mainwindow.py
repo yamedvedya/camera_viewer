@@ -68,8 +68,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.camera_name = self._device_list[0]
 
         self._camera_device = self._init_data_source()
-        self._rois = [{}, ]  # x, y, w, h, threshold
-        self._markers = [{},]
+        self._rois = [{"Roi_Visible": False}, ]  # x, y, w, h, threshold
+        self._markers = [{}, ]
         self._statistics = [{}, ]
         self._current_roi_index = [0]
 
@@ -149,6 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._frame_viewer.roi_changed.connect(self._settings_widget.update_roi)
         self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
         self._frame_viewer.roi_stats_ready.connect(self._settings_widget.update_roi_statistics)
+        self._frame_viewer.new_auto_levels.connect(self._settings_widget.new_auto_levels)
 
         self._settings_widget.marker_changed.connect(self._frame_viewer.update_marker)
         self._settings_widget.markers_changed.connect(self._frame_viewer.markers_changed)
@@ -157,10 +158,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._settings_widget.enable_auto_levels.connect(self._frame_viewer.enable_auto_levels)
         self._settings_widget.levels_changed.connect(self._frame_viewer.levels_changed)
         self._settings_widget.color_map_changed.connect(self._frame_viewer.color_map_changed)
-        self._settings_widget.set_dark_image.connect(self._frame_viewer.set_dark_image)
-        self._settings_widget.remove_dark_image.connect(self._frame_viewer.remove_dark_image)
         self._settings_widget.image_size_changed.connect(self._frame_viewer.move_image)
         self._settings_widget.new_image_reduction.connect(self._frame_viewer.scale_image)
+        self._settings_widget.peak_search_modified.connect(self._frame_viewer.peak_search_modified)
 
         self._init_actions()
         self._toolBar = self._init_tool_bar()
@@ -190,6 +190,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._frame_viewer.update_camera_label()
         self._frame_viewer.start_stop_live_mode()
         self._refresh_title()
+
     # ----------------------------------------------------------------------
     def _addDock(self, WidgetClass, label, location, *args, **kwargs):
         """
@@ -365,11 +366,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._actionShowSettings.setText("Settings")
         self._actionShowSettings.triggered.connect(self.show_settings_dialog)
 
-        self._frame_viewer.device_started.connect(lambda: self._actionStartStop.setIcon(
-                                                    QtGui.QIcon(":/ico/stop.png")))
-        self._frame_viewer.device_stopped.connect(lambda: self._actionStartStop.setIcon(
-                                                    QtGui.QIcon(":/ico/play_16px.png")))
-
     # ----------------------------------------------------------------------
     def _make_save_menu(self, parent):
         """
@@ -504,6 +500,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._lb_resources_status.setText("| {:.2f}MB | CPU {} % |".format(mem,
                                                                            cpu))
+
+        if self._camera_device.is_running():
+            self._actionStartStop.setIcon(QtGui.QIcon(":/ico/stop.png"))
+        else:
+            self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+
+        self._settings_widget.refresh_view()
 
     # ----------------------------------------------------------------------
     def _init_logger(self, loggerName):

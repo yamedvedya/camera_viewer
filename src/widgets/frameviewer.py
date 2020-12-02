@@ -13,6 +13,8 @@ import math
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
+from skimage.feature import peak_local_max
+from src.utils.errors import report_error
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
 from src.utils.functions import rotate
@@ -31,9 +33,8 @@ class FrameViewer(QtWidgets.QWidget):
     roi_changed = QtCore.pyqtSignal(int)
     roi_stats_ready = QtCore.pyqtSignal(int)
     cursor_moved = QtCore.pyqtSignal(float, float)
-    device_started = QtCore.pyqtSignal()
-    device_stopped = QtCore.pyqtSignal()
     range_changed = QtCore.pyqtSignal(float, float, float, float)
+    new_auto_levels  = QtCore.pyqtSignal(int, int)
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -70,6 +71,12 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._init_ui()
 
+        self._peak_markers = PeakMarker()
+        self._peak_search = False
+        self._peak_threshold = 80
+        self._peak_search_mode = False
+        self._ui.imageView.view.addItem(self._peak_markers, ignoreBounds=True)
+
         self._action_first_point = QtWidgets.QAction('Center search start', self)
         self._action_second_point = QtWidgets.QAction('Set second point', self)
         self._action_second_point.setVisible(False)
@@ -86,7 +93,6 @@ class FrameViewer(QtWidgets.QWidget):
 
         self._is_first_frame = True  # temp TODO
         self._last_frame = None
-        self._dark_frame = None
 
         self.color_map_changed('grey')
 
@@ -131,6 +137,7 @@ class FrameViewer(QtWidgets.QWidget):
         self._deviceLabel = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
         self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
         self._roiLabel = self._add_label("ROI", self._settings.node("camera_viewer/roi_label"), visible=False)
+        self._load_label = self._add_label("Load image", self._settings.node("camera_viewer/datetime_label"), visible=False)
 
         self._image_x_pos = 0
         self._image_y_pos = 0
@@ -176,6 +183,7 @@ class FrameViewer(QtWidgets.QWidget):
         self._action_clear_points.setEnabled(False)
         self._center_search_item.setVisible(False)
         self._display_center_search()
+        self.refresh_view()
 
         return True
     # ----------------------------------------------------------------------
@@ -237,13 +245,43 @@ class FrameViewer(QtWidgets.QWidget):
         """
         self._viewRect = viewBox.viewRect()
 
+        self._peak_markers.new_scale(self._viewRect.width(), self._viewRect.height())
+        self._center_search_item.new_scale(self._viewRect.width(), self._viewRect.height())
+
         if self._last_frame is not None:
 
             self._redraw_projections()
 
-            self._show_title()
-            self._show_datetime()
+            self._show_labels()
             self._redraw_roi_label()
+
+    # ----------------------------------------------------------------------
+    def peak_search_modified(self, state, mode, threshold):
+
+        self._peak_search = state
+        self._peak_threshold = threshold
+        self._peak_search_mode = mode
+        self.refresh_view()
+
+    # ----------------------------------------------------------------------
+    def _find_peaks(self):
+        if self._peak_search:
+            try:
+                if self._peak_search_mode:
+                    coordinates = peak_local_max(self._last_frame, threshold_rel=self._peak_threshold/100)
+                else:
+                    coordinates = peak_local_max(self._last_frame, threshold_abs=self._peak_threshold)
+
+                if len(coordinates) > 100:
+                    report_error('Too many ({}) peaks found. Adjust the threshold'.format(len(coordinates)),
+                                 self.log, self, True)
+                    coordinates = ()
+            except:
+                coordinates = ()
+        else:
+            coordinates = ()
+
+        self._peak_markers.new_peaks(coordinates)
 
     # ----------------------------------------------------------------------
     def _redraw_projections(self):
@@ -289,7 +327,6 @@ class FrameViewer(QtWidgets.QWidget):
             self._n_frames = 0
             self._need_to_refresh_image = True
             self._camera_device.start()
-            self.device_started.emit()
         else:
             QtWidgets.QMessageBox.warning(self, "Initialization Error",
                                       "{} not yet initialized".format(self._camera_device.device_id))
@@ -301,7 +338,6 @@ class FrameViewer(QtWidgets.QWidget):
         if self._camera_device and self._camera_device.is_running():
             self._camera_device.stop()
             self.log.debug("{} stopped".format(self._camera_device.device_id))
-            self.device_stopped.emit()
 
     # ----------------------------------------------------------------------
     def close(self):
@@ -330,60 +366,72 @@ class FrameViewer(QtWidgets.QWidget):
     def refresh_view(self):
         """
         """
-        self._last_frame = self._camera_device.get_frame("copy")
-        if self._dark_frame is not None:
-            valid_idx = self._last_frame > self._dark_frame
-            self._last_frame[valid_idx] -= self._dark_frame[valid_idx]
-            self._last_frame[~valid_idx] = 0
+        if hasattr(self, "_load_label"):
+            self._load_label.setVisible(True)
 
-        set_kwargs = {'pos': (self._image_x_pos, self._image_y_pos),
-                      'scale': self._image_scale}
+        try:
+            self._last_frame = self._camera_device.get_frame("copy")
 
-        if self.auto_levels:
-            set_kwargs['autoRange'] = True
-            update_kwargs = {'autoLevels': True}
-        else:
-            set_kwargs['levels'] = (self.min_level, self.max_level)
-            update_kwargs = {'levels': (self._image_x_pos, self._image_y_pos)}
+            set_kwargs = {'pos': (self._image_x_pos, self._image_y_pos),
+                          'scale': self._image_scale}
 
-        if self._need_to_refresh_image:
-            self._ui.imageView.setImage(self._last_frame, **set_kwargs)
-            self._need_to_refresh_image = False
-        else:
-            self._ui.imageView.imageItem.updateImage(self._last_frame, **update_kwargs)
+            if self.auto_levels:
+                set_kwargs['autoRange'] = True
+                update_kwargs = {'autoLevels': True}
+            else:
+                set_kwargs['levels'] = (self.min_level, self.max_level)
+                update_kwargs = {'levels': (self._image_x_pos, self._image_y_pos)}
 
-        if self._is_first_frame:
-            self._is_first_frame = False
-        else:
-            self._ui.imageView.repaint()
+            if self._need_to_refresh_image:
+                self._ui.imageView.setImage(self._last_frame, **set_kwargs)
+                self._need_to_refresh_image = False
+            else:
+                self._ui.imageView.imageItem.updateImage(self._last_frame, **update_kwargs)
 
-        self._show_title()
-        self._show_datetime()
-        self._redraw_roi_label()
-        self._redraw_projections()
+            # if self._is_first_frame:
+            #     self._is_first_frame = False
+            # else:
+            #     self._ui.imageView.repaint()
 
-        self._n_frames += 1
-        if time.time() - self._acq_started > 1:
-            self.status_changed.emit(self._n_frames)
-            self._n_frames = 0
-            self._acq_started = time.time()
+            self._peak_markers.new_scale(self._viewRect.width(), self._viewRect.height())
+            self._center_search_item.new_scale(self._viewRect.width(), self._viewRect.height())
+
+            self._show_labels()
+            self._redraw_roi_label()
+            self._redraw_projections()
+            self._find_peaks()
+            self.update_camera_label()
+
+            self._n_frames += 1
+            if time.time() - self._acq_started > 1:
+                self.status_changed.emit(self._n_frames)
+                self._n_frames = 0
+                self._acq_started = time.time()
+
+            if self.auto_levels:
+                self.new_auto_levels.emit(int(self._ui.imageView.levelMin), int(self._ui.imageView.levelMax))
+
+        except:
+            pass
+
+        if hasattr(self, "_load_label"):
+            self._load_label.setVisible(False)
 
     # ----------------------------------------------------------------------
-    def _show_title(self):
+    def _show_labels(self):
         """
         """
         if hasattr(self, "_deviceLabel"):
             self._show_label(0.5, 0.04, self._deviceLabel)
 
-    # ----------------------------------------------------------------------
-    def _show_datetime(self):
-        """
-        """
         if hasattr(self, "_datetimeLabel"):
             msg = datetime.now().strftime(self.DATETIME)
             self._datetimeLabel.setText(msg)
 
             self._show_label(0.85, 0.9, self._datetimeLabel)
+
+        if hasattr(self, "_load_label"):
+            self._show_label(0.85, 0.04, self._load_label)
 
     # ----------------------------------------------------------------------
     def FWHM(self, data):
@@ -700,12 +748,14 @@ class FrameViewer(QtWidgets.QWidget):
     def enable_auto_levels(self, mode):
 
         self.auto_levels = mode
+        self.refresh_view()
 
     # ----------------------------------------------------------------------
     def levels_changed(self, min, max):
 
         self.min_level = min
         self.max_level = max
+        self.refresh_view()
 
     # ----------------------------------------------------------------------
     def color_map_changed(self, selected_map):
@@ -715,14 +765,7 @@ class FrameViewer(QtWidgets.QWidget):
             colormap = 'gray'
 
         self._ui.imageView.imageItem.setLookupTable(pg.ColorMap(*zip(*Gradients[colormap]["ticks"])).getLookupTable())
-
-    # ----------------------------------------------------------------------
-    def set_dark_image(self):
-        self._dark_frame = self._last_frame
-
-    # ----------------------------------------------------------------------
-    def remove_dark_image(self):
-        self._dark_frame = None
+        self.refresh_view()
 
 # ----------------------------------------------------------------------
 class ImageMarker(object):
@@ -772,6 +815,50 @@ class ImageMarker(object):
         self.imageView.removeItem(self._markerH)
         self.imageView.removeItem(self._markerV)
 
+
+# ----------------------------------------------------------------------
+class PeakMarker(pg.GraphicsObject):
+    """
+        Circle object
+    """
+
+    # ----------------------------------------------------------------------
+    def __init__(self):
+        super(PeakMarker, self).__init__()
+        pg.GraphicsObject.__init__(self)
+        self._picture = QtGui.QPicture()
+        self._positions = ()
+        self._size = 0
+
+    # ----------------------------------------------------------------------
+    def new_peaks(self, positions):
+        self._positions = positions
+        self._draw()
+
+    # ----------------------------------------------------------------------
+    def new_scale(self, picture_w, picture_h):
+        self._size = int(0.01*min(picture_w, picture_h))
+        self._draw()
+
+    # ----------------------------------------------------------------------
+    def _draw(self):
+
+        p = QtGui.QPainter(self._picture)
+        p.setPen(pg.mkPen('r', width=2))
+
+        for x, y in self._positions:
+            p.drawEllipse(QtCore.QPoint(x, y), self._size, self._size)
+
+        p.end()
+
+    # ----------------------------------------------------------------------
+    def paint(self, p, *args):
+        p.drawPicture(0, 0, self._picture)
+
+    # ----------------------------------------------------------------------
+    def boundingRect(self):
+        return QtCore.QRectF(self._picture.boundingRect())
+
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
 
@@ -781,6 +868,8 @@ class LineSegmentItem(pg.GraphicsObject):
         pg.GraphicsObject.__init__(self)
         self._mode = mode
         self._picture = QtGui.QPicture()
+
+        self._size = 0
 
         self._line1_end1 = QtCore.QPoint(0, 0)
         self._line1_end2 = QtCore.QPoint(0, 0)
@@ -842,6 +931,11 @@ class LineSegmentItem(pg.GraphicsObject):
         self.generate_picture()
 
     # ----------------------------------------------------------------------
+    def new_scale(self, w, h):
+        self._size = int(0.01*min(w, h))
+        self.generate_picture()
+
+    # ----------------------------------------------------------------------
     def generate_picture(self):
 
         p = QtGui.QPainter(self._picture)
@@ -858,10 +952,10 @@ class LineSegmentItem(pg.GraphicsObject):
         p.setBrush(pg.mkBrush('r'))
 
         if self._draw_point1:
-            p.drawEllipse(self._line1_end1, 1, 1)
+            p.drawEllipse(self._line1_end1, self._size, self._size)
 
         if self._draw_point2:
-            p.drawEllipse(self._line1_end2, 1, 1)
+            p.drawEllipse(self._line1_end2, self._size, self._size)
 
         p.end()
 

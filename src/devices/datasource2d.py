@@ -11,6 +11,7 @@ import threading
 import time
 
 import numpy as np
+from src.utils.errors import report_error
 
 from PyQt5 import QtCore
 
@@ -29,17 +30,24 @@ class DataSource2D(QtCore.QObject):
         super(DataSource2D, self).__init__(parent)
 
         self.settings = settings
+        self._parent = parent
 
         self.log = logging.getLogger("cam_logger")  # is in sync with the main thread? TODO
 
         self.device_id = ''
+        self._base_id = ''
+
+        self.level_mode = 'lin'
+        self._dark_image = None
+        self.subtract_dark_image = False
+
         self._device_proxy = None
         self._worker = None
 
         self._frame_mutex = QtCore.QMutex()  # sync access to frame
         self._last_frame = np.zeros((1, 1))
 
-        self._got_first_frame = False
+        self.got_first_frame = False
 
         self._state = "idle"
         self.fps = 1
@@ -62,28 +70,37 @@ class DataSource2D(QtCore.QObject):
         self._worker.start()
 
     # ----------------------------------------------------------------------
+    def set_new_level_mode(self, mode):
+
+        if self.level_mode != mode:
+            self.level_mode = mode
+            if self.got_first_frame:
+                self.newFrame.emit()
+
+    # ----------------------------------------------------------------------
     def run(self):
         """
         """
-        self._start_acquisition()
+        if self._start_acquisition():
 
-        while self._state == "running":
+            while self._state == "running":
 
-            frame = self._device_proxy.maybe_read_frame()
-            if frame is not None:
-                self._got_first_frame = True
-                self._last_frame = frame
-                self.newFrame.emit()
+                frame = self._device_proxy.maybe_read_frame()
+                if frame is not None:
+                    self.got_first_frame = True
+                    self._last_frame = frame
+                    self.newFrame.emit()
+                    self.device_id = self._base_id + self._device_proxy.id
 
-            if self._device_proxy.error_flag:
-                self.gotError.emit(str(self._device_proxy.error_msg))
-                self._state = "abort"
+                if self._device_proxy.error_flag:
+                    self.gotError.emit(str(self._device_proxy.error_msg))
+                    self._state = "abort"
 
-            time.sleep(1/self.fps)
-        self.log.info("Closing {}...".format(self.device_id))
+                time.sleep(1/self.fps)
+            self.log.info("Closing {}...".format(self.device_id))
 
-        if self._device_proxy:
-            self._device_proxy.stop_acquisition()
+            if self._device_proxy:
+                self._device_proxy.stop_acquisition()
 
         self._state = "idle"
 
@@ -92,20 +109,23 @@ class DataSource2D(QtCore.QObject):
         """
         """
         if self._device_proxy:
-            self._device_proxy.start_acquisition()
-            self._state = "running"
+            try:
+                self._device_proxy.start_acquisition()
+                self._state = "running"
+                return True
+            except Exception as err:
+                report_error(err, self.log, self._parent)
+                return False
 
     # ----------------------------------------------------------------------
     def stop(self):
         """
         """
-        self.log.info("Stop {}...".format(self.device_id))
-
         if self._state != 'idle':
             self._state = "abort"
 
         while self._state != 'idle':
-            time.sleep(self.fps)
+            time.sleep(1e-3)
 
         self.log.debug('CameraDevice stopped')
 
@@ -114,7 +134,7 @@ class DataSource2D(QtCore.QObject):
 
         if self._device_proxy:
             if setting == 'FPS':
-                self.fps = self._device_proxy.get_settings('FPS', int)
+                self.fps = max(1, self._device_proxy.get_settings('FPS', int))
                 return self.fps
             else:
                 return self._device_proxy.get_settings(setting, cast)
@@ -133,7 +153,51 @@ class DataSource2D(QtCore.QObject):
     def get_frame(self, mode="copy"):
         """
         """
-        return self._last_frame
+        if self.subtract_dark_image and self._dark_image is not None:
+            try:
+                invalid_idx = self._last_frame < self._dark_image
+                frame = self._last_frame - self._dark_image
+                frame[invalid_idx] = 0
+            except:
+                self.subtract_dark_image = False
+                self._dark_image = None
+                frame = self._last_frame
+        else:
+            frame = self._last_frame
+
+        if self.level_mode == 'sqrt':
+            frame = np.sqrt(np.abs(frame))
+        elif self.level_mode == 'log':
+            frame = np.log(np.maximum(0, frame))
+
+        if np.max(frame) == 0:
+            return np.ones_like(frame)
+        else:
+            return frame
+
+    # ----------------------------------------------------------------------
+    def set_dark_image(self):
+        self._dark_image = self._last_frame
+
+    # ----------------------------------------------------------------------
+    def load_dark_image(self, file_name):
+        self._dark_image = np.load(file_name)
+
+    # ----------------------------------------------------------------------
+    def save_dark_image(self, file_name):
+        np.save(file_name, self._dark_image)
+
+    # ----------------------------------------------------------------------
+    def has_dark_image(self):
+        return self._dark_image is not None
+
+    # ----------------------------------------------------------------------
+    def toggle_dark_image(self, state):
+        if self._dark_image is not None:
+            self.subtract_dark_image = state
+
+        if self.got_first_frame:
+            self.newFrame.emit()
 
     # ----------------------------------------------------------------------
     def new_device_proxy(self, name):
@@ -142,14 +206,16 @@ class DataSource2D(QtCore.QObject):
             if device.getAttribute('name') == name:
 
                 self.device_id = name
+                self._base_id = name
 
                 try:
                     proxyClass = device.getAttribute("proxy")
                     self.log.info("Loading device proxy {}...".format(proxyClass))
 
                     module = importlib.import_module("devices.{}".format(proxyClass.lower()))
-                    proxy = getattr(module, proxyClass)(self.parent().options.beamlineID, device, self.log)
-                    self._device_proxy = proxy
+                    self._device_proxy = getattr(module, proxyClass)(self.parent().options.beamlineID, device, self.log)
+                    self.got_first_frame = False
+                    self._last_frame = np.zeros((1, 1))
                     return True
 
                 except Exception as ex:
@@ -187,6 +253,10 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def set_counter(self, value):
         self._device_proxy.set_counter(value)
+
+    # ----------------------------------------------------------------------
+    def visible_layouts(self):
+        return self._device_proxy.visible_layouts
 
     # ----------------------------------------------------------------------
     def change_picture_size(self, size):

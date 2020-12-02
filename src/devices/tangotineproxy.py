@@ -23,9 +23,6 @@ class TangoTineProxy(AbstractCamera):
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...
     #                    "ViewingMode": 1}
 
-    START_DELAY = 1
-    STOP_DELAY = 0.5
-
     _settings_map = {"RoiX": ('roi_server', "roi_x"),
                      "RoiY": ('roi_server', 'roi_y'),
                      "RoiWidth": ('roi_server', 'roi_w'),
@@ -34,6 +31,8 @@ class TangoTineProxy(AbstractCamera):
                      "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
                      'max_level_limit': (None, )
                      }
+
+    visible_layouts = ('FPS', 'Exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):

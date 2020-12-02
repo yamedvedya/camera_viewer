@@ -124,6 +124,7 @@ def rotate(origin, point, angle):
     qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
     return qx, qy
 
+
 # ----------------------------------------------------------------------
 # A little bit of unit testing...
 # ----------------------------------------------------------------------

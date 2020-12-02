@@ -76,9 +76,9 @@ class Ui_AboutDialog(object):
 
     def retranslateUi(self, AboutDialog):
         _translate = QtCore.QCoreApplication.translate
-        AboutDialog.setWindowTitle(_translate("AboutDialog", "VimbaKa"))
-        self.label_3.setText(_translate("AboutDialog", "2D Data Viewer for P22"))
-        self.label_4.setText(_translate("AboutDialog", "Version: 1.0"))
-        self.lbEmail.setText(_translate("AboutDialog", "sebastian.piec@desy.de"))
+        AboutDialog.setWindowTitle(_translate("AboutDialog", "Camera viewer"))
+        self.label_3.setText(_translate("AboutDialog", "2D Data Viewer"))
+        self.label_4.setText(_translate("AboutDialog", "Version: 2.0"))
+        self.lbEmail.setText(_translate("AboutDialog", "yury.matveev@desy.de"))
         self.pushButton.setText(_translate("AboutDialog", "OK"))
-import src.ui_vimbacam.icons_rc
+import icons_rc

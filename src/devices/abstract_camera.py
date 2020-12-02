@@ -25,6 +25,8 @@ class AbstractCamera(object):
         self._log = log
         self._beamline_id = beamline_id
 
+        self.id = ''
+
         self._new_frame_flag = False
         self._eid = None
 
@@ -113,44 +115,42 @@ class AbstractCamera(object):
     def get_settings(self, option, cast):
 
         if option in self._settings_map.keys():
-            if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:
-                return cast(getattr(self._roi_server, self._settings_map[option][1]))
+            try:
+                if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:
+                    value = getattr(self._roi_server, self._settings_map[option][1])
 
-            elif self._settings_map[option][0] == 'settings_proxy' and self._settings_proxy is not None:
-                try:
+                elif self._settings_map[option][0] == 'settings_proxy' and self._settings_proxy is not None:
                     value = self._settings_proxy.read_attribute(self._settings_map[option][1]).value
-                except:
-                    value = None
-                return cast(value)
 
-            elif self._settings_map[option][0] == 'device_proxy' and self._device_proxy is not None:
-                try:
+                elif self._settings_map[option][0] == 'device_proxy' and self._device_proxy is not None:
                     value = self._device_proxy.read_attribute(self._settings_map[option][1]).value
-                except:
-                    value = None
-                return cast(value)
 
-            elif self._settings_map[option][0] is None:
-                return None
-            else:
-                raise RuntimeError('Unknown setting source')
-        else:
-            if cast == str:
-                value = QtCore.QSettings(APP_NAME, self._beamline_id).value("{}/{}".format(self._cid, option))
-                if value is None:
-                    return ''
+                elif self._settings_map[option][0] is None:
+                    value = None
                 else:
-                    return str(value)
+                    raise RuntimeError('Unknown setting source')
+            except:
+                value = None
+        else:
+            try:
+                value = QtCore.QSettings(APP_NAME, self._beamline_id).value("{}/{}".format(self._cid, option))
+            except:
+                value = None
+
+        if value is not None:
+            if cast == bool:
+                return strtobool(str(value))
             else:
-                try:
-                    return cast(QtCore.QSettings(APP_NAME, self._beamline_id).value("{}/{}".format(self._cid, option)))
-                except:
-                    if cast in [int, float]:
-                        return cast(0)
-                    elif cast == bool:
-                        return False
-                    else:
-                        return None
+                return cast(value)
+        else:
+            if cast == bool:
+                return False
+            elif cast in [int, float]:
+                return cast(0)
+            elif cast == str:
+                return ''
+            else:
+                return None
 
     # ----------------------------------------------------------------------
     def save_settings(self, setting, value):
