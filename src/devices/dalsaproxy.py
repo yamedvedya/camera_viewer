@@ -99,7 +99,7 @@ class DalsaProxy(AbstractCamera):
     def _on_event(self, event):
         if not event.err:
             data = event.device.read_attribute(event.attr_name.split('/')[6])
-            self._last_frame = np.transpose(data.value)[self._picture_size[0]:self._picture_size[2],
+            self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
                                                         self._picture_size[1]:self._picture_size[3]]
 
             self._new_frame_flag = True

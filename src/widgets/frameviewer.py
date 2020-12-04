@@ -13,10 +13,7 @@ import math
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
-try:
-    from skimage.feature import peak_local_max
-except:
-    pass
+from skimage.feature import peak_local_max
 from src.utils.errors import report_error
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
@@ -280,7 +277,7 @@ class FrameViewer(QtWidgets.QWidget):
                     report_error('Too many ({}) peaks found. Adjust the threshold'.format(len(coordinates)),
                                  self.log, self, True)
                     coordinates = ()
-            except:
+            except Exception as err:
                 coordinates = ()
         else:
             coordinates = ()
