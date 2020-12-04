@@ -89,22 +89,20 @@ class TangoTineProxy(AbstractCamera):
     def _readout_frame(self, event):
         """Called each time new frame is available.
         """
-        if not self._device_proxy:
-            self._log.error("TangoTineTango DeviceProxy error")
 
-        # for some reason this wants the 'short' attribute name, not the fully-qualified name
-        # we get in event.attr_name
-        data = event.device.read_attribute(event.attr_name.split('/')[6])
-        if self._picture_size:
-            self._last_frame = np.transpose(data.value)[self._picture_size[0]:self._picture_size[2],
-                                                        self._picture_size[1]:self._picture_size[3]]
+        if not event.err:
+            data = event.device.read_attribute(event.attr_name.split('/')[6])
+            if self._picture_size:
+                self._last_frame = np.transpose(data.value)[self._picture_size[0]:self._picture_size[2],
+                                                            self._picture_size[1]:self._picture_size[3]]
+            else:
+                self._last_frame = np.transpose(data.value)
+
+            self._new_frame_flag = True
         else:
-            self._last_frame = np.transpose(data.value)
-
-        self._new_frame_flag = True
-
-        # print('New data after {}'.format(time.time() - self._last_time))
-        # self._last_time = time.time()
+            self._log.error('Tine error: {}'.format(self.error_msg))
+            self.error_flag = True
+            self.error_msg = event.errors
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):

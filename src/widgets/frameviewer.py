@@ -866,7 +866,7 @@ class PeakMarker(pg.GraphicsObject):
 # ----------------------------------------------------------------------
 class LineSegmentItem(pg.GraphicsObject):
 
-    def __init__(self, mode, cross_size=1., circle=0):
+    def __init__(self, mode, cross_size=1., circle=0.):
         pg.GraphicsObject.__init__(self)
         self._mode = mode
         self._picture = QtGui.QPicture()

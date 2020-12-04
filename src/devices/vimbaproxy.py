@@ -123,11 +123,6 @@ class VimbaProxy(AbstractCamera):
     def _readout_frame(self, event):
         """Called each time new frame is available.
         """
-        if self._device_proxy is None:
-            self._log.error("VimbaTango error: no DeviceProxy")
-
-        # for some reason this wants the 'short' attribute name, not the fully-qualified name
-        # we get in event.attr_name
         if not event.err:
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
