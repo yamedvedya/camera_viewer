@@ -13,7 +13,10 @@ import math
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
-from skimage.feature import peak_local_max
+try:
+    from skimage.feature import peak_local_max
+except:
+    pass
 from src.utils.errors import report_error
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
@@ -115,7 +118,7 @@ class FrameViewer(QtWidgets.QWidget):
         self._ui.imageView.view.addItem(self._cross_item, ignoreBounds=True)
 
         self._center_search_item = LineSegmentItem('center', float(self._settings.option("center_search", "cross")),
-                                                    int(self._settings.option("center_search", "circle")))
+                                                    float(self._settings.option("center_search", "circle")))
         self._center_search_item.setVisible(False)
         self._ui.imageView.view.addItem(self._center_search_item, ignoreBounds=True)
 

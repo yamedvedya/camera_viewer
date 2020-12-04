@@ -34,7 +34,7 @@ class DalsaProxy(AbstractCamera):
         if settings.hasAttribute('folders'):
             self._possible_folders = [item.strip() for item in settings.getAttribute("folders").split(';')]
         else:
-            self._possible_folders = ['/gpfs/current/raw/', '/gpfs/commitioning/raw/']
+            self._possible_folders = ['/gpfs/current/raw/', '/gpfs/commissioning/raw/']
 
         if settings.hasAttribute('sources'):
             self._possible_sources = [item.strip() for item in settings.getAttribute("folders").split(';')]
