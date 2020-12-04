@@ -18,6 +18,7 @@ from src.mainwindow import APP_NAME
 # ----------------------------------------------------------------------
 class AbstractCamera(object):
 
+    # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(AbstractCamera, self).__init__()
 
@@ -29,6 +30,8 @@ class AbstractCamera(object):
 
         self._new_frame_flag = False
         self._eid = None
+
+        self.source_mode = None
 
         self._cid = settings.getAttribute("name")
 

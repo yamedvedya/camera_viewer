@@ -84,6 +84,7 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self._ui.chbShowRoi.stateChanged.connect(lambda: self._make_roi_visible(self._ui.chbShowRoi.isChecked()))
         self._ui.cmb_Path.currentTextChanged.connect(lambda text: self._camera_device.save_settings('Path', text))
+        self._ui.cmb_source.currentTextChanged.connect(lambda text: self._camera_device.save_settings('Source', text))
 
         self._ui.pbInOut.clicked.connect(lambda: self._camera_device.move_motor())
         self._ui.chbShowCom.stateChanged.connect(lambda: self._roi_marker_changed('com'))
@@ -522,7 +523,7 @@ class SettingsWidget(QtWidgets.QWidget):
 
         result = True
         try:
-            for layout in ['Exposure', 'Folder', 'FPS']:
+            for layout in ['Exposure', 'Folder', 'FPS', 'Source']:
                 getattr(self._ui, 'frame_{}'.format(layout)).setVisible(layout in self._camera_device.visible_layouts())
 
             with QtCore.QMutexLocker(self._tangoMutex):
@@ -597,6 +598,15 @@ class SettingsWidget(QtWidgets.QWidget):
                     refresh_combo_box(self._ui.cmb_Path, self._camera_device.get_settings('Path', str))
                 else:
                     self._ui.cmb_Path.setEnabled(False)
+
+                self._ui.cmb_source.clear()
+                possible_sources = self._camera_device.get_settings('possible_sources', str)
+                if possible_sources != '':
+                    self._ui.cmb_source.setEnabled(True)
+                    self._ui.cmb_source.addItems(possible_sources)
+                    refresh_combo_box(self._ui.cmb_source, self._camera_device.get_settings('Source', str))
+                else:
+                    self._ui.cmb_source.setEnabled(False)
 
                 peak_search = self._camera_device.get_settings('peak_search', bool)
                 peak_search_mode = self._camera_device.get_settings('peak_search_mode', bool)
@@ -695,9 +705,13 @@ class SettingsWidget(QtWidgets.QWidget):
             if self._ui.frame_Folder.isVisible():
                 self._camera_device.save_settings('Path', self._ui.cmb_Path.currentText())
 
+            if self._ui.frame_Source.isVisible():
+                self._camera_device.save_settings('Source', self._ui.cmb_source.currentText())
+
             self._camera_device.save_settings('peak_search', self._ui.chk_peak_search.isChecked())
-            self._camera_device.save_settings('peak_threshold', self._ui.sb_threshold.value())
-            self._camera_device.save_settings('peak_size', self._ui.sb_size.value())
+            self._camera_device.save_settings('peak_search_mode', self._ui.rb_rel_threshold.isChecked())
+            self._camera_device.save_settings('peak_rel_threshold', self._ui.sl_abs_threshold.value())
+            self._camera_device.save_settings('peak_rel_threshold', self._ui.sl_rel_threshold.value())
 
             self.log.debug("Settings saved")
 

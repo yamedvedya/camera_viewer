@@ -25,7 +25,7 @@ class DalsaProxy(AbstractCamera):
                      'max_level_limit': (None, )
                      }
 
-    visible_layouts = ('Folder',)
+    visible_layouts = ('Folder', 'Source')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
@@ -36,10 +36,17 @@ class DalsaProxy(AbstractCamera):
         else:
             self._possible_folders = ['/gpfs/current/raw/', '/gpfs/commitioning/raw/']
 
+        if settings.hasAttribute('sources'):
+            self._possible_sources = [item.strip() for item in settings.getAttribute("folders").split(';')]
+        else:
+            self._possible_sources =  ['Event', 'Files']
+
         self._my_event_handler = PatternMatchingEventHandler(["*.tif"], "", False, True)
         self._my_event_handler.on_created = self.on_created
 
         self._my_observer = None
+
+        self._source = self._possible_sources[0]
 
         self.path = self._possible_folders[0]
 
@@ -81,6 +88,7 @@ class DalsaProxy(AbstractCamera):
 
     # ----------------------------------------------------------------------
     def _set_new_path(self, path):
+        need_to_restart = self._running
         if self._running:
             self.stop_acquisition()
             self._last_frame = np.zeros((1, 1))
@@ -88,7 +96,7 @@ class DalsaProxy(AbstractCamera):
 
         self.path = path
 
-        if self._running:
+        if need_to_restart:
             self.start_acquisition()
 
     # ----------------------------------------------------------------------
@@ -99,6 +107,16 @@ class DalsaProxy(AbstractCamera):
             if path != '':
                 self._set_new_path(path)
             return self.path
+
+        elif option == 'Source':
+            source = super(DalsaProxy, self).get_settings(option, cast)
+            if source != '':
+                self._set_new_path(source)
+            return self._source
+
+        elif option == 'possible_sources':
+
+            return self._possible_folders
 
         elif option == 'possible_folders':
             return self._possible_folders
@@ -111,10 +129,20 @@ class DalsaProxy(AbstractCamera):
         if setting == 'Path':
             self._set_new_path(value)
 
+        elif setting == 'Source':
+            self._change_source(value)
+
         super(DalsaProxy, self).save_settings(setting, value)
 
     # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
+    def _change_source(self, source):
+        need_to_restart = self._running
+        if self._running:
+            self.stop_acquisition()
+            self._last_frame = np.zeros((1, 1))
+            self._new_frame_flag = True
 
-        # self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
-        pass
+        self._source = source
+
+        if need_to_restart:
+            self.start_acquisition()

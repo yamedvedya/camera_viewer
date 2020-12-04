@@ -261,3 +261,7 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def change_picture_size(self, size):
         self._device_proxy.change_picture_size(size)
+
+    # ----------------------------------------------------------------------
+    def get_device_source(self):
+        return self._device_proxy.source_mode
