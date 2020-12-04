@@ -13,13 +13,8 @@
     <save_folder default= "/home/p23user/Pictures/"/>
 
 <!--Cameras section-->
-        <camera name="Microscope"
-            proxy="VimbaProxy"
-            tango_server="hasep23oh:10000/p23/tangovimba/micro"
-            motor_type = 'none'
-            flip_vertical="False"
-            flip_horizontal="False"
-            rotate = '0'
-            high_depth = 'True'
+        <camera name="Dalsa"
+            proxy="DalsaProxy"
+            folders="/gpfs/current/raw/;/gpfs/commissioning/"
     />
 </camera_viewer>

@@ -34,7 +34,7 @@ class DalsaProxy(AbstractCamera):
         if settings.hasAttribute('folders'):
             self._possible_folders = [item.strip() for item in settings.getAttribute("folders").split(';')]
         else:
-            self._possible_folders = ['/gpfs/current/raw/', '/gpfs/commitioning/raw/']
+            self._possible_folders = ['/gpfs/current/raw/', '/gpfs/commissioning/raw/']
 
         self._my_event_handler = PatternMatchingEventHandler(["*.tif"], "", False, True)
         self._my_event_handler.on_created = self.on_created
