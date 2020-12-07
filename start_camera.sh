@@ -3,4 +3,4 @@ cd $BASEDIR
 
 export VIEWERPATH=$PWD/
 export PYTHONPATH=$PYTHONPATH:$VIEWERPATH
-python3 ./src/main.py
+./venv/bin/python ./src/main.py

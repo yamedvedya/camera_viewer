@@ -276,21 +276,21 @@ class SettingsWidget(QtWidgets.QWidget):
             self._ui.sl_rel_threshold.blockSignals(True)
             self._ui.sl_rel_threshold.setValue(threshold)
             self._ui.sl_rel_threshold.blockSignals(False)
+
+        if mode:
+            threshold = self._ui.sl_rel_threshold.value()
+            self._camera_device.save_settings('peak_rel_threshold', threshold)
+            self._ui.sl_abs_threshold.setEnabled(False)
+            self._ui.sb_abs_threshold.setEnabled(False)
+            self._ui.sl_rel_threshold.setEnabled(True)
+            self._ui.sb_rel_threshold.setEnabled(True)
         else:
-            if mode:
-                threshold = self._ui.sl_rel_threshold.value()
-                self._camera_device.save_settings('peak_rel_threshold', threshold)
-                self._ui.sl_abs_threshold.setEnabled(False)
-                self._ui.sb_abs_threshold.setEnabled(False)
-                self._ui.sl_rel_threshold.setEnabled(True)
-                self._ui.sb_rel_threshold.setEnabled(True)
-            else:
-                threshold = self._ui.sl_abs_threshold.value()
-                self._camera_device.save_settings('peak_abs_threshold', threshold)
-                self._ui.sl_abs_threshold.setEnabled(True)
-                self._ui.sb_abs_threshold.setEnabled(True)
-                self._ui.sl_rel_threshold.setEnabled(False)
-                self._ui.sb_rel_threshold.setEnabled(False)
+            threshold = self._ui.sl_abs_threshold.value()
+            self._camera_device.save_settings('peak_abs_threshold', threshold)
+            self._ui.sl_abs_threshold.setEnabled(True)
+            self._ui.sb_abs_threshold.setEnabled(True)
+            self._ui.sl_rel_threshold.setEnabled(False)
+            self._ui.sb_rel_threshold.setEnabled(False)
 
         self.peak_search_modified.emit(state, mode, threshold)
 
