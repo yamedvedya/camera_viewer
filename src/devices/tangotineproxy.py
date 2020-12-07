@@ -77,7 +77,11 @@ class TangoTineProxy(AbstractCamera):
     # ----------------------------------------------------------------------
     def start_acquisition(self):
 
-        self._eid = self._device_proxy.subscribe_event("Frame", PyTango.EventType.PERIODIC_EVENT, self._readout_frame)
+        try:
+            self._eid = self._device_proxy.subscribe_event("Frame", PyTango.EventType.PERIODIC_EVENT, self._readout_frame)
+            return True
+        except:
+            return False
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):

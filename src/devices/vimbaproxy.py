@@ -106,8 +106,10 @@ class VimbaProxy(AbstractCamera):
 
             self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
+            return True
         else:
             self._log.warning("Camera should be in ON state (is it running already?)")
+            return False
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):

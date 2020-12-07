@@ -109,10 +109,14 @@ class DataSource2D(QtCore.QObject):
         """
         """
         if self._device_proxy:
+
             try:
-                self._device_proxy.start_acquisition()
-                self._state = "running"
-                return True
+                if self._device_proxy.start_acquisition():
+                    self._state = "running"
+                    return True
+                else:
+                    return False
+
             except Exception as err:
                 report_error(err, self.log, self._parent)
                 return False

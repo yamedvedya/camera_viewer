@@ -73,6 +73,7 @@ class DummyProxy(AbstractCamera):
         self._generate = True
         self._generator_thread.start()
         self._new_frame_thead.start()
+        return True
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):

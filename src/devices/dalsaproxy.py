@@ -70,12 +70,16 @@ class DalsaProxy(AbstractCamera):
             self._device_proxy.write_attribute("ViewingMode", 2)
             self._eid = self._device_proxy.subscribe_event("Image16", PyTango.EventType.DATA_READY_EVENT,
                                                            self._on_event, [], True)
+            self._running = True
+            return True
+
         elif self._source == 'Files':
             if self.path != '':
                 self._my_observer = Observer()
                 self._my_observer.schedule(self._my_event_handler, self.path, recursive=True)
                 self._my_observer.start()
                 self._running = True
+                return True
             else:
                 raise RuntimeError('Path is not exist')
         else:
@@ -141,7 +145,7 @@ class DalsaProxy(AbstractCamera):
         elif option == 'Source':
             source = super(DalsaProxy, self).get_settings(option, cast)
             if source != '':
-                self._set_new_path(source)
+                self._change_source(source)
             return self._source
 
         elif option == 'possible_sources':
