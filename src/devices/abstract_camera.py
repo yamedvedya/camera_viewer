@@ -142,7 +142,13 @@ class AbstractCamera(object):
 
         if value is not None:
             if cast == bool:
-                return strtobool(str(value))
+                try:
+                    return strtobool(str(value))
+                except:
+                    print('Cannot convert settings {} {} to bool'.format(option, value))
+                    return False
+            elif cast == int:
+                return int(float(value))
             else:
                 return cast(value)
         else:
@@ -206,10 +212,27 @@ class AbstractCamera(object):
             return None
 
     # ----------------------------------------------------------------------
+    def close_camera(self):
+        pass
+
+    # ----------------------------------------------------------------------
     def set_counter(self, value):
         if self._roi_server is not None:
              self._roi_server.scan_parameter = str(value)
 
     # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
+    def set_picture_clip(self, size):
         pass
+
+    # ----------------------------------------------------------------------
+    def get_picture_clip(self):
+        pass
+
+    # ----------------------------------------------------------------------
+    def get_reduction(self):
+        return self.reduce_resolution
+
+    # ----------------------------------------------------------------------
+    def set_reduction(self, value):
+        self.save_settings('Reduce', value)
+        self.reduce_resolution = value

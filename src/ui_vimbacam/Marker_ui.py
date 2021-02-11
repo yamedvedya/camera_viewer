@@ -13,9 +13,13 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Marker(object):
     def setupUi(self, Marker):
         Marker.setObjectName("Marker")
-        Marker.resize(283, 41)
+        Marker.resize(309, 41)
         self.horizontalLayout = QtWidgets.QHBoxLayout(Marker)
         self.horizontalLayout.setObjectName("horizontalLayout")
+        self.chk_visible = QtWidgets.QCheckBox(Marker)
+        self.chk_visible.setText("")
+        self.chk_visible.setObjectName("chk_visible")
+        self.horizontalLayout.addWidget(self.chk_visible)
         self.label_23 = QtWidgets.QLabel(Marker)
         self.label_23.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.label_23.setObjectName("label_23")

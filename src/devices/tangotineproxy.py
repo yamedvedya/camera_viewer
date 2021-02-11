@@ -23,16 +23,13 @@ class TangoTineProxy(AbstractCamera):
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...
     #                    "ViewingMode": 1}
 
-    _settings_map = {"RoiX": ('roi_server', "roi_x"),
-                     "RoiY": ('roi_server', 'roi_y'),
-                     "RoiWidth": ('roi_server', 'roi_w'),
-                     "RoiHeight": ('roi_server', 'roi_h'),
-                     "ExposureTime": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
-                     "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
+    _settings_map = {
+                     "exposure": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
+                     "gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
                      'max_level_limit': (None, )
                      }
 
-    visible_layouts = ('FPS', 'Exposure')
+    visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
@@ -110,9 +107,9 @@ class TangoTineProxy(AbstractCamera):
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
-        if option in ['wMax', 'hMax']:
+        if option in ['max_width', 'max_height']:
             h, w = self._device_proxy.Frame.shape
-            if option == 'wMax':
+            if option == 'max_width':
                 return w
             else:
                 return h
@@ -121,9 +118,9 @@ class TangoTineProxy(AbstractCamera):
             value = super(TangoTineProxy, self).get_settings(option, cast)
             if value == 0:
                 if option == 'viewW':
-                    return self.get_settings('wMax', int)
+                    return self.get_settings('max_width', int)
                 else:
-                    return self.get_settings('hMax', int)
+                    return self.get_settings('max_height', int)
             else:
                 return value
         elif option in ['ExposureTime', 'Gain']:
@@ -154,6 +151,13 @@ class TangoTineProxy(AbstractCamera):
             super(TangoTineProxy, self).save_settings(setting, value)
 
     # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
+    def set_picture_clip(self, size):
 
         self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
+
+    # ----------------------------------------------------------------------
+    def get_picture_clip(self):
+
+        return [self._picture_size[0], self._picture_size[1],
+                self._picture_size[2] - self._picture_size[0],
+                self._picture_size[3] - self._picture_size[1]]

@@ -31,19 +31,19 @@ class VimbaProxy(AbstractCamera):
     START_DELAY = 1
     STOP_DELAY = 0.5
 
-    _settings_map = {"ExposureTime": ("device_proxy", "ExposureTimeAbs"),
-                     "Gain": ["device_proxy", ""],
+    _settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
+                     "gain": ["device_proxy", ""],
                      'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
                      'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
-                     'viewX': ("device_proxy", "OffsetX"),
-                     'viewY': ("device_proxy", "OffsetY"),
-                     'viewH': ("device_proxy", "Height"),
-                     'viewW': ("device_proxy", "Width"),
-                     'wMax': ("device_proxy", "WidthMax"),
-                     'hMax': ("device_proxy", "HeightMax")
+                     'view_x': ("device_proxy", "OffsetX"),
+                     'view_y': ("device_proxy", "OffsetY"),
+                     'view_h': ("device_proxy", "Height"),
+                     'view_w': ("device_proxy", "Width"),
+                     'max_width': ("device_proxy", "WidthMax"),
+                     'max_height': ("device_proxy", "HeightMax")
                      }
 
-    visible_layouts = ('FPS', 'Exposure')
+    visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):

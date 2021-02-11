@@ -30,11 +30,9 @@ class FrameViewer(QtWidgets.QWidget):
     """
     """
     status_changed = QtCore.pyqtSignal(float)
-    roi_changed = QtCore.pyqtSignal(int)
-    roi_stats_ready = QtCore.pyqtSignal(int)
     cursor_moved = QtCore.pyqtSignal(float, float)
     range_changed = QtCore.pyqtSignal(float, float, float, float)
-    new_auto_levels  = QtCore.pyqtSignal(int, int)
+    refresh_numbers = QtCore.pyqtSignal()
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -42,12 +40,6 @@ class FrameViewer(QtWidgets.QWidget):
 
     LABEL_BRUSH = (30, 144, 255, 170)
     LABEL_COLOR = (255, 255, 255)
-
-    min_level = 0
-    max_level = 1
-    auto_levels = True
-
-    MAXFPS = 2
 
     # ----------------------------------------------------------------------
     def __init__(self, settings, parent):
@@ -63,8 +55,6 @@ class FrameViewer(QtWidgets.QWidget):
         self._saveImageFolder = self._settings.option("save_folder", "default")
 
         self._camera_device = None
-        self._rois, self._markers, self._statistics = None, None, None
-        self._current_roi_index = None
 
         self._ui = Ui_FrameViewer()
         self._ui.setupUi(self)
@@ -72,9 +62,6 @@ class FrameViewer(QtWidgets.QWidget):
         self._init_ui()
 
         self._peak_markers = PeakMarker()
-        self._peak_search = False
-        self._peak_threshold = 80
-        self._peak_search_mode = False
         self._ui.imageView.view.addItem(self._peak_markers, ignoreBounds=True)
 
         self._action_first_point = QtWidgets.QAction('Center search start', self)
@@ -103,16 +90,8 @@ class FrameViewer(QtWidgets.QWidget):
         self._n_frames = 0
         self._need_to_refresh_image = True
 
-        self._rectRoi = pg.RectROI([0, 0], [50, 50], pen=(0, 9))
-        self._ui.imageView.view.addItem(self._rectRoi, ignoreBounds=True)
-        self._rectRoi.sigRegionChanged.connect(self._roi_changed)
-        self._rectRoi.hide()
-
         self._marker_widgets = []
-
-        self._cross_item = LineSegmentItem('cross')
-        self._cross_item.setVisible(False)
-        self._ui.imageView.view.addItem(self._cross_item, ignoreBounds=True)
+        self._rois_widgets = []
 
         self._center_search_item = LineSegmentItem('center', float(self._settings.option("center_search", "cross")),
                                                     float(self._settings.option("center_search", "circle")))
@@ -132,17 +111,11 @@ class FrameViewer(QtWidgets.QWidget):
         self._ui.imageView.view.sigRangeChanged.connect(self._visible_range_changed)
         self._ui.imageView.view.setMenuEnabled(False)
 
-        self.visible_marker = 'none'
-
         # a few info labels
         self._deviceLabel = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
         self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
-        self._roiLabel = self._add_label("ROI", self._settings.node("camera_viewer/roi_label"), visible=False)
         self._load_label = self._add_label("Load image", self._settings.node("camera_viewer/datetime_label"), visible=False)
 
-        self._image_x_pos = 0
-        self._image_y_pos = 0
-        self._image_scale = (1, 1)
         self.log.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
@@ -155,12 +128,8 @@ class FrameViewer(QtWidgets.QWidget):
         pass
 
     # ----------------------------------------------------------------------
-    def set_variables(self, camera_device, rois, markers, statistics,current_roi_index):
+    def set_camera_device(self, camera_device):
         self._camera_device = camera_device
-        self._rois = rois
-        self._markers = markers
-        self._statistics = statistics
-        self._current_roi_index = current_roi_index
 
     # ----------------------------------------------------------------------
     def set_new_camera(self):
@@ -187,6 +156,7 @@ class FrameViewer(QtWidgets.QWidget):
         self.refresh_view()
 
         return True
+
     # ----------------------------------------------------------------------
     def update_camera_label(self):
 
@@ -198,47 +168,88 @@ class FrameViewer(QtWidgets.QWidget):
             widget.delete_me()
 
         self._marker_widgets = []
-        for ind, marker in enumerate(self._markers):
+        for ind, marker in enumerate(self._camera_device.markers):
             self._marker_widgets.append(ImageMarker(marker['x'], marker['y'], self._ui.imageView))
 
-    # ----------------------------------------------------------------------
-    def update_marker(self, ind):
-
-        self._marker_widgets[ind].setPos(self._markers[ind]['x'], self._markers[ind]['y'])
+        self._camera_device.markers_changed = False
 
     # ----------------------------------------------------------------------
-    def update_roi(self, roi_index):
+    def update_marker(self):
+        for widget, marker in zip(self._marker_widgets, self._camera_device.markers):
+            widget.setPos(marker['x'], marker['y'])
+            widget.setVisible(marker['visible'])
+
+        self._camera_device.markers_need_update = False
+
+    # ----------------------------------------------------------------------
+    def rois_changed(self):
+        for widget, marker, label in self._rois_widgets:
+            self._ui.imageView.view.removeItem(widget)
+            self._ui.imageView.view.removeItem(marker)
+            self._ui.imageView.view.removeItem(label)
+
+        self._rois_widgets = []
+        for ind, values in enumerate(self._camera_device.rois):
+            widget = pg.RectROI([values['x'], values['y']], [values['w'], values['h']], pen=(0, 9))
+            widget.sigRegionChanged.connect(lambda rect, id=ind: self._roi_changed(rect, id))
+            if values['visible']:
+                widget.hide()
+            else:
+                widget.show()
+
+            marker_item = LineSegmentItem('cross')
+            marker_item.setVisible(values['visible'])
+            self._ui.imageView.view.addItem(marker_item, ignoreBounds=True)
+
+            self._ui.imageView.view.addItem(widget, ignoreBounds=True)
+            self._rois_widgets.append([widget, marker_item,
+                                       self._add_label("ROI_{}".format(ind+1),
+                                                       self._settings.node("camera_viewer/roi_label"),
+                                                       visible=values['visible'])])
+
+        self._camera_device.roi_changed = False
+
+    # ----------------------------------------------------------------------
+    def update_roi(self):
         """ROI coords changed elsewhere.
         """
-        self._rectRoi.blockSignals(True)
+        for ind, (roi, cross, label) in enumerate(self._rois_widgets):
 
-        self._rectRoi.setVisible(self._rois[roi_index]['Roi_Visible'])
-        self._roiLabel.setVisible(self._rois[roi_index]['Roi_Visible'])
+            roi.blockSignals(True)
 
-        self._rectRoi.setPos([self._rois[roi_index]['RoiX'], self._rois[roi_index]['RoiY']])
-        self._rectRoi.setSize([self._rois[roi_index]['RoiWidth'], self._rois[roi_index]['RoiHeight']])
+            roi.setVisible(self._camera_device.rois[ind]['visible'])
+            label.setVisible(self._camera_device.rois[ind]['visible'])
 
-        self._rectRoi.blockSignals(False)
+            roi.setPos([self._camera_device.rois[ind]['x'], self._camera_device.rois[ind]['y']])
+            roi.setSize([self._camera_device.rois[ind]['w'], self._camera_device.rois[ind]['h']])
+
+            label.setPos(self._camera_device.rois[ind]['x'] + self._camera_device.rois[ind]['w'],
+                         self._camera_device.rois[ind]['y'] + self._camera_device.rois[ind]['h'])
+
+            if not self._camera_device.rois[ind]['visible']:
+                cross.setVisible(False)
+            else:
+                self._calculate_statistics()
+            roi.blockSignals(False)
+
+        self._camera_device.roi_need_update = False
 
     # ----------------------------------------------------------------------
-    def _roi_changed(self, roiRect):
+    def _roi_changed(self, rect, ind):
         """Called when ROI emits sigRegionChanged signal.
         """
         if self._last_frame is not None:
-            pos, size = roiRect.pos(), roiRect.size()
-            x = max(pos.x(), 0)
-            y = max(pos.y(), 0)
+            pos, size = rect.pos(), rect.size()
             max_w, max_h = self._last_frame.shape
 
-            w = min(size.x(), max_w)
-            h = min(size.y(), max_h)
+            self._camera_device.set_roi_value(ind, 'x', max(pos.x(), 0))
+            self._camera_device.set_roi_value(ind, 'y', max(pos.y(), 0))
+            self._camera_device.set_roi_value(ind, 'w', min(size.x(), max_w))
+            self._camera_device.set_roi_value(ind, 'h', min(size.y(), max_h))
 
-            self._rois[self._current_roi_index[0]]['RoiX'], self._rois[self._current_roi_index[0]]['RoiY'] = x, y
-            self._rois[self._current_roi_index[0]]['RoiWidth'], self._rois[self._current_roi_index[0]]['RoiHeight'] = w, h
+            self._rois_widgets[ind][2].setPos(pos.x() + size.x(), pos.y() + size.y())
 
-            self._redraw_roi_label()
-            self.update_roi(self._current_roi_index[0])
-            self.roi_changed.emit(self._current_roi_index[0])
+            self._calculate_statistics()
 
     # ----------------------------------------------------------------------
     def _visible_range_changed(self, viewBox):
@@ -252,26 +263,19 @@ class FrameViewer(QtWidgets.QWidget):
         if self._last_frame is not None:
 
             self._redraw_projections()
-
             self._show_labels()
-            self._redraw_roi_label()
-
-    # ----------------------------------------------------------------------
-    def peak_search_modified(self, state, mode, threshold):
-
-        self._peak_search = state
-        self._peak_threshold = threshold
-        self._peak_search_mode = mode
-        self.refresh_view()
+            self._calculate_statistics()
 
     # ----------------------------------------------------------------------
     def _find_peaks(self):
-        if self._peak_search:
+        if self._camera_device.peak_search['search']:
             try:
-                if self._peak_search_mode:
-                    coordinates = peak_local_max(self._last_frame, threshold_rel=self._peak_threshold/100)
+                if self._camera_device.peak_search['search_mode']:
+                    coordinates = peak_local_max(self._last_frame,
+                                                 threshold_rel=self._camera_device.peak_search['rel_threshold']/100)
                 else:
-                    coordinates = peak_local_max(self._last_frame, threshold_abs=self._peak_threshold)
+                    coordinates = peak_local_max(self._last_frame,
+                                                 threshold_abs=self._camera_device.peak_search['abs_threshold'])
 
                 if len(coordinates) > 100:
                     report_error('Too many ({}) peaks found. Show first 100. Adjust the threshold'.format(len(coordinates)),
@@ -352,16 +356,37 @@ class FrameViewer(QtWidgets.QWidget):
         super(FrameViewer, self).close()
 
     # ----------------------------------------------------------------------
-    def move_image(self, x, y, w, h):
+    def refresh_image(self):
+        if self._camera_device.roi_changed:
+            self.rois_changed()
 
-        self._image_x_pos = x
-        self._image_y_pos = y
-        self._need_to_refresh_image = True
+        if self._camera_device.roi_need_update:
+            self.update_roi()
 
-    # ----------------------------------------------------------------------
-    def scale_image(self, scale):
-        self._image_scale = (scale, scale)
-        self._need_to_refresh_image = True
+        if self._camera_device.markers_changed:
+            self.markers_changed()
+
+        if self._camera_device.markers_need_update:
+            self.update_marker()
+
+        if self._camera_device.image_need_repaint:
+            if str(self._camera_device.levels['color_map']) != '':
+                colormap = self._camera_device.levels['color_map']
+            else:
+                colormap = 'gray'
+
+            self._ui.imageView.imageItem.setLookupTable(
+                pg.ColorMap(*zip(*Gradients[colormap.lower()]["ticks"])).getLookupTable())
+
+            self.refresh_view()
+
+        if self._camera_device.image_need_refresh:
+            self._need_to_refresh_image = True
+            self.refresh_view()
+
+        if self._camera_device.peak_search_need_update:
+            self._camera_device.peak_search_need_update = False
+            self.refresh_view()
 
     # ----------------------------------------------------------------------
     def refresh_view(self):
@@ -371,36 +396,37 @@ class FrameViewer(QtWidgets.QWidget):
             self._load_label.setVisible(True)
 
         try:
-            self._last_frame = self._camera_device.get_frame("copy")
+            self._last_frame = self._camera_device.get_frame()
 
-            set_kwargs = {'pos': (self._image_x_pos, self._image_y_pos),
-                          'scale': self._image_scale}
+            picture_size = self._camera_device.get_picture_clip()
+            reduction = self._camera_device.get_reduction()
+            set_kwargs = {'pos': (picture_size[0], picture_size[1]),
+                          'scale': (reduction, reduction)}
 
-            if self.auto_levels:
+            if self._camera_device.levels['auto_levels']:
                 set_kwargs['autoRange'] = True
                 update_kwargs = {'autoLevels': True}
             else:
-                set_kwargs['levels'] = (self.min_level, self.max_level)
-                update_kwargs = {'levels': (self._image_x_pos, self._image_y_pos)}
+                set_kwargs['levels'] = (self._camera_device.levels['level_min'], self._camera_device.levels['level_max'])
+                update_kwargs = {'levels': (self._camera_device.levels['level_min'], self._camera_device.levels['level_max'])}
 
             if self._need_to_refresh_image:
                 self._ui.imageView.setImage(self._last_frame, **set_kwargs)
                 self._need_to_refresh_image = False
+                self._camera_device.image_need_refresh = False
             else:
                 self._ui.imageView.imageItem.updateImage(self._last_frame, **update_kwargs)
-
-            # if self._is_first_frame:
-            #     self._is_first_frame = False
-            # else:
-            #     self._ui.imageView.repaint()
+                self._camera_device.image_need_repaint = False
 
             self._peak_markers.new_scale(self._viewRect.width(), self._viewRect.height())
             self._center_search_item.new_scale(self._viewRect.width(), self._viewRect.height())
 
             self._show_labels()
-            self._redraw_roi_label()
-            self._redraw_projections()
+            self._calculate_statistics()
             self._find_peaks()
+
+            self._redraw_projections()
+
             self.update_camera_label()
 
             self._n_frames += 1
@@ -409,11 +435,12 @@ class FrameViewer(QtWidgets.QWidget):
                 self._n_frames = 0
                 self._acq_started = time.time()
 
-            if self.auto_levels:
-                self.new_auto_levels.emit(int(self._ui.imageView.levelMin), int(self._ui.imageView.levelMax))
+            if self._camera_device.levels['auto_levels']:
+                self._camera_device.level_setting_change('level_min', int(self._ui.imageView.levelMin))
+                self._camera_device.level_setting_change('level_max', int(self._ui.imageView.levelMax))
 
-        except:
-            pass
+        except Exception as err:
+            print('Error during refresh view: {}'.format(err))
 
         if hasattr(self, "_load_label"):
             self._load_label.setVisible(False)
@@ -447,74 +474,76 @@ class FrameViewer(QtWidgets.QWidget):
             return 0
 
     # ----------------------------------------------------------------------
-    def roi_marker_selected(self, visible_marker):
-        self.visible_marker = visible_marker
-
-    # ----------------------------------------------------------------------
-    def _redraw_roi_label(self):
+    def _calculate_statistics(self):
         """
         """
-        if self._rois[self._current_roi_index[0]]['Roi_Visible']:
-            pos, size = self._rectRoi.pos(), self._rectRoi.size()
-            x, y, w, h = int(pos.x() - self._image_x_pos), int(pos.y() - self._image_y_pos), int(size.x()), int(size.y())
+        if self._last_frame is None:
+            return
 
-            array = self._last_frame[x:x + w, y:y + h]
-            if array != []:
-                array[array < self._rois[self._current_roi_index[0]]['Threshold']] = 0  # All low values set to 0
+        for roi_widgets, info, data in zip(self._rois_widgets, self._camera_device.rois, self._camera_device.rois_data):
+            if info['visible']:
+                pos, size = roi_widgets[0].pos(), roi_widgets[0].size()
 
-                roi_sum = np.sum(array)
+                image_size = self._camera_device.get_picture_clip()
+                _image_x_pos, _image_y_pos = image_size[0], image_size[1]
+                x, y, w, h = int(pos.x() - _image_x_pos), int(pos.y() - _image_y_pos), int(size.x()), int(size.y())
 
-                try:
-                    roiExtrema = scipymeasure.extrema(array)  # all in one!
-                except:
-                    roiExtrema = (0, 0, (0, 0), (0, 0))
+                array = self._last_frame[x:x + w, y:y + h]
+                if array != []:
+                    array[array < info['bg']] = 0  # All low values set to 0
 
-                roi_max = (roiExtrema[3][0] + x + self._image_x_pos, roiExtrema[3][1] + y + self._image_y_pos)
-                roi_min = (roiExtrema[2][0] + x + self._image_x_pos, roiExtrema[2][1] + y + self._image_y_pos)
+                    roi_sum = np.sum(array)
 
-                try:
-                    roi_com = scipymeasure.center_of_mass(array)
-                except:
-                    roi_com = (0, 0)
+                    try:
+                        roiExtrema = scipymeasure.extrema(array)  # all in one!
+                    except:
+                        roiExtrema = (0, 0, (0, 0), (0, 0))
 
-                if math.isnan(roi_com[0]) or math.isnan(roi_com[1]):
-                    roi_com = (0, 0)
+                    roi_max = (int(roiExtrema[3][0] + x + _image_x_pos), int(roiExtrema[3][1] + y + _image_y_pos))
+                    roi_min = (int(roiExtrema[2][0] + x + _image_x_pos), int(roiExtrema[2][1] + y + _image_y_pos))
 
-                roi_com = (roi_com[0] + x + self._image_x_pos, roi_com[1] + y + self._image_y_pos)
+                    try:
+                        roi_com = scipymeasure.center_of_mass(array)
+                    except:
+                        roi_com = (0, 0)
 
-                try:
-                    intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
-                except:
-                    intensity_at_com = [0, 0]
+                    if math.isnan(roi_com[0]) or math.isnan(roi_com[1]):
+                        roi_com = (0, 0)
 
-                roi_FWHM = (self.FWHM(np.sum(array, axis=1)), self.FWHM(np.sum(array, axis=0)))
+                    roi_com = (int(roi_com[0] + x + _image_x_pos), int(roi_com[1] + y + _image_y_pos))
 
-                if self.visible_marker == 'max':
-                    # Marker on Max
-                    self._cross_item.set_pos(roi_max, roi_FWHM)
-                    self._cross_item.setVisible(True)
-                elif self.visible_marker == 'min':
-                    # Marker on Max
-                    self._cross_item.set_pos(roi_min, roi_FWHM)
-                    self._cross_item.setVisible(True)
-                elif self.visible_marker == 'com':
-                    # Marker auf CoM
-                    self._cross_item.set_pos(roi_com, roi_FWHM)
-                    self._cross_item.setVisible(True)
-                elif self.visible_marker == 'none':
-                    self._cross_item.setVisible(False)
-                    # self.crossItem([0,0], [0,0])
+                    try:
+                        intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
+                    except:
+                        intensity_at_com = [0, 0]
 
-                self._statistics[self._current_roi_index[0]] = {"extrema": (roiExtrema[0], roiExtrema[1], roi_min, roi_max),
-                                                              "com_pos" : roi_com,
-                                                              "intensity_at_com": intensity_at_com,
-                                                              'fwhm': roi_FWHM,
-                                                              'sum': roi_sum}
+                    roi_FWHM = (self.FWHM(np.sum(array, axis=1)), self.FWHM(np.sum(array, axis=0)))
 
-                self.roi_stats_ready.emit(self._current_roi_index[0])
-                self._roiLabel.setText(roi_text(roi_sum, compact=False))
+                    if info['mark'] == 'max':
+                        roi_widgets[1].set_pos(roi_max, roi_FWHM)
+                        roi_widgets[1].setVisible(True)
+                    elif info['mark'] == 'min':
+                        roi_widgets[1].set_pos(roi_min, roi_FWHM)
+                        roi_widgets[1].setVisible(True)
+                    elif info['mark'] == 'com':
+                        roi_widgets[1].set_pos(roi_com, roi_FWHM)
+                        roi_widgets[1].setVisible(True)
+                    else:
+                        roi_widgets[1].setVisible(False)
 
-                self._show_label(0.1, 0.9, self._roiLabel)  # hotspot based
+                    data['max_x'], data['max_y'] = roi_max
+                    data['max_v'] = np.round(roiExtrema[1], 3)
+
+                    data['min_x'], data['min_y'] = roi_min
+                    data['min_v'] = np.round(roiExtrema[0], 3)
+
+                    data['com_x'], data['com_y'] = roi_com
+                    data['com_v'] = np.round(intensity_at_com, 3)
+
+                    data['fwhm_x'], data['fwhm_y'] = roi_FWHM
+                    data['sum'] = np.round(roi_sum, 3)
+
+        self.refresh_numbers.emit()
     # ----------------------------------------------------------------------
     def _mouse_moved(self, pos):
         """
@@ -746,26 +775,8 @@ class FrameViewer(QtWidgets.QWidget):
             pass
 
     # ----------------------------------------------------------------------
-    def enable_auto_levels(self, mode):
-
-        self.auto_levels = mode
-        self.refresh_view()
-
-    # ----------------------------------------------------------------------
-    def levels_changed(self, min, max):
-
-        self.min_level = min
-        self.max_level = max
-        self.refresh_view()
-
-    # ----------------------------------------------------------------------
     def color_map_changed(self, selected_map):
-        if str(selected_map) != '':
-            colormap = str(selected_map)
-        else:
-            colormap = 'gray'
 
-        self._ui.imageView.imageItem.setLookupTable(pg.ColorMap(*zip(*Gradients[colormap]["ticks"])).getLookupTable())
         self.refresh_view()
 
 # ----------------------------------------------------------------------
