@@ -134,6 +134,8 @@ dmypy.json
 /.idea
 /config
 /src/logs/
+/src/ui_vimbacam
 /tmp/
 /logs
 /config.xml
+icons_rc.py

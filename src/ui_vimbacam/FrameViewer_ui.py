@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/FrameViewer.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_FrameViewer(object):
     def setupUi(self, FrameViewer):
@@ -46,6 +44,7 @@ class Ui_FrameViewer(object):
     def retranslateUi(self, FrameViewer):
         _translate = QtCore.QCoreApplication.translate
         FrameViewer.setWindowTitle(_translate("FrameViewer", "Form"))
+
 from widgets.image_view import ImageViewNoKeyboard
 from widgets.projectionwidget import ProjectionWidget
 import icons_rc

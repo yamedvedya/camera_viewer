@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/SettingsWidget.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_SettingsWidget(object):
     def setupUi(self, SettingsWidget):
@@ -102,7 +100,7 @@ class Ui_SettingsWidget(object):
         spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.gridLayout.addItem(spacerItem3, 0, 5, 1, 1)
         self.sb_view_h = QtWidgets.QSpinBox(self.frame_Cut)
-        self.sb_view_h.setMinimum(4)
+        self.sb_view_h.setMinimum(-1)
         self.sb_view_h.setMaximum(9999)
         self.sb_view_h.setSingleStep(4)
         self.sb_view_h.setObjectName("sb_view_h")
@@ -112,7 +110,7 @@ class Ui_SettingsWidget(object):
         self.label_22.setObjectName("label_22")
         self.gridLayout.addWidget(self.label_22, 0, 0, 2, 1)
         self.sb_view_w = QtWidgets.QSpinBox(self.frame_Cut)
-        self.sb_view_w.setMinimum(4)
+        self.sb_view_w.setMinimum(-1)
         self.sb_view_w.setMaximum(9999)
         self.sb_view_w.setSingleStep(4)
         self.sb_view_w.setObjectName("sb_view_w")
@@ -518,3 +516,4 @@ class Ui_SettingsWidget(object):
         self.rb_abs_threshold.setText(_translate("SettingsWidget", "Absolute threshold"))
         self.rb_rel_threshold.setText(_translate("SettingsWidget", "Relative thershold"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), _translate("SettingsWidget", "Peak search"))
+

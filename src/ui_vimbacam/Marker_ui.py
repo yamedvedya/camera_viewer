@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/Marker.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_Marker(object):
     def setupUi(self, Marker):
@@ -59,3 +57,4 @@ class Ui_Marker(object):
         self.label_23.setText(_translate("Marker", "X:"))
         self.label_24.setText(_translate("Marker", "Y:"))
         self.but_delete.setText(_translate("Marker", "Delete"))
+

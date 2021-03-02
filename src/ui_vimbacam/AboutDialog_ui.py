@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/AboutDialog.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_AboutDialog(object):
     def setupUi(self, AboutDialog):
@@ -81,4 +79,5 @@ class Ui_AboutDialog(object):
         self.label_4.setText(_translate("AboutDialog", "Version: 2.0"))
         self.lbEmail.setText(_translate("AboutDialog", "yury.matveev@desy.de"))
         self.pushButton.setText(_translate("AboutDialog", "OK"))
+
 import icons_rc

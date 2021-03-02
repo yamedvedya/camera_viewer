@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/ROI.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_Roi(object):
     def setupUi(self, Roi):
@@ -307,3 +305,4 @@ class Ui_Roi(object):
         self.label_11.setText(_translate("Roi", "Y"))
         self.label_12.setText(_translate("Roi", "Value"))
         self.label_21.setText(_translate("Roi", "Mark"))
+

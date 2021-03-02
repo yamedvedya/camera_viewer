@@ -6,8 +6,8 @@ import os
 import sys
 
 # ----------------------------------------------------------------------
-in_dirs = ["src/uis"]
-out_dirs = ["src/gui"]
+in_dirs = ["ui"]
+out_dirs = ["src/ui_vimbacam"]
 
 ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
                 "linux": "python -m PyQt5.uic.pyuic",

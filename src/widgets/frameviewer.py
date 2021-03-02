@@ -21,7 +21,6 @@ from src.utils.functions import rotate
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.GradientEditorItem import Gradients
-from src.utils.functions import roi_text
 
 from src.ui_vimbacam.FrameViewer_ui import Ui_FrameViewer
 

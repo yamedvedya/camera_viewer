@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/LogWidget.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_LogWidget(object):
     def setupUi(self, LogWidget):
@@ -27,3 +25,4 @@ class Ui_LogWidget(object):
     def retranslateUi(self, LogWidget):
         _translate = QtCore.QCoreApplication.translate
         LogWidget.setWindowTitle(_translate("LogWidget", "Form"))
+

@@ -2,13 +2,11 @@
 
 # Form implementation generated from reading ui file 'ui/ProjectionWidget.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.0
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_ProjectionWidget(object):
     def setupUi(self, ProjectionWidget):
@@ -27,4 +25,5 @@ class Ui_ProjectionWidget(object):
     def retranslateUi(self, ProjectionWidget):
         _translate = QtCore.QCoreApplication.translate
         ProjectionWidget.setWindowTitle(_translate("ProjectionWidget", "Form"))
+
 from pyqtgraph import GraphicsView

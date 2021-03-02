@@ -63,7 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._init_ui()
 
-        self.camera_name = 'Lambda' #self._load_ui_settings()
+        self.camera_name = self._load_ui_settings()
         if self.camera_name == '' or self.camera_name is None:
             self.camera_name = self._device_list[0]
 
@@ -328,7 +328,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         """
         self._ui.actionQuit.triggered.connect(self._quit_program)
-        self._ui.actionAbout.triggered.connect(self._show_about)
+        about_action = QtWidgets.QAction('About', self)
+        about_action.triggered.connect(self._show_about)
+        self.menuBar().addAction(about_action)
 
         self._actionStartStop = QtWidgets.QAction(self)
         self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))

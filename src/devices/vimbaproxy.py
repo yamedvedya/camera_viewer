@@ -49,14 +49,14 @@ class VimbaProxy(AbstractCamera):
     def __init__(self, beamline_id, settings, log):
         super(VimbaProxy, self).__init__(beamline_id, settings, log)
 
-        self._settings_map["Gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
+        self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
         if settings.hasAttribute('high_depth'):
             self._high_depth = strtobool(settings.getAttribute("high_depth"))
         else:
             self._high_depth = False
 
         if self._high_depth:
-            valid_formats = self._device_proxy.read_attribute('PixelFormat#Values').value
+            valid_formats = self._device_proxy.read_attribute('PixelFormat_Values').value
             if "Mono12" in valid_formats:
                 settings = 'high'
                 self._depth = 16
@@ -115,7 +115,7 @@ class VimbaProxy(AbstractCamera):
     def stop_acquisition(self):
         """
         """
-        if self._device_proxy.state() == PyTango.DevState.RUNNING:
+        if self._device_proxy.state() == PyTango.DevState.MOVING:
             self._device_proxy.unsubscribe_event(self._eid)
             self._device_proxy.command_inout("StopAcquisition")
 
