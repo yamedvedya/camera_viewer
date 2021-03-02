@@ -23,10 +23,14 @@ from src.devices.abstract_camera import AbstractCamera
 class LambdaProxy(AbstractCamera):
 
     _settings_map = {
-                     'max_level_limit': (None, )
-                     }
+                     'max_level_limit': (None, ),
+                     'max_width': ('self', 'MAX_W'),
+                     'max_height': ('self', 'MAX_H')}
 
     visible_layouts = ('folder', 'source')
+
+    MAX_W = 1556
+    MAX_H = 516
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
@@ -51,7 +55,6 @@ class LambdaProxy(AbstractCamera):
 
         self.path = self._possible_folders[0]
 
-        self._picture_size = [0, 0, -1, -1]
         self._last_frame = np.zeros((1, 1))
 
         self.error_flag = False
@@ -66,8 +69,8 @@ class LambdaProxy(AbstractCamera):
             if self._device_proxy is None:
                 raise RuntimeError('No device proxy')
 
-            self._eid = self._device_proxy.subscribe_event("Image16", PyTango.EventType.DATA_READY_EVENT,
-                                                           self._on_event, [], True)
+            self._eid = self._device_proxy.subscribe_event("LiveLastImageData",
+                                                           PyTango.EventType.DATA_READY_EVENT, self._on_event)
             self._running = True
             return True
 
@@ -102,11 +105,11 @@ class LambdaProxy(AbstractCamera):
         if not event.err:
             data = event.device.read_attribute(event.attr_name.split('/')[6])
             self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
-                                                        self._picture_size[1]:self._picture_size[3]]
+                                                    self._picture_size[1]:self._picture_size[3]]
 
             self._new_frame_flag = True
         else:
-            pass
+            print('Event error!')
             # self._log.error('Tine error: {}'.format(self.error_msg))
             # self.error_flag = True
             # self.error_msg = event.errors
@@ -115,7 +118,7 @@ class LambdaProxy(AbstractCamera):
 
         self.id = ' file: {}'.format(ospath.splitext(ospath.basename(event.src_path))[0])
         self._last_frame = np.array(Image.open(event.src_path))[self._picture_size[0]:self._picture_size[2],
-                                                        self._picture_size[1]:self._picture_size[3]]
+                                                                self._picture_size[1]:self._picture_size[3]]
         self._new_frame_flag = True
 
     # ----------------------------------------------------------------------
@@ -145,6 +148,12 @@ class LambdaProxy(AbstractCamera):
             if source != '':
                 self._change_source(source)
             return self._source
+
+        if option == 'max_width':
+            return 1556
+
+        elif option == 'max_height':
+            return 516
 
         elif option == 'possible_sources':
 

@@ -176,7 +176,7 @@ class SettingsWidget(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def _reload_rois(self):
         for ind in range(self._ui.tb_rois.count())[::-1]:
-            self._delete_roi(ind)
+            self._ui.tb_rois.removeTab(ind)
 
         if len(self._camera_device.rois):
             self._ui.tb_rois.setVisible(True)
@@ -294,10 +294,18 @@ class SettingsWidget(QtWidgets.QWidget):
             gain_value = self._camera_device.get_settings('Gain', int)
             self._ui.sb_gain.setValue(gain_value)
 
-        for ui in ['view_x', 'view_y', 'view_w', 'view_h']:
+        for ui in ['view_x', 'view_y']:
             if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
                 getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
                 getattr(self._ui, 'sb_{}'.format(ui)).setValue(self._camera_device.get_settings(ui, int))
+
+        for ui in ['view_w', 'view_h']:
+            if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
+                getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
+                value = self._camera_device.get_settings(ui, int)
+                if value == 0:
+                    value = 1
+                getattr(self._ui, 'sb_{}'.format(ui)).setValue(value)
 
         self._update_picture_size_limits()
 
@@ -358,8 +366,21 @@ class SettingsWidget(QtWidgets.QWidget):
         max_w, max_h = self._camera_device.get_max_picture_size()
         view_x = min(max(self._ui.sb_view_x.value(), 0), max_w)
         view_y = min(max(self._ui.sb_view_y.value(), 0), max_h)
-        view_w = min(max(self._ui.sb_view_w.value(), 1), max_w)
-        view_h = min(max(self._ui.sb_view_h.value(), 1), max_h)
+
+        view_w = min(self._ui.sb_view_w.value(), max_w)
+        if view_w == 0:
+            view_w = 1
+            self._ui.sb_view_w.blockSignals(True)
+            self._ui.sb_view_w.setValue(view_w)
+            self._ui.sb_view_w.blockSignals(False)
+
+        view_h = min(self._ui.sb_view_h.value(), max_h)
+        if view_h == 0:
+            view_h = 1
+            self._ui.sb_view_h.blockSignals(True)
+            self._ui.sb_view_h.setValue(view_h)
+            self._ui.sb_view_h.blockSignals(False)
+
         self._ui.sb_view_x.setMaximum(max_w - view_w)
         self._ui.sb_view_y.setMaximum(max_h - view_h)
         self._ui.sb_view_w.setMaximum(max_w - view_x)

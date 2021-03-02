@@ -19,15 +19,14 @@ class DummyProxy(AbstractCamera):
 
     NOISE = 0.27
 
-    _settings_map = {}
+    _settings_map = {'max_width': ('self', 'FRAME_W'),
+                     'max_height': ('self', 'FRAME_H')}
 
     visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(DummyProxy, self).__init__(beamline_id, settings, log)
-
-        self._picture_size = [0, 0, self.FRAME_W, self.FRAME_H]
 
         x, y = np.meshgrid(np.linspace(-4, 4, self.FRAME_H),
                            np.linspace(-4, 4, self.FRAME_W))
@@ -70,7 +69,7 @@ class DummyProxy(AbstractCamera):
             if self._generate:
 
                 self._last_frame = self._data[self._picture_size[0]:self._picture_size[2],
-                                        self._picture_size[1]:self._picture_size[3]]
+                                              self._picture_size[1]:self._picture_size[3]]
                 self._new_frame_flag = True
                 # print('New frame after {}'.format(time.time() - _last_time))
                 _last_time = time.time()
@@ -117,15 +116,3 @@ class DummyProxy(AbstractCamera):
             self._fps = value
 
         super(DummyProxy, self).save_settings(option, value)
-
-    # ----------------------------------------------------------------------
-    def set_picture_clip(self, size):
-
-        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
-
-    # ----------------------------------------------------------------------
-    def get_picture_clip(self):
-
-        return [self._picture_size[0], self._picture_size[1],
-                self._picture_size[2] - self._picture_size[0],
-                self._picture_size[3] - self._picture_size[1]]

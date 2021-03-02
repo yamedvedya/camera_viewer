@@ -63,7 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._init_ui()
 
-        self.camera_name = 'Dummy' #self._load_ui_settings()
+        self.camera_name = 'Lambda' #self._load_ui_settings()
         if self.camera_name == '' or self.camera_name is None:
             self.camera_name = self._device_list[0]
 

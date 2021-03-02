@@ -51,7 +51,6 @@ class DalsaProxy(AbstractCamera):
 
         self.path = self._possible_folders[0]
 
-        self._picture_size = [0, 0, -1, -1]
         self._last_frame = np.zeros((1, 1))
 
         self.error_flag = False
@@ -104,7 +103,7 @@ class DalsaProxy(AbstractCamera):
         if not event.err:
             data = event.device.read_attribute(event.attr_name.split('/')[6])
             self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
-                                                        self._picture_size[1]:self._picture_size[3]]
+                                                    self._picture_size[1]:self._picture_size[3]]
 
             self._new_frame_flag = True
         else:
@@ -116,8 +115,9 @@ class DalsaProxy(AbstractCamera):
     def _on_created(self, event):
 
         self.id = ' file: {}'.format(ospath.splitext(ospath.basename(event.src_path))[0])
+
         self._last_frame = np.array(Image.open(event.src_path))[self._picture_size[0]:self._picture_size[2],
-                                                        self._picture_size[1]:self._picture_size[3]]
+                                                                self._picture_size[1]:self._picture_size[3]]
         self._new_frame_flag = True
 
     # ----------------------------------------------------------------------

@@ -373,7 +373,7 @@ class FrameViewer(QtWidgets.QWidget):
             if str(self._camera_device.levels['color_map']) != '':
                 colormap = self._camera_device.levels['color_map']
             else:
-                colormap = 'gray'
+                colormap = 'grey'
 
             self._ui.imageView.imageItem.setLookupTable(
                 pg.ColorMap(*zip(*Gradients[colormap.lower()]["ticks"])).getLookupTable())

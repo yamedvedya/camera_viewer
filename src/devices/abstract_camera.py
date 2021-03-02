@@ -89,6 +89,8 @@ class AbstractCamera(object):
 
         self.reduce_resolution = max(self.get_settings('Reduce', int), 1)
 
+        self._picture_size = [0, 0, -1, -1]
+
     # ----------------------------------------------------------------------
     def maybe_read_frame(self):
         """
@@ -127,6 +129,9 @@ class AbstractCamera(object):
 
                 elif self._settings_map[option][0] == 'device_proxy' and self._device_proxy is not None:
                     value = self._device_proxy.read_attribute(self._settings_map[option][1]).value
+
+                elif self._settings_map[option][0] == 'self':
+                    value = getattr(self, self._settings_map[option][1])
 
                 elif self._settings_map[option][0] is None:
                     value = None
@@ -222,11 +227,20 @@ class AbstractCamera(object):
 
     # ----------------------------------------------------------------------
     def set_picture_clip(self, size):
-        pass
+
+        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
+
+        self.save_settings('view_x', size[0])
+        self.save_settings('view_y', size[1])
+        self.save_settings('view_w', size[2])
+        self.save_settings('view_h', size[3])
 
     # ----------------------------------------------------------------------
     def get_picture_clip(self):
-        pass
+
+        return [self._picture_size[0], self._picture_size[1],
+                self._picture_size[2] - self._picture_size[0],
+                self._picture_size[3] - self._picture_size[1]]
 
     # ----------------------------------------------------------------------
     def get_reduction(self):

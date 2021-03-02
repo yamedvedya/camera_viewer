@@ -252,7 +252,7 @@
              <item row="1" column="4">
               <widget class="QSpinBox" name="sb_view_h">
                <property name="minimum">
-                <number>4</number>
+                <number>-1</number>
                </property>
                <property name="maximum">
                 <number>9999</number>
@@ -278,7 +278,7 @@
              <item row="1" column="2">
               <widget class="QSpinBox" name="sb_view_w">
                <property name="minimum">
-                <number>4</number>
+                <number>-1</number>
                </property>
                <property name="maximum">
                 <number>9999</number>
