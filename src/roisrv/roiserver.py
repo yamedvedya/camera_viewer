@@ -42,11 +42,8 @@ class RoiServer(QtCore.QObject):
 
         super(RoiServer, self).__init__()
 
-        self._rois = None
-        self._markers = None
-        self._statistics = None
+        self._camera_device = None
         self._cameras_list = None
-        self._current_roi_index = None
 
         self.log = logging.getLogger("cam_logger")
         
@@ -69,12 +66,9 @@ class RoiServer(QtCore.QObject):
                                                            self.port))
 
     # ----------------------------------------------------------------------
-    def set_variables(self, rois, markers, statistics, cameras_list, current_roi_index):
-        self._rois = rois
-        self._markers = markers
-        self._statistics = statistics
+    def set_camera_device(self, camera_device, cameras_list):
+        self._camera_device = camera_device
         self._cameras_list = cameras_list
-        self._current_roi_index = current_roi_index
 
     # ----------------------------------------------------------------------
     def start(self):

@@ -37,7 +37,26 @@ class DataSource2D(QtCore.QObject):
         self.device_id = ''
         self._base_id = ''
 
+        self.image_need_repaint = False
+        self.image_need_refresh = False
+
+        self.rois = []
+        self.rois_data = []
+        self.roi_need_update = False
+        self.roi_changed = False
+
+        self.markers = []
+        self.markers_need_update = False
+        self.markers_changed = False
+
+        self.peak_search = {}
+        self.peak_search_need_update = False
+
+        self.levels = []
         self.level_mode = 'lin'
+
+        self.auto_screen = False
+
         self._dark_image = None
         self.subtract_dark_image = False
 
@@ -74,6 +93,7 @@ class DataSource2D(QtCore.QObject):
 
         if self.level_mode != mode:
             self.level_mode = mode
+            self.save_settings('level_mode', mode)
             if self.got_first_frame:
                 self.newFrame.emit()
 
@@ -109,10 +129,14 @@ class DataSource2D(QtCore.QObject):
         """
         """
         if self._device_proxy:
+
             try:
-                self._device_proxy.start_acquisition()
-                self._state = "running"
-                return True
+                if self._device_proxy.start_acquisition():
+                    self._state = "running"
+                    return True
+                else:
+                    return False
+
             except Exception as err:
                 report_error(err, self.log, self._parent)
                 return False
@@ -150,7 +174,7 @@ class DataSource2D(QtCore.QObject):
             self._device_proxy.save_settings(setting, value)
 
     # ----------------------------------------------------------------------
-    def get_frame(self, mode="copy"):
+    def get_frame(self):
         """
         """
         if self.subtract_dark_image and self._dark_image is not None:
@@ -200,6 +224,11 @@ class DataSource2D(QtCore.QObject):
             self.newFrame.emit()
 
     # ----------------------------------------------------------------------
+    def close_camera(self):
+        if self._device_proxy is not None:
+            self._device_proxy.close_camera()
+
+    # ----------------------------------------------------------------------
     def new_device_proxy(self, name):
 
         for device in self.settings.getNodes('camera_viewer', 'camera'):
@@ -216,6 +245,62 @@ class DataSource2D(QtCore.QObject):
                     self._device_proxy = getattr(module, proxyClass)(self.parent().options.beamlineID, device, self.log)
                     self.got_first_frame = False
                     self._last_frame = np.zeros((1, 1))
+
+                    self.levels = {'auto_levels': self.get_settings('auto_levels', bool),
+                                   'level_min': self.get_settings('level_min', int),
+                                   'level_max': self.get_settings('level_max', int),
+                                   'color_map': self.get_settings('color_map', str),
+                                   'max_limit': self.get_settings('max_level_limit', int)}
+
+                    self.level_mode = self.get_settings('level_mode', str)
+                    if self.level_mode == '':
+                        self.level_mode = 'lin'
+
+                    self.image_need_repaint = True
+
+                    self.auto_screen = self.get_settings('auto_screen', bool)
+
+                    self.rois = []
+                    self.rois_data = []
+                    for ind in range(self.get_settings('num_rois', int)):
+                        self.rois.append({'x': self.get_settings('roi_{}_x'.format(ind), int),
+                                          'y': self.get_settings('roi_{}_y'.format(ind), int),
+                                          'w': self.get_settings('roi_{}_w'.format(ind), int),
+                                          'h': self.get_settings('roi_{}_h'.format(ind), int),
+                                          'bg': self.get_settings('roi_{}_bg'.format(ind), int),
+                                          'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
+                                          'mark': self.get_settings('roi_{}_mark'.format(ind), str)})
+
+                        self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
+                                                             'min_x', 'min_y', 'min_v',
+                                                             'com_x', 'com_y', 'com_v',
+                                                             'fwhm_x', 'fwhm_y', 'sum']))
+
+                    self.roi_changed = True
+                    self.roi_need_update = True
+
+                    self.markers = []
+                    for ind in range(self.get_settings('num_markers', int)):
+                        self.markers.append({'x': self.get_settings('marker_{}_x'.format(ind), int),
+                                             'y': self.get_settings('marker_{}_y'.format(ind), int),
+                                             'visible': self.get_settings('marker_{}_visible'.format(ind), bool)})
+
+                    self.markers_changed = True
+                    self.markers_need_update = True
+
+                    self.peak_search = {'search': self.get_settings('peak_search', bool),
+                                        'search_mode': self.get_settings('peak_search_mode', bool),
+                                        'rel_threshold': self.get_settings('peak_rel_threshold', int),
+                                        'abs_threshold': self.get_settings('peak_abs_threshold', int)}
+
+                    if self.peak_search['rel_threshold'] == 0:
+                        self.peak_search['rel_threshold'] = 80
+
+                    if self.peak_search['abs_threshold'] == 0:
+                        self.peak_search['abs_threshold'] = 16000
+
+                    self.peak_search_need_update = True
+
                     return True
 
                 except Exception as ex:
@@ -223,6 +308,76 @@ class DataSource2D(QtCore.QObject):
                     return False
 
         return False
+
+    # ----------------------------------------------------------------------
+    def set_peak_search_value(self, setting, value):
+        self.peak_search_need_update = True
+        self.peak_search[setting] = value
+        self.save_settings('peak_{}'.format(setting), value)
+
+    # ----------------------------------------------------------------------
+    def _save_marker_settings(self):
+        num_markers = len(self.markers)
+        self.save_settings('num_markers', num_markers)
+        for ind, marker in enumerate(self.markers):
+            for param in ['x', 'y', 'visible']:
+                self.save_settings('marker_{}_{}'.format(ind, param), marker[param])
+
+    # ----------------------------------------------------------------------
+    def set_marker_value(self, marker_id, setting, value):
+        self.markers_need_update = True
+        self.markers[marker_id][setting] = value
+        self.save_settings('marker_{}_{}'.format(marker_id, setting), value)
+
+    # ----------------------------------------------------------------------
+    def append_marker(self):
+        self.markers_changed = True
+        self.markers.append({'x': 0, 'y': 0, 'visible': True})
+        self._save_marker_settings()
+
+    # ----------------------------------------------------------------------
+    def delete_marker(self, index):
+        self.markers_changed = True
+        del self.markers[index]
+        self._save_marker_settings()
+
+    # ----------------------------------------------------------------------
+    def _save_roi_settings(self):
+        num_rois = len(self.rois)
+        self.save_settings('num_rois', num_rois)
+        for ind, roi in enumerate(self.rois):
+            for param in ['x', 'y', 'w', 'h', 'bg', 'visible', 'mark']:
+                self.save_settings('roi_{}_{}'.format(ind, param), roi[param])
+
+    # ----------------------------------------------------------------------
+    def set_roi_value(self, roi_id, setting, value):
+        self.roi_need_update = True
+        self.rois[roi_id][setting] = value
+        self.save_settings('roi_{}_{}'.format(roi_id, setting), value)
+
+    # ----------------------------------------------------------------------
+    def add_roi(self):
+        self.roi_changed = True
+        self.rois.append({'x': 0, 'y': 0, 'w': 50, 'h': 50, 'bg': 0, 'visible': True, 'mark': ''})
+        self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
+                                             'min_x', 'min_y', 'min_v',
+                                             'com_x', 'com_y', 'com_v',
+                                             'fwhm_x', 'fwhm_y', 'sum']))
+
+        self._save_roi_settings()
+
+    # ----------------------------------------------------------------------
+    def delete_roi(self, index):
+        self.roi_changed = True
+        del self.rois[index]
+        del self.rois_data[index]
+        self._save_roi_settings()
+
+    # ----------------------------------------------------------------------
+    def level_setting_change(self, setting, value):
+        self.image_need_repaint = True
+        self.levels[setting] = value
+        self.save_settings(setting, value)
 
     # ----------------------------------------------------------------------
     def is_running(self):
@@ -259,5 +414,35 @@ class DataSource2D(QtCore.QObject):
         return self._device_proxy.visible_layouts
 
     # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
-        self._device_proxy.change_picture_size(size)
+    def set_picture_clip(self, size):
+        self.image_need_refresh = True
+        self.save_settings('view_x', size[0])
+        self.save_settings('view_y', size[1])
+        self.save_settings('view_w', size[2])
+        self.save_settings('view_h', size[3])
+        self._device_proxy.set_picture_clip(size)
+
+    # ----------------------------------------------------------------------
+    def get_picture_clip(self):
+        return self._device_proxy.get_picture_clip()
+
+    # ----------------------------------------------------------------------
+    def get_max_picture_size(self):
+        return self._device_proxy.get_settings('max_width', int), self._device_proxy.get_settings('max_height', int)
+
+    # ----------------------------------------------------------------------
+    def get_device_source(self):
+        return self._device_proxy.source_mode
+
+    # ----------------------------------------------------------------------
+    def get_reduction(self):
+        return self._device_proxy.get_reduction()
+
+    # ----------------------------------------------------------------------
+    def set_reduction(self, value):
+        self._device_proxy.set_reduction(value)
+
+    # ----------------------------------------------------------------------
+    def set_auto_screen(self, state):
+        self.auto_screen = state
+        self.save_settings('auto_screen', state)

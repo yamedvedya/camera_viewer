@@ -8,6 +8,7 @@
 
 import numpy as np
 import time
+from threading import Thread
 from src.devices.abstract_camera import AbstractCamera
 
 try:
@@ -23,43 +24,18 @@ class TangoTineProxy(AbstractCamera):
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...
     #                    "ViewingMode": 1}
 
-    _settings_map = {"RoiX": ('roi_server', "roi_x"),
-                     "RoiY": ('roi_server', 'roi_y'),
-                     "RoiWidth": ('roi_server', 'roi_w'),
-                     "RoiHeight": ('roi_server', 'roi_h'),
-                     "ExposureTime": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
-                     "Gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
+    _settings_map = {
+                     "exposure": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
+                     "gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
                      'max_level_limit': (None, )
                      }
 
-    visible_layouts = ('FPS', 'Exposure')
+    visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(TangoTineProxy, self).__init__(beamline_id, settings, log)
 
-        self._init_device()
-
-        self._picture_size = []
-        self._last_frame = np.zeros((1, 1))
-
-        self.error_flag = False
-        self.error_msg = ''
-
-        self.period = 200
-        # self._last_time = time.time()
-
-        if not self._device_proxy.is_attribute_polled('Frame'):
-            self._device_proxy.poll_attribute('Frame', self.period)
-
-        self.self_period = not self._device_proxy.get_attribute_poll_period("Frame") == self.period
-
-        if self.self_period:
-            self._device_proxy.stop_poll_attribute("Frame")
-            self._device_proxy.poll_attribute('Frame', self.period)
-
-    # ----------------------------------------------------------------------
-    def _init_device(self):
         if self._settings_proxy is not None:
             att_conf_exposure = self._settings_proxy.get_attribute_config('ExposureValue.Set')
             att_conf_gain = self._settings_proxy.get_attribute_config('GainValue.Set')
@@ -74,56 +50,55 @@ class TangoTineProxy(AbstractCamera):
             self._settings_proxy.set_attribute_config(att_conf_exposure)
             self._settings_proxy.set_attribute_config(att_conf_gain)
 
+        self._last_frame = np.zeros((1, 1))
+
+        self.error_flag = False
+        self.error_msg = ''
+
+        self.period = 1/self.get_settings('FPS', int)
+
+        self._camera_read_thread = None
+        self._camera_read_thread_running = False
+
     # ----------------------------------------------------------------------
     def start_acquisition(self):
 
-        self._eid = self._device_proxy.subscribe_event("Frame", PyTango.EventType.PERIODIC_EVENT, self._readout_frame)
+        self._camera_read_thread = Thread(target=self._readout_frame)
+        self._camera_read_thread_running = True
+        self._camera_read_thread.start()
+
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
 
-        self._device_proxy.unsubscribe_event(self._eid)
-        self._log.debug("TangoTineTango Event unsubscribed")
+        if self._camera_read_thread_running:
+            self._camera_read_thread_running = False
+            self._camera_read_thread.join()
+
+        self._log.debug("TangoTineTango thread stoppped")
 
     # ----------------------------------------------------------------------
     def _readout_frame(self, event):
         """Called each time new frame is available.
         """
-        if not self._device_proxy:
-            self._log.error("TangoTineTango DeviceProxy error")
 
-        # for some reason this wants the 'short' attribute name, not the fully-qualified name
-        # we get in event.attr_name
-        data = event.device.read_attribute(event.attr_name.split('/')[6])
-        if self._picture_size:
-            self._last_frame = np.transpose(data.value)[self._picture_size[0]:self._picture_size[2],
-                                                        self._picture_size[1]:self._picture_size[3]]
-        else:
-            self._last_frame = np.transpose(data.value)
-
-        self._new_frame_flag = True
-
-        # print('New data after {}'.format(time.time() - self._last_time))
-        # self._last_time = time.time()
+        while self._camera_read_thread_running:
+            try:
+                self._last_frame = self._device_proxy.Frame
+                self._new_frame_flag = True
+                time.sleep(self.period)
+            except:
+                self._camera_read_thread_running = False
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
-        if option in ['wMax', 'hMax']:
+        if option in ['max_width', 'max_height']:
             h, w = self._device_proxy.Frame.shape
-            if option == 'wMax':
+            if option == 'max_width':
                 return w
             else:
                 return h
 
-        elif option in ['viewW', 'viewH']:
-            value = super(TangoTineProxy, self).get_settings(option, cast)
-            if value == 0:
-                if option == 'viewW':
-                    return self.get_settings('wMax', int)
-                else:
-                    return self.get_settings('hMax', int)
-            else:
-                return value
         elif option in ['ExposureTime', 'Gain']:
             if self._settings_proxy is not None:
                 try:
@@ -150,8 +125,3 @@ class TangoTineProxy(AbstractCamera):
                 self._settings_proxy.write_attribute(self._settings_map[setting][1][0], value)
         else:
             super(TangoTineProxy, self).save_settings(setting, value)
-
-    # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
-
-        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]

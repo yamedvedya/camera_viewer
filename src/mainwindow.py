@@ -68,15 +68,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.camera_name = self._device_list[0]
 
         self._camera_device = self._init_data_source()
-        self._rois = [{"Roi_Visible": False}, ]  # x, y, w, h, threshold
-        self._markers = [{}, ]
-        self._statistics = [{}, ]
-        self._current_roi_index = [0]
 
-        self._frame_viewer.set_variables(self._camera_device, self._rois, self._markers, self._statistics,
-                                         self._current_roi_index)
-        self._settings_widget.set_variables(self._camera_device, self._rois, self._markers, self._statistics,
-                                            self._current_roi_index)
+        self._frame_viewer.set_camera_device(self._camera_device)
+        self._settings_widget.set_camera_device(self._camera_device)
 
         self.change_cam(self.camera_name)
         refresh_combo_box(self._cb_cam_selector, self.camera_name)
@@ -91,8 +85,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._roi_server = RoiServer(self._settings.option("roi_server", "host"),
                                              self._settings.option("roi_server", "port"))
 
-                self._roi_server.set_variables(self._rois, self._markers, self._statistics, self._device_list,
-                                               self._current_roi_index)
+                self._roi_server.set_camera_device(self._camera_device, self._device_list)
                 self._roi_server.start()
                 self._roi_server.change_camera.connect(lambda name: self.change_cam(str(name)))
             except Exception as err:
@@ -146,21 +139,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self._addDock(SettingsWidget, "General", QtCore.Qt.RightDockWidgetArea, self._settings, self)
 
         self._frame_viewer.status_changed.connect(self._display_camera_status)
-        self._frame_viewer.roi_changed.connect(self._settings_widget.update_roi)
         self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
-        self._frame_viewer.roi_stats_ready.connect(self._settings_widget.update_roi_statistics)
-        self._frame_viewer.new_auto_levels.connect(self._settings_widget.new_auto_levels)
+        self._frame_viewer.refresh_numbers.connect(self._settings_widget.refresh_view)
 
-        self._settings_widget.marker_changed.connect(self._frame_viewer.update_marker)
-        self._settings_widget.markers_changed.connect(self._frame_viewer.markers_changed)
-        self._settings_widget.roi_changed.connect(self._frame_viewer.update_roi)
-        self._settings_widget.roi_marker_selected.connect(self._frame_viewer.roi_marker_selected)
-        self._settings_widget.enable_auto_levels.connect(self._frame_viewer.enable_auto_levels)
-        self._settings_widget.levels_changed.connect(self._frame_viewer.levels_changed)
-        self._settings_widget.color_map_changed.connect(self._frame_viewer.color_map_changed)
-        self._settings_widget.image_size_changed.connect(self._frame_viewer.move_image)
-        self._settings_widget.new_image_reduction.connect(self._frame_viewer.scale_image)
-        self._settings_widget.peak_search_modified.connect(self._frame_viewer.peak_search_modified)
+        self._settings_widget.refresh_image.connect(self._frame_viewer.refresh_image)
 
         self._init_actions()
         self._toolBar = self._init_tool_bar()
@@ -172,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._frame_viewer.stop_live_mode()
         self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
+        self._camera_device.close_camera()
 
         if self._camera_device.new_device_proxy(name) and \
                 self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked()) and \
@@ -189,6 +172,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._frame_viewer.update_camera_label()
         self._frame_viewer.start_stop_live_mode()
+        self._frame_viewer.refresh_image()
         self._refresh_title()
 
     # ----------------------------------------------------------------------
@@ -278,6 +262,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._roi_server.stop()
         self._settings_widget.close()
         self._statusTimer.stop()
+        self._camera_device.close_camera()
 
         self._save_ui_settings()
 
@@ -343,7 +328,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         """
         self._ui.actionQuit.triggered.connect(self._quit_program)
-        self._ui.actionAbout.triggered.connect(self._show_about)
+        about_action = QtWidgets.QAction('About', self)
+        about_action.triggered.connect(self._show_about)
+        self.menuBar().addAction(about_action)
 
         self._actionStartStop = QtWidgets.QAction(self)
         self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))

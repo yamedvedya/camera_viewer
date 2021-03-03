@@ -18,6 +18,7 @@ from src.mainwindow import APP_NAME
 # ----------------------------------------------------------------------
 class AbstractCamera(object):
 
+    # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(AbstractCamera, self).__init__()
 
@@ -29,6 +30,8 @@ class AbstractCamera(object):
 
         self._new_frame_flag = False
         self._eid = None
+
+        self.source_mode = None
 
         self._cid = settings.getAttribute("name")
 
@@ -86,6 +89,8 @@ class AbstractCamera(object):
 
         self.reduce_resolution = max(self.get_settings('Reduce', int), 1)
 
+        self._picture_size = [0, 0, -1, -1]
+
     # ----------------------------------------------------------------------
     def maybe_read_frame(self):
         """
@@ -125,6 +130,9 @@ class AbstractCamera(object):
                 elif self._settings_map[option][0] == 'device_proxy' and self._device_proxy is not None:
                     value = self._device_proxy.read_attribute(self._settings_map[option][1]).value
 
+                elif self._settings_map[option][0] == 'self':
+                    value = getattr(self, self._settings_map[option][1])
+
                 elif self._settings_map[option][0] is None:
                     value = None
                 else:
@@ -139,7 +147,13 @@ class AbstractCamera(object):
 
         if value is not None:
             if cast == bool:
-                return strtobool(str(value))
+                try:
+                    return strtobool(str(value))
+                except:
+                    print('Cannot convert settings {} {} to bool'.format(option, value))
+                    return False
+            elif cast == int:
+                return int(float(value))
             else:
                 return cast(value)
         else:
@@ -203,10 +217,36 @@ class AbstractCamera(object):
             return None
 
     # ----------------------------------------------------------------------
+    def close_camera(self):
+        pass
+
+    # ----------------------------------------------------------------------
     def set_counter(self, value):
         if self._roi_server is not None:
              self._roi_server.scan_parameter = str(value)
 
     # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
-        pass
+    def set_picture_clip(self, size):
+
+        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
+
+        self.save_settings('view_x', size[0])
+        self.save_settings('view_y', size[1])
+        self.save_settings('view_w', size[2])
+        self.save_settings('view_h', size[3])
+
+    # ----------------------------------------------------------------------
+    def get_picture_clip(self):
+
+        return [self._picture_size[0], self._picture_size[1],
+                self._picture_size[2] - self._picture_size[0],
+                self._picture_size[3] - self._picture_size[1]]
+
+    # ----------------------------------------------------------------------
+    def get_reduction(self):
+        return self.reduce_resolution
+
+    # ----------------------------------------------------------------------
+    def set_reduction(self, value):
+        self.save_settings('Reduce', value)
+        self.reduce_resolution = value

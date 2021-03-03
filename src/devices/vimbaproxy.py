@@ -31,32 +31,32 @@ class VimbaProxy(AbstractCamera):
     START_DELAY = 1
     STOP_DELAY = 0.5
 
-    _settings_map = {"ExposureTime": ("device_proxy", "ExposureTimeAbs"),
-                     "Gain": ["device_proxy", ""],
+    _settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
+                     "gain": ["device_proxy", ""],
                      'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
                      'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
-                     'viewX': ("device_proxy", "OffsetX"),
-                     'viewY': ("device_proxy", "OffsetY"),
-                     'viewH': ("device_proxy", "Height"),
-                     'viewW': ("device_proxy", "Width"),
-                     'wMax': ("device_proxy", "WidthMax"),
-                     'hMax': ("device_proxy", "HeightMax")
+                     'view_x': ("device_proxy", "OffsetX"),
+                     'view_y': ("device_proxy", "OffsetY"),
+                     'view_h': ("device_proxy", "Height"),
+                     'view_w': ("device_proxy", "Width"),
+                     'max_width': ("device_proxy", "WidthMax"),
+                     'max_height': ("device_proxy", "HeightMax")
                      }
 
-    visible_layouts = ('FPS', 'Exposure')
+    visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(VimbaProxy, self).__init__(beamline_id, settings, log)
 
-        self._settings_map["Gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
+        self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
         if settings.hasAttribute('high_depth'):
             self._high_depth = strtobool(settings.getAttribute("high_depth"))
         else:
             self._high_depth = False
 
         if self._high_depth:
-            valid_formats = self._device_proxy.read_attribute('PixelFormat#Values').value
+            valid_formats = self._device_proxy.read_attribute('PixelFormat_Values').value
             if "Mono12" in valid_formats:
                 settings = 'high'
                 self._depth = 16
@@ -106,14 +106,16 @@ class VimbaProxy(AbstractCamera):
 
             self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
+            return True
         else:
             self._log.warning("Camera should be in ON state (is it running already?)")
+            return False
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
         """
         """
-        if self._device_proxy.state() == PyTango.DevState.RUNNING:
+        if self._device_proxy.state() == PyTango.DevState.MOVING:
             self._device_proxy.unsubscribe_event(self._eid)
             self._device_proxy.command_inout("StopAcquisition")
 
@@ -123,11 +125,6 @@ class VimbaProxy(AbstractCamera):
     def _readout_frame(self, event):
         """Called each time new frame is available.
         """
-        if self._device_proxy is None:
-            self._log.error("VimbaTango error: no DeviceProxy")
-
-        # for some reason this wants the 'short' attribute name, not the fully-qualified name
-        # we get in event.attr_name
         if not event.err:
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])

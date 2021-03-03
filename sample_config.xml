@@ -15,6 +15,7 @@
 <!--Cameras section-->
         <camera name="Dalsa"
             proxy="DalsaProxy"
+
             folders="/gpfs/current/raw/;/gpfs/commissioning/"
     />
 </camera_viewer>

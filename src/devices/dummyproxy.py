@@ -14,18 +14,19 @@ import time
 class DummyProxy(AbstractCamera):
     """
     """
-    FRAME_W = 2500
-    FRAME_H = 2500
+    FRAME_W = 500
+    FRAME_H = 500
 
     NOISE = 0.27
 
-    _settings_map = {}
+    _settings_map = {'max_width': ('self', 'FRAME_W'),
+                     'max_height': ('self', 'FRAME_H')}
+
+    visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(DummyProxy, self).__init__(beamline_id, settings, log)
-
-        self._picture_size = [0, 0, self.FRAME_W, self.FRAME_H]
 
         x, y = np.meshgrid(np.linspace(-4, 4, self.FRAME_H),
                            np.linspace(-4, 4, self.FRAME_W))
@@ -39,40 +40,60 @@ class DummyProxy(AbstractCamera):
         self.error_flag = False
         self.error_msg = ''
 
-        self._fps = 25
+        self._fps = self.get_settings('FPS', int)
+        if self._fps == 0:
+            self._fps = 25
 
         self._generator_thread = Thread(target=self._generator)
         self._generate = False
-
+        self._run = True
         self._new_frame_thead = Thread(target=self._new_frame)
-    
+
+        self._generator_thread.start()
+        self._new_frame_thead.start()
+
+        self._generator_thread_working = True
+        self._new_frame_thead_working = True
+
+    # ----------------------------------------------------------------------
+    def close_camera(self):
+        self._run = False
+        while self._generator_thread_working or self._new_frame_thead_working:
+            time.sleep(self._fps)
+
     # ----------------------------------------------------------------------
     def _new_frame(self):
-        _last_time = time.time()
-        while self._generate:
-            time.sleep(1/self._fps)
-            self._last_frame = self._data[self._picture_size[0]:self._picture_size[2],
-                                    self._picture_size[1]:self._picture_size[3]]
-            self._new_frame_flag = True
-            # print('New frame after {}'.format(time.time() - _last_time))
+        while self._run:
             _last_time = time.time()
+            time.sleep(1 / self._fps)
+            if self._generate:
+
+                self._last_frame = self._data[self._picture_size[0]:self._picture_size[2],
+                                              self._picture_size[1]:self._picture_size[3]]
+                self._new_frame_flag = True
+                # print('New frame after {}'.format(time.time() - _last_time))
+                _last_time = time.time()
+
+        self._new_frame_thead_working = False
 
     # ----------------------------------------------------------------------
     def _generator(self):
         """
         """
-        _last_time = time.time()
-        while self._generate:
-            time.sleep(1/10)
-            nPoints = self.FRAME_W * self.FRAME_H
-            self._data = self._baseData + np.random.uniform(0.0, self.NOISE, nPoints).reshape(self.FRAME_W, self.FRAME_H)
+        while self._run:
             _last_time = time.time()
+            time.sleep(1 / 10)
+            if self._generate:
+                nPoints = self.FRAME_W * self.FRAME_H
+                self._data = self._baseData + np.random.uniform(0.0, self.NOISE, nPoints).reshape(self.FRAME_W, self.FRAME_H)
+                _last_time = time.time()
+
+        self._generator_thread_working = False
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
         self._generate = True
-        self._generator_thread.start()
-        self._new_frame_thead.start()
+        return True
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
@@ -82,11 +103,9 @@ class DummyProxy(AbstractCamera):
     def get_settings(self, option, cast):
         if option == 'FPSmax':
             return 200
-        elif option == 'FPS':
-            return self._fps
-        elif option == 'wMax':
+        elif option == 'max_width':
             return self.FRAME_W
-        elif option == 'hMax':
+        elif option == 'max_height':
             return self.FRAME_H
         else:
             return super(DummyProxy, self).get_settings(option, cast)
@@ -95,10 +114,5 @@ class DummyProxy(AbstractCamera):
     def save_settings(self, option, value):
         if option == 'FPS':
             self._fps = value
-        else:
-            super(DummyProxy, self).save_settings(option, value)
 
-    # ----------------------------------------------------------------------
-    def change_picture_size(self, size):
-
-        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
+        super(DummyProxy, self).save_settings(option, value)

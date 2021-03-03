@@ -10,9 +10,11 @@ in_dirs = ["ui"]
 out_dirs = ["src/ui_vimbacam"]
 
 ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
+                "linux": "python -m PyQt5.uic.pyuic",
                 "win32": "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyuic5.exe"}
 
-rc_compilers = {"linux2": "python -m PyQt5.uic.pyrcc",
+rc_compilers = {"linux2": "pyrcc5",
+                "linux": "pyrcc5",
                 "win32":  "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyrcc5.exe"}
 
 # ----------------------------------------------------------------------
@@ -21,12 +23,14 @@ def compile_uis(ui_compiler, rc_compiler, in_dirs, out_dirs):
     """
     for in_dir, out_dir in zip(in_dirs, out_dirs):
         for f in [f for f in os.listdir(in_dir) if os.path.isfile(os.path.join(in_dir, f))
-                                                   and os.path.splitext(f)[-1] in [".ui",
-                                                                                   ".qrc"]]:  # simplify this loop TODO
-            base, ext = os.path.splitext(f)
-            post, comp = ("_ui", ui_compiler) if ext == ".ui" else ("_rc", rc_compiler)
+                  and os.path.splitext(f)[-1] in [".ui", ".qrc"]]:
 
-            cmd = "{} {}/{} -o {}/{}{}.py".format(comp, in_dir, f, out_dir, base, post)
+            base, ext = os.path.splitext(f)
+            if ext == ".ui":
+                cmd = "{} {}/{} -o {}/{}{}.py".format(ui_compiler, in_dir, f, out_dir, base, "_ui")
+            else:
+                cmd = "{} {}/{} -o {}{}.py".format(rc_compiler, in_dir, f, base, "_rc")
+
             print(cmd)
             os.system(cmd)
 

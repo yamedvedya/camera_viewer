@@ -20,17 +20,21 @@ from PIL import Image
 from src.devices.abstract_camera import AbstractCamera
 
 # ----------------------------------------------------------------------
-class DalsaProxy(AbstractCamera):
+class LambdaProxy(AbstractCamera):
 
     _settings_map = {
-                     'max_level_limit': (None, )
-                     }
+                     'max_level_limit': (None, ),
+                     'max_width': ('self', 'MAX_W'),
+                     'max_height': ('self', 'MAX_H')}
 
     visible_layouts = ('folder', 'source')
 
+    MAX_W = 1556
+    MAX_H = 516
+
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
-        super(DalsaProxy, self).__init__(beamline_id, settings, log)
+        super(LambdaProxy, self).__init__(beamline_id, settings, log)
 
         if settings.hasAttribute('folders'):
             self._possible_folders = [item.strip() for item in settings.getAttribute("folders").split(';')]
@@ -42,7 +46,7 @@ class DalsaProxy(AbstractCamera):
         else:
             self._possible_sources = ['Event', 'Files']
 
-        self._my_event_handler = PatternMatchingEventHandler(["*.tif"], "", False, True)
+        self._my_event_handler = PatternMatchingEventHandler(["*.nxs"], "", False, True)
         self._my_event_handler.on_created = self._on_created
 
         self._my_observer = None
@@ -65,10 +69,8 @@ class DalsaProxy(AbstractCamera):
             if self._device_proxy is None:
                 raise RuntimeError('No device proxy')
 
-            self._device_proxy.write_attribute("PixelFormat", "Mono16")
-            self._device_proxy.write_attribute("ViewingMode", 2)
-            self._eid = self._device_proxy.subscribe_event("Image16", PyTango.EventType.DATA_READY_EVENT,
-                                                           self._on_event, [], True)
+            self._eid = self._device_proxy.subscribe_event("LiveLastImageData",
+                                                           PyTango.EventType.DATA_READY_EVENT, self._on_event)
             self._running = True
             return True
 
@@ -107,7 +109,7 @@ class DalsaProxy(AbstractCamera):
 
             self._new_frame_flag = True
         else:
-            pass
+            print('Event error!')
             # self._log.error('Tine error: {}'.format(self.error_msg))
             # self.error_flag = True
             # self.error_msg = event.errors
@@ -115,7 +117,6 @@ class DalsaProxy(AbstractCamera):
     def _on_created(self, event):
 
         self.id = ' file: {}'.format(ospath.splitext(ospath.basename(event.src_path))[0])
-
         self._last_frame = np.array(Image.open(event.src_path))[self._picture_size[0]:self._picture_size[2],
                                                                 self._picture_size[1]:self._picture_size[3]]
         self._new_frame_flag = True
@@ -137,16 +138,22 @@ class DalsaProxy(AbstractCamera):
     def get_settings(self, option, cast):
 
         if option == 'Path':
-            path = super(DalsaProxy, self).get_settings(option, cast)
+            path = super(LambdaProxy, self).get_settings(option, cast)
             if path != '':
                 self._set_new_path(path)
             return self.path
 
         elif option == 'Source':
-            source = super(DalsaProxy, self).get_settings(option, cast)
+            source = super(LambdaProxy, self).get_settings(option, cast)
             if source != '':
                 self._change_source(source)
             return self._source
+
+        if option == 'max_width':
+            return 1556
+
+        elif option == 'max_height':
+            return 516
 
         elif option == 'possible_sources':
 
@@ -156,7 +163,7 @@ class DalsaProxy(AbstractCamera):
             return self._possible_folders
 
         else:
-            return super(DalsaProxy, self).get_settings(option, cast)
+            return super(LambdaProxy, self).get_settings(option, cast)
 
     # ----------------------------------------------------------------------
     def save_settings(self, setting, value):
@@ -166,7 +173,7 @@ class DalsaProxy(AbstractCamera):
         elif setting == 'Source':
             self._change_source(value)
 
-        super(DalsaProxy, self).save_settings(setting, value)
+        super(LambdaProxy, self).save_settings(setting, value)
 
     # ----------------------------------------------------------------------
     def _change_source(self, source):
