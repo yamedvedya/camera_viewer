@@ -168,7 +168,7 @@ class DataSource2D(QtCore.QObject):
         if self.level_mode == 'sqrt':
             frame = np.sqrt(np.abs(frame))
         elif self.level_mode == 'log':
-            frame = np.log(np.maximum(0, frame))
+            frame = np.log(np.maximum(1, frame))
 
         if np.max(frame) == 0:
             return np.ones_like(frame)
