@@ -287,11 +287,11 @@ class SettingsWidget(QtWidgets.QWidget):
                 refresh_combo_box(self._ui.cb_counter, counter_name)
 
         if not self._ui.sb_exposure.hasFocus():
-            exposure_time = self._camera_device.get_settings('ExposureTime', int)
+            exposure_time = self._camera_device.get_settings('exposure', int)
             self._ui.sb_exposure.setValue(exposure_time)
 
         if not self._ui.sb_gain.hasFocus():
-            gain_value = self._camera_device.get_settings('Gain', int)
+            gain_value = self._camera_device.get_settings('gain', int)
             self._ui.sb_gain.setValue(gain_value)
 
         for ui in ['view_x', 'view_y']:

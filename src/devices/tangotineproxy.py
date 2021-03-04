@@ -25,8 +25,8 @@ class TangoTineProxy(AbstractCamera):
     #                    "ViewingMode": 1}
 
     _settings_map = {
-                     "exposure": ("settings_proxy", ("ExposureValue.Set", 'ExposureValue.Rdbk')),
-                     "gain": ("settings_proxy", ("GainValue.Set", 'GainValue.Rdbk')),
+                     "exposure": ("device_proxy", "Exposure"),
+                     "gain": ("device_proxy", "Gain"),
                      'max_level_limit': (None, )
                      }
 
@@ -35,20 +35,6 @@ class TangoTineProxy(AbstractCamera):
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
         super(TangoTineProxy, self).__init__(beamline_id, settings, log)
-
-        if self._settings_proxy is not None:
-            att_conf_exposure = self._settings_proxy.get_attribute_config('ExposureValue.Set')
-            att_conf_gain = self._settings_proxy.get_attribute_config('GainValue.Set')
-            exposure_max = self._settings_proxy.read_attribute('ExposureValue.Max')
-            exposure_min = self._settings_proxy.read_attribute('ExposureValue.Min')
-            gain_max = self._settings_proxy.read_attribute('GainValue.Max')
-            gain_min = self._settings_proxy.read_attribute('GainValue.Min')
-            att_conf_exposure.max_value = str(exposure_max.value)
-            att_conf_exposure.min_value = str(exposure_min.value)
-            att_conf_gain.max_value = str(gain_max.value)
-            att_conf_gain.min_value = str(gain_min.value)
-            self._settings_proxy.set_attribute_config(att_conf_exposure)
-            self._settings_proxy.set_attribute_config(att_conf_gain)
 
         self._last_frame = np.zeros((1, 1))
 
@@ -67,6 +53,7 @@ class TangoTineProxy(AbstractCamera):
         self._camera_read_thread_running = True
         self._camera_read_thread.start()
 
+        return True
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
@@ -78,7 +65,7 @@ class TangoTineProxy(AbstractCamera):
         self._log.debug("TangoTineTango thread stoppped")
 
     # ----------------------------------------------------------------------
-    def _readout_frame(self, event):
+    def _readout_frame(self):
         """Called each time new frame is available.
         """
 
@@ -99,17 +86,6 @@ class TangoTineProxy(AbstractCamera):
             else:
                 return h
 
-        elif option in ['ExposureTime', 'Gain']:
-            if self._settings_proxy is not None:
-                try:
-                    value = self._settings_proxy.read_attribute(self._settings_map[option][1][0]).value
-                except:
-                    value = self._settings_proxy.read_attribute(self._settings_map[option][1][1]).value
-                    self._settings_proxy.write_attribute(self._settings_map[option][1][0], value)
-                return cast(value)
-            else:
-                return None
-
         elif option == 'FPSmax':
             return 1000/self.period
 
@@ -117,11 +93,3 @@ class TangoTineProxy(AbstractCamera):
             return max(1, super(TangoTineProxy, self).get_settings(option, cast))
         else:
             return super(TangoTineProxy, self).get_settings(option, cast)
-
-    # ----------------------------------------------------------------------
-    def save_settings(self, setting, value):
-        if setting in ['ExposureTime', 'Gain']:
-            if self._settings_proxy is not None:
-                self._settings_proxy.write_attribute(self._settings_map[setting][1][0], value)
-        else:
-            super(TangoTineProxy, self).save_settings(setting, value)
