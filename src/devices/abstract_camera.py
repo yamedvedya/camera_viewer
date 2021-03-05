@@ -62,22 +62,6 @@ class AbstractCamera(object):
 
         if settings.hasAttribute('roi_server'):
             self._roi_server = PyTango.DeviceProxy(str(settings.getAttribute("roi_server")))
-            no_need_to_init = True
-            for prop in ['Flip_H', 'Flip_V']:
-                pr = self._roi_server.get_property(prop)
-                if strtobool(pr[prop][0]) != getattr(self, prop.lower()):
-                    no_need_to_init *= False
-                    pr[prop][0] = '{}'.format(getattr(self, prop.lower()))
-                    self._roi_server.put_property(pr)
-
-            pr = self._roi_server.get_property('Rotate_Angle')
-            if int(pr['Rotate_Angle'][0]) != self.rotate_angle:
-                no_need_to_init *= False
-                pr[prop][0] = '{}'.format(self.rotate_angle)
-                self._roi_server.put_property(pr)
-
-            if not no_need_to_init:
-                self._roi_server.init()
         else:
             self._roi_server = None
 
