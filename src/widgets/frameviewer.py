@@ -241,10 +241,10 @@ class FrameViewer(QtWidgets.QWidget):
             pos, size = rect.pos(), rect.size()
             max_w, max_h = self._last_frame.shape
 
-            self._camera_device.set_roi_value(ind, 'x', max(pos.x(), 0))
-            self._camera_device.set_roi_value(ind, 'y', max(pos.y(), 0))
-            self._camera_device.set_roi_value(ind, 'w', min(size.x(), max_w))
-            self._camera_device.set_roi_value(ind, 'h', min(size.y(), max_h))
+            self._camera_device.set_roi_value(ind, 'x', max(int(pos.x()), 0))
+            self._camera_device.set_roi_value(ind, 'y', max(int(pos.y()), 0))
+            self._camera_device.set_roi_value(ind, 'w', min(int(size.x()), max_w))
+            self._camera_device.set_roi_value(ind, 'h', min(int(size.y()), max_h))
 
             self._rois_widgets[ind][2].setPos(pos.x() + size.x(), pos.y() + size.y())
 

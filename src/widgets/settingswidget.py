@@ -97,6 +97,8 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self._ui.cb_counter.currentTextChanged.connect(lambda text: self._camera_device.set_counter(text))
 
+        self._ui.cmb_roi_as_counter.currentIndexChanged.connect(lambda ind: self._camera_device.set_counter_roi(ind))
+
         self._tangoMutex = QtCore.QMutex()
 
         self._refresh_view_timer = QtCore.QTimer(self)
@@ -166,12 +168,32 @@ class SettingsWidget(QtWidgets.QWidget):
         self._add_roi_widget(self._ui.tb_rois.count())
         self.refresh_image.emit()
 
+        self._refresh_roi_as_counter_cmb()
+        self._ui.tb_rois.setVisible(True)
+
     # ----------------------------------------------------------------------
     def _delete_roi(self, idx):
         self._ui.tb_rois.removeTab(idx)
 
         self._camera_device.delete_roi(idx)
         self.refresh_image.emit()
+
+        self._ui.tb_rois.setVisible(self._camera_device.num_roi())
+        self._refresh_roi_as_counter_cmb()
+
+    # ----------------------------------------------------------------------
+    def _refresh_roi_as_counter_cmb(self):
+        self._ui.cmb_roi_as_counter.clear()
+        if self._camera_device.num_roi():
+            self._ui.cmb_roi_as_counter.setEnabled(True)
+            for ind in range(self._camera_device.num_roi()):
+                self._ui.cmb_roi_as_counter.addItem('ROI {}'.format(ind + 1))
+            if self._camera_device.get_counter_roi() < self._camera_device.num_roi():
+                self._ui.cmb_roi_as_counter.setCurrentIndex(self._camera_device.get_counter_roi())
+            else:
+                self._ui.cmb_roi_as_counter.setCurrentIndex(self._camera_device.num_roi()-1)
+        else:
+            self._ui.cmb_roi_as_counter.setEnabled(False)
 
     # ----------------------------------------------------------------------
     def _reload_rois(self):
@@ -184,6 +206,8 @@ class SettingsWidget(QtWidgets.QWidget):
                 self._add_roi_widget(ind)
         else:
             self._ui.tb_rois.setVisible(False)
+
+        self._refresh_roi_as_counter_cmb()
 
     # ----------------------------------------------------------------------
     def _add_marker(self):
@@ -283,8 +307,10 @@ class SettingsWidget(QtWidgets.QWidget):
 
         if not self._ui.cb_counter.hasFocus():
             counter_name = self._camera_device.get_counter()
-            if counter_name is not None:
-                refresh_combo_box(self._ui.cb_counter, counter_name)
+            if counter_name == '':
+                counter_name = 'sum'
+                self._camera_device.set_counter(counter_name)
+            refresh_combo_box(self._ui.cb_counter, counter_name)
 
         if not self._ui.sb_exposure.hasFocus():
             exposure_time = self._camera_device.get_settings('exposure', int)

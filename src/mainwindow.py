@@ -64,7 +64,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._init_ui()
 
         self.camera_name = self._load_ui_settings()
-        if self.camera_name == '' or self.camera_name is None:
+        if self.camera_name == '' or self.camera_name is None or self.camera_name not in self._device_list:
             self.camera_name = self._device_list[0]
 
         self._camera_device = self._init_data_source()

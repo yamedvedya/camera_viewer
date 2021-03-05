@@ -27,7 +27,11 @@ class TangoTineProxy(AbstractCamera):
     _settings_map = {
                      "exposure": ("device_proxy", "Exposure"),
                      "gain": ("device_proxy", "Gain"),
-                     'max_level_limit': (None, )
+                     'max_level_limit': (None, ),
+                     "counter_x": ('roi_server', 'roi_x'),
+                     "counter_y": ('roi_server', 'roi_y'),
+                     "counter_w": ('roi_server', 'roi_w'),
+                     "counter_h": ('roi_server', 'roi_h'),
                      }
 
     visible_layouts = ('FPS', 'exposure')

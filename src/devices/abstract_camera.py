@@ -196,9 +196,12 @@ class AbstractCamera(object):
     # ----------------------------------------------------------------------
     def get_counter(self):
         if self._roi_server is not None:
-            return self._roi_server.scan_parameter
+            try:
+                return self._roi_server.scan_parameter
+            except:
+                return ''
         else:
-            return None
+            return ''
 
     # ----------------------------------------------------------------------
     def close_camera(self):
@@ -207,7 +210,10 @@ class AbstractCamera(object):
     # ----------------------------------------------------------------------
     def set_counter(self, value):
         if self._roi_server is not None:
-             self._roi_server.scan_parameter = str(value)
+            try:
+                self._roi_server.scan_parameter = str(value)
+            except:
+                pass
 
     # ----------------------------------------------------------------------
     def set_picture_clip(self, size):

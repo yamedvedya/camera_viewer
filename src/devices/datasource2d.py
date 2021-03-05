@@ -44,6 +44,7 @@ class DataSource2D(QtCore.QObject):
         self.rois_data = []
         self.roi_need_update = False
         self.roi_changed = False
+        self._counter_roi = 0
 
         self.markers = []
         self.markers_need_update = False
@@ -262,6 +263,9 @@ class DataSource2D(QtCore.QObject):
 
                     self.rois = []
                     self.rois_data = []
+                    self._counter_roi = self.get_settings('counter_roi', int)
+                    self._counter_param = self.get_settings('counter_roi', int)
+
                     for ind in range(self.get_settings('num_rois', int)):
                         self.rois.append({'x': self.get_settings('roi_{}_x'.format(ind), int),
                                           'y': self.get_settings('roi_{}_y'.format(ind), int),
@@ -270,6 +274,10 @@ class DataSource2D(QtCore.QObject):
                                           'bg': self.get_settings('roi_{}_bg'.format(ind), int),
                                           'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
                                           'mark': self.get_settings('roi_{}_mark'.format(ind), str)})
+
+                        if ind == self._counter_roi:
+                            for setting in ['x', 'y', 'w', 'h']:
+                                self.save_settings('counter_{}'.format(setting), self.rois[ind][setting])
 
                         self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
                                                              'min_x', 'min_y', 'min_v',
@@ -354,6 +362,25 @@ class DataSource2D(QtCore.QObject):
         self.roi_need_update = True
         self.rois[roi_id][setting] = value
         self.save_settings('roi_{}_{}'.format(roi_id, setting), value)
+
+        if roi_id == self._counter_roi:
+            if setting in ['x', 'y', 'w', 'h']:
+                self.save_settings('counter_{}'.format(setting), value)
+
+    # ----------------------------------------------------------------------
+    def num_roi(self):
+        return len(self.rois)
+
+    # ----------------------------------------------------------------------
+    def get_counter_roi(self):
+        return self._counter_roi
+
+    # ----------------------------------------------------------------------
+    def set_counter_roi(self, value):
+        self._counter_roi = value
+        self.save_settings('counter_roi', value)
+        for setting in ['x', 'y', 'w', 'h']:
+            self.save_settings('counter_{}'.format(setting), self.rois[value][setting])
 
     # ----------------------------------------------------------------------
     def add_roi(self):
