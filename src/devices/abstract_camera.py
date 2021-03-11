@@ -130,7 +130,7 @@ class AbstractCamera(object):
                 value = None
 
         if option in ['view_w', 'view_h']:
-            if value < 1:
+            if value is None or int(value) < 1:
                 if option == 'view_w':
                     return self.get_settings('max_width', int) - self.get_settings('view_x', int)
                 else:
