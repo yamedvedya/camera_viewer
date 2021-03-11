@@ -31,11 +31,7 @@ class RoiServer(QtCore.QObject):
     SOCKET_TIMEOUT = .5                            # [s]
     MAX_REQUEST_LEN = 256
     MAX_CLIENT_NUMBER = 32
-    CMD_MAP = {"get_camera_list": {'function': '_get_camera_list', "args": ''},
-               "get_sum": {'function': '_get_roi_value', 'args': 'sum'},
-               "get_fwhm": {'function': '_get_roi_value', 'args': 'fwhm'},
-               "set_camera": {'function': '_set_camera',"args": ''},
-               "get_list_of_commands": {'function': '_get_list_of_commands', "args": ''}}
+    CMD_LIST = ["get_sum",]
 
     # ----------------------------------------------------------------------
     def __init__(self, host, port):
@@ -152,44 +148,32 @@ class RoiServer(QtCore.QObject):
 
         try:
             if len(tokens)> 1:
-                response = self._makeResponse("OK", getattr(self, self.CMD_MAP[tokens[0]]['function'])(
-                    self.CMD_MAP[tokens[0]]['args'], tokens[1:]))
+                response = self._make_response("OK", getattr(self, tokens[0])(tokens[1:]))
             else:
-                response = self._makeResponse("OK", getattr(self, self.CMD_MAP[tokens[0]]['function'])(
-                    self.CMD_MAP[tokens[0]]['args'], []))
+                response = self._make_response("OK", getattr(self, tokens[0])())
 
         except Exception as err:
-            response = self._makeResponse("err", 'request unknown')
+            response = self._make_response("err", 'request unknown')
+
+        print(__file__, "response '{}'".format(response))
 
         return response
 
     # ----------------------------------------------------------------------
-    def listOfCommands(self):
-
-        commands = self.CMD_MAP.keys()
-        return commands
-
-    # ----------------------------------------------------------------------
-    def _makeResponse(self, flag, message):
+    def _make_response(self, flag, message):
         """
         """
         return "{};{}".format(flag, json.dumps(message))
 
     # ----------------------------------------------------------------------
-    def _get_camera_list(self, args, tockens):
-        return ';'.join(self._cameras_list)
+    def get_list_of_commands(self):
+
+        return self.CMD_LIST
 
     # ----------------------------------------------------------------------
-    def _set_camera(self, args, tockens):
-        self.change_camera.emit(str(tockens[0]))
+    def get_sum(self):
 
-    # ----------------------------------------------------------------------
-    def _get_roi_value(self, args, tockens):
-        return self._statistics[self._current_roi_index][args]
-
-    # ----------------------------------------------------------------------
-    def get_list_of_commands(self, args, tockens):
-        return ';'.join(self.CMD_MAP.keys())
+        return self._camera_device.get_active_roi_value('sum')
 
 # ----------------------------------------------------------------------
 class KillConnection(Exception):

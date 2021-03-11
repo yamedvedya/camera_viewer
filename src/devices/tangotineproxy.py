@@ -75,7 +75,8 @@ class TangoTineProxy(AbstractCamera):
 
         while self._camera_read_thread_running:
             try:
-                self._last_frame = self._device_proxy.Frame
+                self._last_frame = self._device_proxy.Frame[self._picture_size[0]:self._picture_size[2],
+                                                            self._picture_size[1]:self._picture_size[3]]
                 self._new_frame_flag = True
                 time.sleep(self.period)
             except:
@@ -84,7 +85,7 @@ class TangoTineProxy(AbstractCamera):
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
         if option in ['max_width', 'max_height']:
-            h, w = self._device_proxy.Frame.shape
+            w, h = self._device_proxy.Frame.shape
             if option == 'max_width':
                 return w
             else:

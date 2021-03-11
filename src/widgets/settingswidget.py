@@ -417,6 +417,7 @@ class SettingsWidget(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def _change_picture_size(self):
 
+
         self._camera_device.set_picture_clip(self._update_picture_size_limits())
         self.refresh_image.emit()
 

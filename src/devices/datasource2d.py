@@ -383,6 +383,10 @@ class DataSource2D(QtCore.QObject):
             self.save_settings('counter_{}'.format(setting), self.rois[value][setting])
 
     # ----------------------------------------------------------------------
+    def get_active_roi_value(self, value):
+        return self.rois_data[self._counter_roi][value]
+
+    # ----------------------------------------------------------------------
     def add_roi(self):
         self.roi_changed = True
         self.rois.append({'x': 0, 'y': 0, 'w': 50, 'h': 50, 'bg': 0, 'visible': True, 'mark': ''})
