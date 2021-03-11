@@ -218,7 +218,7 @@ class SettingsWidget(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def _delete_marker(self, id):
 
-        del self._camera_device.markers[id]
+        self._camera_device.delete_marker(id)
         self._update_marker_layout()
         self.refresh_image.emit()
 
