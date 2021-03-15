@@ -98,12 +98,11 @@ class VimbaProxy(AbstractCamera):
         """
         """
 
+        self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
+                                                       PyTango.EventType.DATA_READY_EVENT,
+                                                       self._readout_frame, [], True)
+
         if self._device_proxy.state() == PyTango.DevState.ON:
-
-            self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
-                                                           PyTango.EventType.DATA_READY_EVENT,
-                                                           self._readout_frame, [], True)
-
             self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
             return True
@@ -120,6 +119,10 @@ class VimbaProxy(AbstractCamera):
             self._device_proxy.command_inout("StopAcquisition")
 
             time.sleep(self.STOP_DELAY)  # ? TODO
+
+    # ----------------------------------------------------------------------
+    def is_running(self):
+        return self._device_proxy.state() == PyTango.DevState.MOVING
 
     # ----------------------------------------------------------------------
     def _readout_frame(self, event):

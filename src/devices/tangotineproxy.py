@@ -69,6 +69,10 @@ class TangoTineProxy(AbstractCamera):
         self._log.debug("TangoTineTango thread stoppped")
 
     # ----------------------------------------------------------------------
+    def is_running(self):
+        return self._camera_read_thread_running
+
+    # ----------------------------------------------------------------------
     def _readout_frame(self):
         """Called each time new frame is available.
         """

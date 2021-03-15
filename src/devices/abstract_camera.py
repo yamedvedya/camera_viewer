@@ -178,6 +178,10 @@ class AbstractCamera(object):
             self.reduce_resolution = value
 
     # ----------------------------------------------------------------------
+    def is_running(self):
+        return True
+
+    # ----------------------------------------------------------------------
     def has_motor(self):
         return self._motor_worker is not None
 

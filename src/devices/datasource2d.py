@@ -380,7 +380,8 @@ class DataSource2D(QtCore.QObject):
         self._counter_roi = value
         self.save_settings('counter_roi', value)
         for setting in ['x', 'y', 'w', 'h']:
-            self.save_settings('counter_{}'.format(setting), self.rois[value][setting])
+            if len(self.rois):
+                self.save_settings('counter_{}'.format(setting), self.rois[value][setting])
 
     # ----------------------------------------------------------------------
     def get_active_roi_value(self, value):
@@ -422,6 +423,7 @@ class DataSource2D(QtCore.QObject):
     def move_motor(self, new_state=None):
 
         self._device_proxy.move_motor(new_state)
+        pass
 
     # ----------------------------------------------------------------------
     def motor_position(self):
