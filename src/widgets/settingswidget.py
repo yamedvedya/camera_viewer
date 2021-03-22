@@ -351,12 +351,9 @@ class SettingsWidget(QtWidgets.QWidget):
         self._camera_device = camera_device
 
     # ----------------------------------------------------------------------
-    def close_camera(self, auto_screen):
+    def close_camera(self):
         if not self._first_camera:
             self.save_camera_settings()
-
-        if self._camera_device.auto_screen and auto_screen:
-            self._camera_device.move_motor(False)
 
     # ----------------------------------------------------------------------
     def set_new_camera(self, auto_screen):

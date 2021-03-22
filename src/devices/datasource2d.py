@@ -225,7 +225,10 @@ class DataSource2D(QtCore.QObject):
             self.newFrame.emit()
 
     # ----------------------------------------------------------------------
-    def close_camera(self):
+    def close_camera(self, auto_screen):
+        if self.auto_screen and auto_screen:
+            self._device_proxy.move_motor(False)
+
         if self._device_proxy is not None:
             self._device_proxy.close_camera()
 
@@ -413,7 +416,10 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def is_running(self):
-        return self._state == 'running'
+        if self._device_proxy is None:
+            return None
+        else:
+            return self._device_proxy.is_running()
 
     # ----------------------------------------------------------------------
     def has_motor(self):

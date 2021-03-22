@@ -153,8 +153,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def change_cam(self, name):
 
         self._frame_viewer.stop_live_mode()
-        self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
-        self._camera_device.close_camera()
+        self._settings_widget.close_camera()
+        self._camera_device.close_camera(self._chk_auto_screens.isChecked())
 
         if self._camera_device.new_device_proxy(name) and \
                 self._settings_widget.set_new_camera(self._chk_auto_screens.isChecked()) and \
@@ -253,7 +253,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def clean_close(self):
         """
         """
-        self._settings_widget.close_camera(self._chk_auto_screens.isChecked())
+        self._settings_widget.close_camera()
 
         self.log.info("Closing the app...")
 
@@ -262,7 +262,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._roi_server.stop()
         self._settings_widget.close()
         self._statusTimer.stop()
-        self._camera_device.close_camera()
+        self._camera_device.close_camera(self._chk_auto_screens.isChecked())
 
         self._save_ui_settings()
 
@@ -488,10 +488,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lb_resources_status.setText("| {:.2f}MB | CPU {} % |".format(mem,
                                                                            cpu))
 
-        if self._camera_device.is_running():
+        state = self._camera_device.is_running()
+        if state is None:
+            self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+            self._actionStartStop.setEnabled(False)
+        elif state:
             self._actionStartStop.setIcon(QtGui.QIcon(":/ico/stop.png"))
+            self._actionStartStop.setEnabled(True)
         else:
             self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+            self._actionStartStop.setEnabled(True)
 
         self._settings_widget.refresh_view()
 

@@ -9,10 +9,14 @@ import socket
 import errno, time
 import json
 import PyTango
+import threading
 
 from io import StringIO
+from queue import Queue, Empty
 
+REFRESH_PERIOD = 1
 
+# ----------------------------------------------------------------------
 class MotorExecutor(object):
 
     SOCKET_TIMEOUT = 3
@@ -29,11 +33,50 @@ class MotorExecutor(object):
 
         elif str(settings.getAttribute("motor_type")).lower() == 'fsbt':
             self._motor_type = 'FSBT'
-            self._fsbt_server = self.get_connection_to_fsbt(str(settings.getAttribute("motor_host")),
-                                                            int(settings.getAttribute("motor_port")))
             self._motor_name = str(settings.getAttribute("motor_name"))
+
+            self._fsbt_server = None
+            self._fsbt_host = str(settings.getAttribute("motor_host"))
+            self._fsbt_port = int(settings.getAttribute("motor_port"))
+
+            self._fsbt_worker = threading.Thread(target=self.server_connection)
+            self._fsbt_worker_status = 'running'
+            self._run_server = True
+            self._motor_position = None
+            self._move_queue = Queue()
+
+            self._fsbt_worker.start()
+
         else:
             raise RuntimeError('Unknown type of motor')
+
+    def server_connection(self):
+        if not self.get_connection_to_fsbt():
+            self._fsbt_worker_status = 'stopped'
+            return
+
+        while self._run_server:
+            try:
+                status = self.send_command_to_fsbt('status ' + self._motor_name)
+                self._motor_position = status[1][self._motor_name] == 'in'
+            except Exception as err:
+                self._log.error("Error during motor status {}...".format(err))
+                return None
+
+            try:
+                result = self.send_command_to_fsbt(self._move_queue.get(block=False))
+                if not result:
+                    self._log.error("Cannot move motor")
+
+            except Empty:
+                pass
+
+            except Exception as err:
+                pass
+
+            time.sleep(REFRESH_PERIOD)
+
+        self._fsbt_worker_status = 'stopped'
 
     # ----------------------------------------------------------------------
     def motor_position(self):
@@ -42,12 +85,7 @@ class MotorExecutor(object):
             return _currentPos[3 - self._valve_channel] == "1"
 
         elif self._motor_type == 'FSBT':
-            try:
-                status = self.send_command_to_fsbt('status ' + self._motor_name)
-                return status[1][self._motor_name] == 'in'
-            except Exception as err:
-                self._log.error("Error during motor status {}...".format(err))
-                return None
+            return self._motor_position
 
     # ----------------------------------------------------------------------
     def move_motor(self, new_state):
@@ -65,40 +103,31 @@ class MotorExecutor(object):
                 self._valve_device_proxy.write_attribute("Register0", int("".join(_currentPos), 2))
 
         elif self._motor_type == 'FSBT':
-            try:
-                status = self.send_command_to_fsbt('status ' + self._motor_name)[1][self._motor_name] == 'in'
-                if status != new_state:
-                    if new_state:
-                        result = self.send_command_to_fsbt('in {:s}'.format(self._motor_name))
-                    else:
-                        result = self.send_command_to_fsbt('out {:s}'.format(self._motor_name))
-                    if not result:
-                        self._log.error("Cannot move motor")
-            except Exception as err:
-                self._log.error("Error during motor movement {}...".format(err))
+            if self._motor_position != new_state:
+                if new_state:
+                    self._move_queue.put('in {:s}'.format(self._motor_name))
+                else:
+                    self._move_queue.put('out {:s}'.format(self._motor_name))
         else:
             raise RuntimeError('Unknown type of motor')
 
     # ----------------------------------------------------------------------
-    def get_connection_to_fsbt(self, host, port):
+    def get_connection_to_fsbt(self):
 
-        FSBTSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        FSBTSocket.settimeout(self.SOCKET_TIMEOUT)
+        self._fsbt_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._fsbt_server.settimeout(self.SOCKET_TIMEOUT)
 
         start_timeout = time.time()
         time_out = False
         is_connected = False
         while not time_out and not is_connected:
-            err = FSBTSocket.connect_ex((host, port))
+            err = self._fsbt_server.connect_ex((self._fsbt_host, self._fsbt_port))
             if err == 0 or err == errno.EISCONN:
                 is_connected = True
             if time.time() - start_timeout > self.SOCKET_TIMEOUT:
                 time_out = True
 
-        if is_connected:
-            return FSBTSocket
-        else:
-            return None
+        return is_connected
 
     # ----------------------------------------------------------------------
     def send_command_to_fsbt(self, command):
