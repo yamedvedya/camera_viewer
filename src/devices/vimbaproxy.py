@@ -139,10 +139,12 @@ class VimbaProxy(AbstractCamera):
                 # self._last_time = time.time()
 
             except Exception as err:
+                print('Vimba error: {}'.format(err))
                 self._log.error('Vimba error: {}'.format(err))
-                self.error_flag = True
-                self.error_msg = str(err)
+                # self.error_flag = True
+                # self.error_msg = str(err)
         else:
-            self._log.error('Vimba error: {}'.format(self.error_msg))
-            self.error_flag = True
-            self.error_msg = event.errors
+            print('Vimba error: {}'.format(event.errors))
+            self._log.error('Vimba error: {}'.format(event.errors))
+            # self.error_flag = True
+            # self.error_msg = event.errors
