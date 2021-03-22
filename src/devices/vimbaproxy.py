@@ -76,6 +76,7 @@ class VimbaProxy(AbstractCamera):
         self.error_flag = False
         self._last_frame = np.zeros((1, 1))
         self._last_time = time.time()
+        self._camera_was_moving = False
 
         if self._device_proxy.state() == PyTango.DevState.RUNNING:
             self._device_proxy.StopAcquisition()
@@ -106,6 +107,9 @@ class VimbaProxy(AbstractCamera):
             self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
             return True
+        elif self._device_proxy.state() == PyTango.DevState.MOVING:
+            self._camera_was_moving = True
+            return True
         else:
             self._log.warning("Camera should be in ON state (is it running already?)")
             return False
@@ -116,7 +120,8 @@ class VimbaProxy(AbstractCamera):
         """
         if self._device_proxy.state() == PyTango.DevState.MOVING:
             self._device_proxy.unsubscribe_event(self._eid)
-            self._device_proxy.command_inout("StopAcquisition")
+            if not self._camera_was_moving:
+                self._device_proxy.command_inout("StopAcquisition")
 
             time.sleep(self.STOP_DELAY)  # ? TODO
 
