@@ -317,12 +317,12 @@ class FrameViewer(QtWidgets.QWidget):
         """
         """
         if self._camera_device and not self._camera_device.is_running():
-            self._start_live_mode()
+            self.start_live_mode()
         else:
             self.stop_live_mode()
 
     # ----------------------------------------------------------------------
-    def _start_live_mode(self):
+    def start_live_mode(self):
         """
         """
         if self._camera_device:
@@ -413,6 +413,10 @@ class FrameViewer(QtWidgets.QWidget):
                 self._ui.imageView.setImage(self._last_frame, **set_kwargs)
                 self._need_to_refresh_image = False
                 self._camera_device.image_need_refresh = False
+                try:
+                    self._ui.imageView.autoRange()
+                except:
+                    pass
             else:
                 self._ui.imageView.imageItem.updateImage(self._last_frame, **update_kwargs)
                 self._camera_device.image_need_repaint = False
