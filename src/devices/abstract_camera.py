@@ -216,7 +216,8 @@ class AbstractCamera(object):
 
     # ----------------------------------------------------------------------
     def close_camera(self):
-        pass
+        if self._motor_worker is not None:
+            self._motor_worker.stop()
 
     # ----------------------------------------------------------------------
     def set_counter(self, value):

@@ -77,7 +77,7 @@ class SettingsWidget(QtWidgets.QWidget):
         self._ui.cmb_source.currentTextChanged.connect(lambda text: self._camera_device.save_settings('Source', text))
 
         self._ui.but_in_out.clicked.connect(lambda: self._camera_device.move_motor())
-        self._ui.chk_auto_screen.clicked.connect(lambda state: self._camera_device.set_auto_screen(state==2))
+        self._ui.chk_auto_screen.clicked.connect(lambda state: self._camera_device.set_auto_screen(state))
 
         self._ui.but_add_marker.clicked.connect(self._add_marker)
         self._ui.but_add_roi.clicked.connect(self._add_roi)
@@ -356,13 +356,11 @@ class SettingsWidget(QtWidgets.QWidget):
             self.save_camera_settings()
 
     # ----------------------------------------------------------------------
-    def set_new_camera(self, auto_screen):
+    def set_new_camera(self):
         if self.load_camera_settings():
             self._first_camera = False
             self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
             self._ui.gb_sardana.setVisible(self._camera_device.has_counter())
-            if self._camera_device.auto_screen and auto_screen:
-                self._camera_device.move_motor(True)
             return True
         else:
             return False

@@ -19,7 +19,7 @@ REFRESH_PERIOD = 1
 # ----------------------------------------------------------------------
 class MotorExecutor(object):
 
-    SOCKET_TIMEOUT = 3
+    SOCKET_TIMEOUT = 5
     DATA_BUFFER_SIZE = 2 ** 22
 
     def __init__(self, settings, log):
@@ -50,6 +50,7 @@ class MotorExecutor(object):
         else:
             raise RuntimeError('Unknown type of motor')
 
+    # ----------------------------------------------------------------------
     def server_connection(self):
         if not self.get_connection_to_fsbt():
             self._fsbt_worker_status = 'stopped'
@@ -61,22 +62,35 @@ class MotorExecutor(object):
                 self._motor_position = status[1][self._motor_name] == 'in'
             except Exception as err:
                 self._log.error("Error during motor status {}...".format(err))
-                return None
+                if not self.get_connection_to_fsbt():
+                    break
 
             try:
                 result = self.send_command_to_fsbt(self._move_queue.get(block=False))
-                if not result:
+                if not result[0]:
                     self._log.error("Cannot move motor")
 
             except Empty:
                 pass
 
             except Exception as err:
-                pass
+                self._log.error("Error during motor move {}...".format(err))
+                break
 
             time.sleep(REFRESH_PERIOD)
 
         self._fsbt_worker_status = 'stopped'
+
+    # ----------------------------------------------------------------------
+    def stop(self):
+        if self._motor_type == 'FSBT' and self._fsbt_worker_status != 'stopped':
+            while not self._move_queue.empty() and self._fsbt_worker_status != 'stopped':
+                print('Need to finish queue')
+                time.sleep(0.1)
+
+            self._run_server = False
+            while self._fsbt_worker_status != 'stopped':
+                time.sleep(0.1)
 
     # ----------------------------------------------------------------------
     def motor_position(self):
@@ -151,7 +165,11 @@ class MotorExecutor(object):
                 if time.time() - start_timeout > self.SOCKET_TIMEOUT:
                     time_out = True
         if not time_out:
-            return json.load(StringIO(ans))
+            try:
+                ans = json.load(StringIO(ans))
+            except Exception as err:
+                ans = None
+            return ans
         else:
             raise RuntimeError("The FSBT server does not respond")
 

@@ -233,7 +233,7 @@ class DataSource2D(QtCore.QObject):
             self._device_proxy.close_camera()
 
     # ----------------------------------------------------------------------
-    def new_device_proxy(self, name):
+    def new_device_proxy(self, name, auto_screen):
 
         for device in self.settings.getNodes('camera_viewer', 'camera'):
             if device.getAttribute('name') == name:
@@ -311,6 +311,9 @@ class DataSource2D(QtCore.QObject):
                         self.peak_search['abs_threshold'] = 16000
 
                     self.peak_search_need_update = True
+
+                    if self.auto_screen and auto_screen:
+                        self._device_proxy.move_motor(True)
 
                     return True
 
