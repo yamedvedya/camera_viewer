@@ -1,6 +1,6 @@
 <camera_viewer version="1.0">
 <!--  General section   -->
-    <roi_server enable="false" host="" port="23358"/>
+    <roi_server enable="true" host="" port="23358"/>
 
     <clip rect="5,5,2400,2400" />
 
@@ -8,14 +8,70 @@
     <roi_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255" />
     <datetime_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255,255" />
 
-    <center_search cross = '0.5' circle= '15'/>
-
     <save_folder default= "/home/p23user/Pictures/"/>
 
-<!--Cameras section-->
-        <camera name="Dalsa"
-            proxy="DalsaProxy"
+    <center_search cross = '0.2' circle= '5'/>
 
-            folders="/gpfs/current/raw/;/gpfs/commissioning/"
+<!--Cameras section-->
+    <camera name="LM04"
+            proxy="TangoTineProxy"
+            roi_server = "hasep23oh:10000/p23/lmanalysis/lm4"
+            tango_server="hasep23oh:10000/p23/tinecamera/lm4"
+            widget="CameraSettingsWidget"
+            motor_type = 'None'
+    />
+
+    <camera name="LM05"
+            proxy="TangoTineProxy"
+            tango_server="hasep23oh:10000/p23/tinecamera/lm5"
+            roi_server = "hasep23oh:10000/p23/lmanalysis/lm5"
+            widget="CameraSettingsWidget"
+            motor_type = 'FSBT'
+            motor_host = 'hasep23web'
+            motor_port = '12658'
+            motor_name = 'LM5'
+    />
+
+        <camera name="LM06"
+            proxy="TangoTineProxy"
+            tango_server="hasep23oh:10000/p23/tinecamera/lm6"
+            roi_server = "hasep23oh:10000/p23/lmanalysis/lm6"
+            widget="CameraSettingsWidget"
+            motor_type = 'FSBT'
+            motor_host = 'hasep23web'
+            motor_port = '12658'
+            motor_name = 'LM6'
+    />
+
+        <camera name="LM07"
+            proxy="TangoTineProxy"
+            tango_server="hasep23oh:10000/p23/tinecamera/lm7"
+            roi_server = "hasep23oh:10000/p23/lmanalysis/lm7"
+            widget="CameraSettingsWidget"
+            motor_type = 'FSBT'
+            motor_host = 'hasep23web'
+            motor_port = '12658'
+            motor_name = 'LM7'
+    />
+
+        <camera name="LM08"
+            proxy="TangoTineProxy"
+            tango_server="hasep23oh:10000/p23/tinecamera/lm8"
+            roi_server = "hasep23oh:10000/p23/lmanalysis/lm8"
+            widget="CameraSettingsWidget"
+            motor_type = 'FSBT'
+            motor_host = 'hasep23web'
+            motor_port = '12658'
+            motor_name = 'LM8'
+    />
+
+    <camera name="Microscope"
+            proxy="VimbaProxy"
+            tango_server="hasep23oh:10000/p23/tangovimba/micro"
+            motor_type = 'none'
+            flip_vertical="False"
+            flip_horizontal="False"
+            rotate = '0'
+            high_depth = 'True'
     />
 </camera_viewer>

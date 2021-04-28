@@ -13,7 +13,7 @@ import math
 
 import numpy as np
 import scipy.ndimage.measurements as scipymeasure
-# from skimage.feature import peak_local_max
+from skimage.feature import peak_local_max
 from src.utils.errors import report_error
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
