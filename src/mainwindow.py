@@ -171,7 +171,7 @@ class MainWindow(QtWidgets.QMainWindow):
             report_error('Cannot change camera', self.log, self, True)
 
         self._frame_viewer.update_camera_label()
-        self._frame_viewer.start_stop_live_mode()
+        self._frame_viewer.start_live_mode()
         self._frame_viewer.refresh_image()
         self._refresh_title()
 
