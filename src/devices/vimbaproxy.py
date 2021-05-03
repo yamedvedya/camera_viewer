@@ -6,12 +6,12 @@
 """
 
 import time
-
 import numpy as np
 
-from src.devices.abstract_camera import AbstractCamera
-
+from threading import Thread
 from distutils.util import strtobool
+
+from src.devices.abstract_camera import AbstractCamera
 
 try:
     import PyTango
@@ -76,7 +76,12 @@ class VimbaProxy(AbstractCamera):
         self.error_flag = False
         self._last_frame = np.zeros((1, 1))
         self._last_time = time.time()
-        self._camera_was_moving = False
+
+        self._mode = None
+        self._eid = None
+        self._frame_thread = None
+        self._frame_thread_running = False
+        self._stop_frame_thread = False
 
         if self._device_proxy.state() == PyTango.DevState.RUNNING:
             self._device_proxy.StopAcquisition()
@@ -99,16 +104,21 @@ class VimbaProxy(AbstractCamera):
         """
         """
 
-        self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
-                                                       PyTango.EventType.DATA_READY_EVENT,
-                                                       self._readout_frame, [], True)
-
         if self._device_proxy.state() == PyTango.DevState.ON:
+            self._mode = 'event'
+            self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
+                                                           PyTango.EventType.DATA_READY_EVENT,
+                                                           self._readout_frame, [], True)
+
             self._device_proxy.command_inout("StartAcquisition")
             time.sleep(self.START_DELAY)  # ? TODO
+
             return True
         elif self._device_proxy.state() == PyTango.DevState.MOVING:
-            self._camera_was_moving = True
+            self._mode = 'attribute'
+            self._frame_thread = Thread(target=self._read_frame)
+            self._frame_thread_running = True
+            self._frame_thread.start()
             return True
         else:
             self._log.warning("Camera should be in ON state (is it running already?)")
@@ -118,16 +128,37 @@ class VimbaProxy(AbstractCamera):
     def stop_acquisition(self):
         """
         """
-        if self._device_proxy.state() == PyTango.DevState.MOVING:
-            self._device_proxy.unsubscribe_event(self._eid)
-            if not self._camera_was_moving:
+        if self._mode == 'event':
+            if self._eid is not None:
+                self._device_proxy.unsubscribe_event(self._eid)
+                self._eid = None
+            if self._device_proxy.state() == PyTango.DevState.MOVING:
                 self._device_proxy.command_inout("StopAcquisition")
+        else:
+            if self._frame_thread_running:
+                self._stop_frame_thread = True
+                while self._frame_thread_running:
+                    time.sleep(0.1)
 
             time.sleep(self.STOP_DELAY)  # ? TODO
 
     # ----------------------------------------------------------------------
     def is_running(self):
         return self._device_proxy.state() == PyTango.DevState.MOVING
+
+    # ----------------------------------------------------------------------
+    def _read_frame(self):
+        sleep_time = self.get_settings('FPS', int)
+        while not self._stop_frame_thread:
+            try:
+                self._last_frame = np.transpose(getattr(self._device_proxy, "Image{:d}".format(self._depth)))
+                self._new_frame_flag = True
+            except Exception as err:
+                self._log.error('Vimba error: {}'.format(err))
+                self.error_flag = True
+                self.error_msg = str(err)
+            time.sleep(1/sleep_time)
+        self._frame_thread_running = False
 
     # ----------------------------------------------------------------------
     def _readout_frame(self, event):
@@ -137,11 +168,7 @@ class VimbaProxy(AbstractCamera):
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
                 self._last_frame = np.transpose(data.value)
-
                 self._new_frame_flag = True
-
-                # print('New data after {}'.format(time.time() - self._last_time))
-                # self._last_time = time.time()
 
             except Exception as err:
                 self._log.error('Vimba error: {}'.format(err))
@@ -151,3 +178,16 @@ class VimbaProxy(AbstractCamera):
             self._log.error('Vimba error: {}'.format(self.error_msg))
             self.error_flag = True
             self.error_msg = event.errors
+
+    # ----------------------------------------------------------------------
+    def close_camera(self):
+        super(VimbaProxy, self).close_camera()
+
+        if self._eid is not None:
+            self._device_proxy.unsubscribe_event(self._eid)
+
+        if self._frame_thread_running:
+            self._stop_frame_thread = True
+            while self._frame_thread_running:
+                time.sleep(0.1)
+
