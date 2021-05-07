@@ -29,7 +29,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tab">
       <attribute name="title">
@@ -499,6 +499,32 @@
                 <string>Save Dark Image</string>
                </property>
               </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="frame_background">
+            <layout class="QGridLayout" name="gridLayout_3">
+             <property name="margin">
+              <number>1</number>
+             </property>
+             <item row="0" column="0" colspan="2">
+              <widget class="QCheckBox" name="chk_background">
+               <property name="text">
+                <string>Substract mean background:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QLabel" name="label_6">
+               <property name="text">
+                <string>sigmas</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QDoubleSpinBox" name="dsb_sigmas"/>
              </item>
             </layout>
            </widget>

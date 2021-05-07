@@ -299,7 +299,7 @@ class DataSource2D(QtCore.QObject):
                     self.markers_changed = True
                     self.markers_need_update = True
 
-                    self.peak_search = {'search': self.get_settings('peak_search', bool),
+                    self.peak_search = {'search': False, #TODO: need solution for wrong settings!
                                         'search_mode': self.get_settings('peak_search_mode', bool),
                                         'rel_threshold': self.get_settings('peak_rel_threshold', int),
                                         'abs_threshold': self.get_settings('peak_abs_threshold', int)}

@@ -273,9 +273,8 @@ class FrameViewer(QtWidgets.QWidget):
                     coordinates = peak_local_max(self._last_frame,
                                                  threshold_rel=self._camera_device.peak_search['rel_threshold']/100)
                 else:
-                    coordinates = ()
-                    # coordinates = peak_local_max(self._last_frame,
-                    #                              threshold_abs=self._camera_device.peak_search['abs_threshold'])
+                    coordinates = peak_local_max(self._last_frame,
+                                                 threshold_abs=self._camera_device.peak_search['abs_threshold'])
 
                 if len(coordinates) > 100:
                     report_error('Too many ({}) peaks found. Show first 100. Adjust the threshold'.format(len(coordinates)),

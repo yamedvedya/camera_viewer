@@ -32,9 +32,11 @@ class TangoTineProxy(AbstractCamera):
                      "counter_y": ('roi_server', 'roi_y'),
                      "counter_w": ('roi_server', 'roi_w'),
                      "counter_h": ('roi_server', 'roi_h'),
+                     "background": ("device_proxy", "SubtractBackground"),
+                     "background_sigmas": ("device_proxy", "BackgroundSigmas"),
                      }
 
-    visible_layouts = ('FPS', 'exposure')
+    visible_layouts = ('FPS', 'exposure', 'background')
 
     # ----------------------------------------------------------------------
     def __init__(self, beamline_id, settings, log):
