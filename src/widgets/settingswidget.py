@@ -54,8 +54,6 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self._statistics_marker = 'none'
 
-        self._first_camera = True
-
         self._picture_width = None
         self._picture_height = None
 
@@ -106,6 +104,9 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self._refresh_view_timer = QtCore.QTimer(self)
         self._refresh_view_timer.timeout.connect(self._sync_settings)
+
+    # ----------------------------------------------------------------------
+    def start_settings_sync(self):
         self._refresh_view_timer.start(self.SYNC_TICK)
 
     # ----------------------------------------------------------------------
@@ -361,13 +362,11 @@ class SettingsWidget(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def close_camera(self):
-        if not self._first_camera:
-            self.save_camera_settings()
+        self.save_camera_settings()
 
     # ----------------------------------------------------------------------
     def set_new_camera(self):
         if self.load_camera_settings():
-            self._first_camera = False
             self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
             self._ui.gb_sardana.setVisible(self._camera_device.has_counter())
             return True
