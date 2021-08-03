@@ -14,6 +14,7 @@ import os
 import psutil
 import socket
 import subprocess
+import HasyUtils
 
 from functools import partial
 
@@ -55,7 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.options = options
         self._settings = XmlSettings('./config.xml')
-        self._device_list = self._parse_settings()
+        self._device_list = self._get_cameras_list()
 
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
@@ -72,7 +73,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._frame_viewer.set_camera_device(self._camera_device)
         self._settings_widget.set_camera_device(self._camera_device)
 
-        self.change_cam(self.camera_name)
+        self._start_first_camera(self.camera_name)
         refresh_combo_box(self._cb_cam_selector, self.camera_name)
 
         self._statusTimer = QtCore.QTimer(self)
@@ -95,7 +96,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
-    def _parse_settings(self):
+    def _get_cameras_list(self):
 
         cam_list = []
         for device in self._settings.getNodes('camera_viewer', 'camera'):
@@ -150,22 +151,41 @@ class MainWindow(QtWidgets.QMainWindow):
         self._init_status_bar()
 
     # ----------------------------------------------------------------------
+    def _start_new_camera(self, name):
+        return self._camera_device.new_device_proxy(name, self._chk_auto_screens.isChecked()) and \
+               self._settings_widget.set_new_camera() and \
+               self._frame_viewer.set_new_camera()
+
+    # ----------------------------------------------------------------------
+    def _start_first_camera(self, name):
+        while not self._start_new_camera(name):
+            _camera_list = self._get_cameras_list()
+            name, ok = QtWidgets.QInputDialog.getItem(self, "Select camera",
+                                                      f"Cannot start {name}!!!\n\n"
+                                                      "Check that server and camera are running and try again, or select a new one:",
+                                                      _camera_list, _camera_list.index(self.camera_name), False)
+            if not ok:
+                self._quit_program()
+
+        self._settings_widget.start_settings_sync()
+        self._frame_viewer.update_camera_label()
+        self._frame_viewer.start_live_mode()
+        self._frame_viewer.refresh_image()
+        self._refresh_title()
+
+    # ----------------------------------------------------------------------
     def change_cam(self, name):
 
         self._frame_viewer.stop_live_mode()
         self._settings_widget.close_camera()
         self._camera_device.close_camera(self._chk_auto_screens.isChecked())
 
-        if self._camera_device.new_device_proxy(name, self._chk_auto_screens.isChecked()) and \
-                self._settings_widget.set_new_camera() and \
-                self._frame_viewer.set_new_camera():
+        if self._start_new_camera(name):
             self.camera_name = name
             refresh_combo_box(self._cb_cam_selector, self.camera_name)
             self.log.info("Changing camera to {}".format(self.camera_name))
         else:
-            self._camera_device.new_device_proxy(self.camera_name, self._chk_auto_screens.isChecked())
-            self._settings_widget.set_new_camera()
-            self._frame_viewer.set_new_camera()
+            self._start_new_camera(self.camera_name)
             refresh_combo_box(self._cb_cam_selector, self.camera_name)
 
             report_error('Cannot change camera', self.log, self, True)

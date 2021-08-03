@@ -437,15 +437,24 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def motor_position(self):
 
-        return self._device_proxy.motor_position()
+        if self._device_proxy is not None:
+            return self._device_proxy.motor_position()
+
+        return None
 
     # ----------------------------------------------------------------------
     def has_counter(self):
-        return self._device_proxy.has_counter()
+        if self._device_proxy is not None:
+            return self._device_proxy.has_counter()
+
+        return False
 
     # ----------------------------------------------------------------------
     def get_counter(self):
-        return self._device_proxy.get_counter()
+        if self._device_proxy is not None:
+            return self._device_proxy.get_counter()
+
+        return ""
 
     # ----------------------------------------------------------------------
     def set_counter(self, value):
