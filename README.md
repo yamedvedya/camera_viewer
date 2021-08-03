@@ -13,6 +13,7 @@ The utility is installed @hasep23web and @hasep23sdd. You can start it by execut
 The camera configuration is stored in the config.xml
 
 ## This is example of minimum entry to add camera:
+```xml
 <camera name="LM05"
         proxy="TangoTineProxy"
         tango_server="hasep23oh:10000/hasylab/p23_lm5/output"
@@ -22,41 +23,48 @@ The camera configuration is stored in the config.xml
         proxy="VimbaProxy"
         tango_server="hasep23oh:10000/p23/tangovimba/micro"
 />
-proxy can be 'VimbaProxy" or "TangoTineProxy", "LambdaProxy"  or "DummyProxy"
+```
 
-tango_server is the image source server
+- *proxy* can be 'VimbaProxy" or "TangoTineProxy", "LambdaProxy"  or "DummyProxy"
 
-If you want a 12 bit mode of Vimba camera: high_depth="True"
+- *tango_server* is the image source server
+
+- If you want a 12 bit mode of Vimba camera: *high_depth*="True"
 
 
-In case you have an associated LMAnalysis server you can add it by:
-
+- In case you have an associated LMAnalysis server you can add it by:
+```xml
 roi_server = "hasep23oh:10000/p23/lmanalysis/lm5"
+```
 
+- In case there is an motor to insert/remove screen it can be specified by:
 
-In case there is an motor to insert/remove screen it can be specified by:
+1. For FSBT motor (you need to have FSBT valve control server running):
 
-For FSBT motor (you need to have FSBT valve control server running):
-
+```xml
 motor_type = 'FSBT'
 motor_host = 'hasep23swt01'
 motor_port = '12658'
 motor_name = 'LM5'
-For Acromag:
+```
 
+2. For Acromag:
+
+```xml
 motor_type = 'Acromag' 
 valve_tango_server = "p22/acromagxt1121/ch1.02" 
 valve_channel="2"
+```
 
+- In case of you need to flip/rotate image (in 90 deg terms):
 
-In case of you need to flip/rotate image (in 90 deg terms):
-
+```xml
 flip_vertical="True"
 flip_horizontal="True"
 rotate = '2'
+```
 
-
-Here is an example of TTGW camera, with associated settings, lmanalysis server, driven by FSBT motor which picture need to be vertically flipped:
+### Here is an example of TTGW camera, with associated settings, lmanalysis server, driven by FSBT motor which picture need to be vertically flipped:
 
 ```xml
     <camera name="LM05"
