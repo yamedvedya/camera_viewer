@@ -38,6 +38,12 @@ def compile_uis(ui_compiler, rc_compiler, in_dirs, out_dirs):
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
 
+    for out_dir in out_dirs:
+        if not os.path.exists(out_dir):
+            os.mkdir(out_dir)
+            with open(out_dir + '/__init__.py', 'w'):
+                pass
+
     print("Removing pyc files...")
 
     for out_dir in out_dirs:
