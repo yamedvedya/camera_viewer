@@ -54,8 +54,6 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self._statistics_marker = 'none'
 
-        self._first_camera = True
-
         self._picture_width = None
         self._picture_height = None
 
@@ -87,6 +85,9 @@ class SettingsWidget(QtWidgets.QWidget):
         self._ui.but_save_dark_image.clicked.connect(self._save_dark_image)
         self._ui.but_load_dark_image.clicked.connect(self._load_dark_image)
 
+        self._ui.chk_background.clicked.connect(lambda state: self._camera_device.save_settings('background', state))
+        self._ui.dsb_sigmas.valueChanged.connect(lambda value: self._camera_device.save_settings('background_sigmas', value))
+
         self._ui.chk_peak_search.clicked.connect(lambda: self._peak_search_modified('chk_peak_search'))
         self._ui.rb_abs_threshold.clicked.connect(lambda: self._peak_search_modified('mode'))
         self._ui.rb_rel_threshold.clicked.connect(lambda: self._peak_search_modified('mode'))
@@ -103,6 +104,9 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self._refresh_view_timer = QtCore.QTimer(self)
         self._refresh_view_timer.timeout.connect(self._sync_settings)
+
+    # ----------------------------------------------------------------------
+    def start_settings_sync(self):
         self._refresh_view_timer.start(self.SYNC_TICK)
 
     # ----------------------------------------------------------------------
@@ -247,7 +251,7 @@ class SettingsWidget(QtWidgets.QWidget):
 
         result = True
         try:
-            for layout in ['exposure', 'folder', 'FPS', 'source']:
+            for layout in ['exposure', 'folder', 'FPS', 'source', 'background']:
                 getattr(self._ui, 'frame_{}'.format(layout)).setVisible(layout in self._camera_device.visible_layouts())
 
             with QtCore.QMutexLocker(self._tangoMutex):
@@ -346,19 +350,23 @@ class SettingsWidget(QtWidgets.QWidget):
             self._ui.sb_FPS.setMaximum(fps_max)
             self._ui.sb_FPS.setValue(fps)
 
+        if not self._ui.chk_background.hasFocus():
+            self._ui.chk_background.setChecked(self._camera_device.get_settings('background', bool))
+
+        if not self._ui.dsb_sigmas.hasFocus():
+            self._ui.dsb_sigmas.setValue(self._camera_device.get_settings('background_sigmas', float))
+
     # ----------------------------------------------------------------------
     def set_camera_device(self, camera_device):
         self._camera_device = camera_device
 
     # ----------------------------------------------------------------------
     def close_camera(self):
-        if not self._first_camera:
-            self.save_camera_settings()
+        self.save_camera_settings()
 
     # ----------------------------------------------------------------------
     def set_new_camera(self):
         if self.load_camera_settings():
-            self._first_camera = False
             self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
             self._ui.gb_sardana.setVisible(self._camera_device.has_counter())
             return True
