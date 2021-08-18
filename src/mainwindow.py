@@ -73,7 +73,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._frame_viewer.set_camera_device(self._camera_device)
         self._settings_widget.set_camera_device(self._camera_device)
 
-        self._start_first_camera(self.camera_name)
+        if not self._start_first_camera(self.camera_name):
+            self.close()
+            return
+
         refresh_combo_box(self._cb_cam_selector, self.camera_name)
 
         self._statusTimer = QtCore.QTimer(self)
@@ -165,13 +168,15 @@ class MainWindow(QtWidgets.QMainWindow):
                                                       "Check that server and camera are running and try again, or select a new one:",
                                                       _camera_list, _camera_list.index(self.camera_name), False)
             if not ok:
-                self._quit_program()
+                return False
 
         self._settings_widget.start_settings_sync()
         self._frame_viewer.update_camera_label()
         self._frame_viewer.start_live_mode()
         self._frame_viewer.refresh_image()
         self._refresh_title()
+
+        return True
 
     # ----------------------------------------------------------------------
     def change_cam(self, name):
@@ -278,10 +283,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log.info("Closing the app...")
 
         self._frame_viewer.close()
-        if self._roi_server:
+        if hasattr(self, '_roi_server') and self._roi_server:
             self._roi_server.stop()
         self._settings_widget.close()
-        self._statusTimer.stop()
+        if hasattr(self, '_statusTimer'):
+            self._statusTimer.stop()
         self._camera_device.close_camera(self._chk_auto_screens.isChecked())
 
         self._save_ui_settings()
