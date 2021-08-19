@@ -19,12 +19,11 @@ from src.mainwindow import APP_NAME
 class AbstractCamera(object):
 
     # ----------------------------------------------------------------------
-    def __init__(self, beamline_id, settings, log):
+    def __init__(self, settings, log):
         super(AbstractCamera, self).__init__()
 
         self._settings = settings
         self._log = log
-        self._beamline_id = beamline_id
 
         self.id = ''
 
@@ -125,7 +124,7 @@ class AbstractCamera(object):
                 value = None
         else:
             try:
-                value = QtCore.QSettings(APP_NAME, self._beamline_id).value("{}/{}".format(self._cid, option))
+                value = QtCore.QSettings(APP_NAME).value("{}/{}".format(self._cid, option))
             except:
                 value = None
 
@@ -172,7 +171,7 @@ class AbstractCamera(object):
             else:
                 raise RuntimeError('Unknown setting source')
         else:
-            QtCore.QSettings(APP_NAME, self._beamline_id).setValue("{}/{}".format(self._cid, setting), value)
+            QtCore.QSettings(APP_NAME).setValue("{}/{}".format(self._cid, setting), value)
 
         if setting == 'Reduce':
             self.reduce_resolution = value

@@ -25,8 +25,8 @@ class DummyProxy(AbstractCamera):
     visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
-    def __init__(self, beamline_id, settings, log):
-        super(DummyProxy, self).__init__(beamline_id, settings, log)
+    def __init__(self, settings, log):
+        super(DummyProxy, self).__init__(settings, log)
 
         x, y = np.meshgrid(np.linspace(-4, 4, self.FRAME_H),
                            np.linspace(-4, 4, self.FRAME_W))

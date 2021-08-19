@@ -6,8 +6,8 @@ import os
 import sys
 
 # ----------------------------------------------------------------------
-in_dirs = ["ui"]
-out_dirs = ["src/ui_vimbacam"]
+in_dirs = ["src/ui"]
+out_dirs = ["src/gui"]
 
 ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
                 "linux": "python -m PyQt5.uic.pyuic",
@@ -16,6 +16,7 @@ ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
 rc_compilers = {"linux2": "pyrcc5",
                 "linux": "pyrcc5",
                 "win32":  "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyrcc5.exe"}
+
 
 # ----------------------------------------------------------------------
 def compile_uis(ui_compiler, rc_compiler, in_dirs, out_dirs):

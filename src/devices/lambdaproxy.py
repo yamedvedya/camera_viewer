@@ -33,8 +33,8 @@ class LambdaProxy(AbstractCamera):
     MAX_H = 516
 
     # ----------------------------------------------------------------------
-    def __init__(self, beamline_id, settings, log):
-        super(LambdaProxy, self).__init__(beamline_id, settings, log)
+    def __init__(self, settings, log):
+        super(LambdaProxy, self).__init__(settings, log)
 
         if settings.hasAttribute('folders'):
             self._possible_folders = [item.strip() for item in settings.getAttribute("folders").split(';')]

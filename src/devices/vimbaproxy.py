@@ -46,8 +46,8 @@ class VimbaProxy(AbstractCamera):
     visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
-    def __init__(self, beamline_id, settings, log):
-        super(VimbaProxy, self).__init__(beamline_id, settings, log)
+    def __init__(self, settings, log):
+        super(VimbaProxy, self).__init__(settings, log)
 
         self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
         if settings.hasAttribute('high_depth'):
@@ -82,9 +82,6 @@ class VimbaProxy(AbstractCamera):
         self._frame_thread = None
         self._frame_thread_running = False
         self._stop_frame_thread = False
-
-        if self._device_proxy.state() == PyTango.DevState.RUNNING:
-            self._device_proxy.StopAcquisition()
 
         for k, v in self.SERVER_SETTINGS[settings].items():
             self._device_proxy.write_attribute(k, v)

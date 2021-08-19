@@ -24,13 +24,13 @@ class DataSource2D(QtCore.QObject):
     gotError = QtCore.pyqtSignal(str)
 
     # ----------------------------------------------------------------------
-    def __init__(self, settings, parent):
+    def __init__(self, parent):
         """
         """
         super(DataSource2D, self).__init__(parent)
 
-        self.settings = settings
         self._parent = parent
+        self.settings = parent.settings
 
         self.log = logging.getLogger("cam_logger")  # is in sync with the main thread? TODO
 
@@ -235,7 +235,7 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def new_device_proxy(self, name, auto_screen):
 
-        for device in self.settings.getNodes('camera_viewer', 'camera'):
+        for device in self.settings.get_nodes('camera_viewer', 'camera'):
             if device.getAttribute('name') == name:
 
                 self.device_id = name
@@ -246,7 +246,7 @@ class DataSource2D(QtCore.QObject):
                     self.log.info("Loading device proxy {}...".format(proxyClass))
 
                     module = importlib.import_module("devices.{}".format(proxyClass.lower()))
-                    self._device_proxy = getattr(module, proxyClass)(self.parent().options.beamlineID, device, self.log)
+                    self._device_proxy = getattr(module, proxyClass)(device, self.log)
                     self.got_first_frame = False
                     self._last_frame = np.zeros((1, 1))
 
@@ -314,6 +314,9 @@ class DataSource2D(QtCore.QObject):
 
                     if self.auto_screen and auto_screen:
                         self._device_proxy.move_motor(True)
+
+                    if self._device_proxy.is_running():
+                        self.start()
 
                     return True
 

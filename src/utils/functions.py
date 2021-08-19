@@ -12,6 +12,8 @@ import datetime
 import logging
 import math
 import os
+from PyQt5 import QtWidgets, QtCore
+
 
 # ----------------------------------------------------------------------
 def roi_text(value, compact=False):
@@ -39,6 +41,7 @@ def roi_text(value, compact=False):
     value = value_bak / (math.pow(1000, cnt)) if cnt > 0 else value_bak
     return "{:.1f}{}".format(value, post[cnt])
 
+
 # ----------------------------------------------------------------------  
 def make_log_name(logfile_base, logdir):
     """Create date dependent log directory and generate unique logfile
@@ -62,6 +65,7 @@ def make_log_name(logfile_base, logdir):
 
     return file_name, target_dir
 
+
 # ---------------------------------------------------------------------- 
 def parse_log_level(level):
     """
@@ -76,6 +80,7 @@ def parse_log_level(level):
             "error": logging.ERROR,
             "critical": logging.CRITICAL
            }[level.lower()]
+
 
 # ----------------------------------------------------------------------
 def unique_name(base_name, used_names, max_trials=10e+6):
@@ -94,6 +99,7 @@ def unique_name(base_name, used_names, max_trials=10e+6):
 
     return new_name
 
+
 # ----------------------------------------------------------------------
 def refresh_combo_box(comboBox, text):
     """Auxiliary function refreshing combo box with a given text.
@@ -109,6 +115,21 @@ def refresh_combo_box(comboBox, text):
         comboBox.blockSignals(False)
         return False
 
+
+# ----------------------------------------------------------------------
+def add_dock(parent, menu, WidgetClass, label, *args, **kwargs):
+    """
+    """
+    widget = WidgetClass(*args, **kwargs)
+
+    dock = QtWidgets.QDockWidget(label)
+    dock.setObjectName("{0}Dock".format("".join(label.split())))
+    dock.setWidget(widget)
+
+    parent.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+    menu.addAction(dock.toggleViewAction())
+
+    return widget, dock
 
 # ----------------------------------------------------------------------
 def rotate(origin, point, angle):

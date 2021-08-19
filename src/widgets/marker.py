@@ -6,7 +6,7 @@
 """
 
 from PyQt5 import QtWidgets, QtCore
-from src.ui_vimbacam.Marker_ui import Ui_Marker
+from src.gui.Marker_ui import Ui_Marker
 
 # ----------------------------------------------------------------------
 class Marker(QtWidgets.QWidget):

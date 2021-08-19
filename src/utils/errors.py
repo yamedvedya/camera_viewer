@@ -13,6 +13,7 @@ import traceback
 
 from PyQt5 import QtWidgets
 
+
 # ----------------------------------------------------------------------
 def report_error(err, log=None, parent=None, simplify=False):
     """Send error message to the logging object and show user-friendly

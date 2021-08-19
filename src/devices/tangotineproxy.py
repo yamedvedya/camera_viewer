@@ -39,8 +39,8 @@ class TangoTineProxy(AbstractCamera):
     visible_layouts = ('FPS', 'exposure', 'background')
 
     # ----------------------------------------------------------------------
-    def __init__(self, beamline_id, settings, log):
-        super(TangoTineProxy, self).__init__(beamline_id, settings, log)
+    def __init__(self, settings, log):
+        super(TangoTineProxy, self).__init__(settings, log)
 
         self._last_frame = np.zeros((1, 1))
 

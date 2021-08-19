@@ -6,7 +6,7 @@
 """
 
 from PyQt5 import QtWidgets, QtCore
-from src.ui_vimbacam.ROI_ui import Ui_Roi
+from src.gui.ROI_ui import Ui_Roi
 
 # ----------------------------------------------------------------------
 class ROI(QtWidgets.QWidget):

@@ -29,8 +29,8 @@ class DalsaProxy(AbstractCamera):
     visible_layouts = ('folder', 'source')
 
     # ----------------------------------------------------------------------
-    def __init__(self, beamline_id, settings, log):
-        super(DalsaProxy, self).__init__(beamline_id, settings, log)
+    def __init__(self, settings, log):
+        super(DalsaProxy, self).__init__(settings, log)
 
         if settings.hasAttribute('folders'):
             self._possible_folders = [item.strip() for item in settings.getAttribute("folders").split(';')]

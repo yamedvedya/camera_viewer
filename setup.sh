@@ -6,8 +6,8 @@ cd $BASEDIR || exit
 export VIEWERPATH=$PWD/
 export PYTHONPATH=$PYTHONPATH:$VIEWERPATH
 
-python3 ./build.py
-python3 ./make_alias.py
+python3 .setup/build.py
+python3 .setup/make_alias.py
 chmod +x start_camera.sh
 
 cp ./sample_config.xml ./config.xml

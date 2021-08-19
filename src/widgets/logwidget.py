@@ -6,7 +6,7 @@
 """
 
 from PyQt5 import QtCore, QtWidgets, QtGui
-from src.ui_vimbacam.LogWidget_ui import Ui_LogWidget
+from src.gui.LogWidget_ui import Ui_LogWidget
 
 # ----------------------------------------------------------------------
 class LogWidget(QtWidgets.QWidget):

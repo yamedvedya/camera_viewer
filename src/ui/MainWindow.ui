@@ -22,29 +22,16 @@
      <x>0</x>
      <y>0</y>
      <width>845</width>
-     <height>20</height>
+     <height>21</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuFile">
-    <property name="title">
-     <string>File</string>
-    </property>
-    <addaction name="actionQuit"/>
-   </widget>
-   <widget class="QMenu" name="menuView">
-    <property name="title">
-     <string>View</string>
-    </property>
-   </widget>
-   <addaction name="menuFile"/>
-   <addaction name="menuView"/>
   </widget>
   <widget class="QStatusBar" name="statusbar">
    <property name="sizeGripEnabled">
     <bool>false</bool>
    </property>
   </widget>
-  <action name="actionQuit">
+  <action name="quit_action">
    <property name="text">
     <string>Quit...</string>
    </property>

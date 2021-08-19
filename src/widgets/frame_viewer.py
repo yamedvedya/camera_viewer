@@ -3,9 +3,9 @@
 # ----------------------------------------------------------------------
 
 """
+This widget displays frame, markers, rois and provide functionality to move markers, rois, as well as center search
 """
 
-import logging
 import time
 from datetime import datetime
 import json
@@ -20,18 +20,21 @@ from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
 from src.utils.functions import rotate
 
 import pyqtgraph as pg
-from pyqtgraph.graphicsItems.GradientEditorItem import Gradients
 
-from src.ui_vimbacam.FrameViewer_ui import Ui_FrameViewer
+from pyqtgraph.graphicsItems.GradientEditorItem import Gradients
+from src.widgets.base_widget import BaseWidget, APP_NAME
+from src.gui.FrameViewer_ui import Ui_FrameViewer
+
+WIDGET_NAME = 'FrameViewer'
+SAVE_STATE_UIS = ['splitter_y1', 'splitter_y2', 'splitter_x']
 
 # ----------------------------------------------------------------------
-class FrameViewer(QtWidgets.QWidget):
+class FrameViewer(BaseWidget):
     """
     """
-    status_changed = QtCore.pyqtSignal(float)
-    cursor_moved = QtCore.pyqtSignal(float, float)
-    range_changed = QtCore.pyqtSignal(float, float, float, float)
-    refresh_numbers = QtCore.pyqtSignal()
+    status_changed = QtCore.pyqtSignal(float) # signal, that reports actual FPS to status bar
+    cursor_moved = QtCore.pyqtSignal(float, float) # sends cursor coordinates to status bar
+    refresh_numbers = QtCore.pyqtSignal() #signal to settings widget to refresh statistics
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -41,28 +44,45 @@ class FrameViewer(QtWidgets.QWidget):
     LABEL_COLOR = (255, 255, 255)
 
     # ----------------------------------------------------------------------
-    def __init__(self, settings, parent):
+    def __init__(self, parent):
         """
         """
         super(FrameViewer, self).__init__(parent)
 
-        self.log = logging.getLogger("cam_logger")
+        # ----------------------------------------------------------------------
+        #                Variables
+        # ----------------------------------------------------------------------
 
-        self._settings = settings
+        self._last_frame = None # stores last read frame
 
-        self._saveDataFolder = self._settings.option("save_folder", "default")
-        self._saveImageFolder = self._settings.option("save_folder", "default")
+        self._acq_started = time.time()
+        self._fps_counter = 0
+        self._need_to_refresh_image = True
 
-        self._camera_device = None
+        self._view_rect = None
+
+        self._marker_widgets = []
+        self._rois_widgets = []
+
+        # ----------------------------------------------------------------------
+        #                UI setup
+        # ----------------------------------------------------------------------
 
         self._ui = Ui_FrameViewer()
         self._ui.setupUi(self)
 
-        self._init_ui()
+        # ----------------------------------------------------------------------
+        #                Settings
+        # ----------------------------------------------------------------------
 
-        self._peak_markers = PeakMarker()
-        self._ui.imageView.view.addItem(self._peak_markers, ignoreBounds=True)
+        self._save_data_folder = self._settings.option("save_folder", "default")
+        self._save_image_folder = self._settings.option("save_folder", "default")
 
+        # ----------------------------------------------------------------------
+        #                Center search functionality
+        # ----------------------------------------------------------------------
+
+        # context menu to perform center search
         self._action_first_point = QtWidgets.QAction('Center search start', self)
         self._action_second_point = QtWidgets.QAction('Set second point', self)
         self._action_second_point.setVisible(False)
@@ -77,62 +97,69 @@ class FrameViewer(QtWidgets.QWidget):
         self._center_search_points = [None, None]
         self._search_in_progress = False
 
-        self._is_first_frame = True  # temp TODO
-        self._last_frame = None
-
-        self.color_map_changed('grey')
-
-        self._fps = 2.0
-        self._viewRect = None
-
-        self._acq_started = None
-        self._n_frames = 0
-        self._need_to_refresh_image = True
-
-        self._marker_widgets = []
-        self._rois_widgets = []
-
+        # center search UI
         self._center_search_item = LineSegmentItem('center', float(self._settings.option("center_search", "cross")),
                                                     float(self._settings.option("center_search", "circle")))
         self._center_search_item.setVisible(False)
-        self._ui.imageView.view.addItem(self._center_search_item, ignoreBounds=True)
+        self._ui.image_view.view.addItem(self._center_search_item, ignoreBounds=True)
+
+        # ----------------------------------------------------------------------
+        #               Peak search functionality
+        # ----------------------------------------------------------------------
+
+        self._peak_markers = PeakMarker()
+        self._ui.image_view.view.addItem(self._peak_markers, ignoreBounds=True)
+
+        # ----------------------------------------------------------------------
+        #                        Ui signals
+        # ----------------------------------------------------------------------
+        self._ui.image_view.scene.sigMouseMoved.connect(self._mouse_moved)
+        self._ui.image_view.scene.sigMouseClicked.connect(self._mouse_clicked)
+        self._ui.image_view.scene.sigMouseHover.connect(self._mouse_hover)
+
+        self._ui.image_view.view.sigRangeChanged.connect(self._visible_range_changed)
+        self._ui.image_view.view.setMenuEnabled(False)
 
         self._ui.wiProfileX.cursor_moved.connect(lambda x, y: self.cursor_moved.emit(x, y))
         self._ui.wiProfileY.cursor_moved.connect(lambda x, y: self.cursor_moved.emit(x, y))
 
-        #
-        self._ui.wiProfileY.as_projection_y()
-
-        self._ui.imageView.scene.sigMouseMoved.connect(self._mouse_moved)
-        self._ui.imageView.scene.sigMouseClicked.connect(self._mouse_clicked)
-        self._ui.imageView.scene.sigMouseHover.connect(self._mouse_hover)
-
-        self._ui.imageView.view.sigRangeChanged.connect(self._visible_range_changed)
-        self._ui.imageView.view.setMenuEnabled(False)
-
-        # a few info labels
+        # ----------------------------------------------------------------------
+        #                        Labels
+        # ----------------------------------------------------------------------
         self._deviceLabel = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
         self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
         self._load_label = self._add_label("Load image", self._settings.node("camera_viewer/datetime_label"), visible=False)
 
-        self.log.info("Initialized successfully")
+        if not self.load_camera():
+            raise RuntimeError('Cannot set FrameViewer')
+
+        self._init_ui()
+
+        self._log.info("FrameView initialized successfully")
 
     # ----------------------------------------------------------------------
     def _init_ui(self):
         """
+        finalizes UI setup
         """
-        self._ui.imageView.ui.histogram.hide()
-        self._ui.imageView.ui.roiBtn.hide()
-        self._ui.imageView.ui.menuBtn.hide()
+        self._ui.image_view.ui.histogram.hide()
+        self._ui.image_view.ui.roiBtn.hide()
+        self._ui.image_view.ui.menuBtn.hide()
+        self._ui.wiProfileY.as_projection_y()
+        self.color_map_changed('grey')
         pass
 
     # ----------------------------------------------------------------------
-    def set_camera_device(self, camera_device):
-        self._camera_device = camera_device
-
+    #                        Setting and changing camera device
     # ----------------------------------------------------------------------
-    def set_new_camera(self):
+    def load_camera(self):
+        """
+        called to set new camera
+        :return: True or False - success or not
+        """
         self._need_to_refresh_image = True
+
+        # update center search with last saved for camera
         center_search = self._camera_device.get_settings('center_search', str)
         if center_search != '':
             coordinates = json.loads(center_search)
@@ -152,6 +179,8 @@ class FrameViewer(QtWidgets.QWidget):
         self._action_clear_points.setEnabled(False)
         self._center_search_item.setVisible(False)
         self._display_center_search()
+
+        # redraw everything
         self.refresh_view()
 
         return True
@@ -162,13 +191,47 @@ class FrameViewer(QtWidgets.QWidget):
         self._deviceLabel.setText(self._camera_device.device_id)
 
     # ----------------------------------------------------------------------
+    def start_stop_live_mode(self):
+        """
+        """
+        if self._camera_device and not self._camera_device.is_running():
+            self.start_live_mode()
+        else:
+            self.stop_live_mode()
+
+    # ----------------------------------------------------------------------
+    def start_live_mode(self):
+        """
+        """
+        if self._camera_device:
+            self._acq_started = time.time()
+            self._fps_counter = 0
+            self._need_to_refresh_image = True
+            self._camera_device.start()
+        else:
+            QtWidgets.QMessageBox.warning(self, "Initialization Error",
+                                      "{} not yet initialized".format(self._camera_device.device_id))
+
+    # ----------------------------------------------------------------------
+    def stop_live_mode(self):
+        """
+        """
+        if self._camera_device and self._camera_device.is_running():
+            self._camera_device.stop()
+            self._log.debug("{} stopped".format(self._camera_device.device_id))
+
+    # ----------------------------------------------------------------------
+    #                  Marker functionality
+    # ----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def markers_changed(self):
         for widget in self._marker_widgets:
             widget.delete_me()
 
         self._marker_widgets = []
         for ind, marker in enumerate(self._camera_device.markers):
-            self._marker_widgets.append(ImageMarker(marker['x'], marker['y'], self._ui.imageView))
+            self._marker_widgets.append(ImageMarker(marker['x'], marker['y'], self._ui.image_view))
 
         self._camera_device.markers_changed = False
 
@@ -181,11 +244,15 @@ class FrameViewer(QtWidgets.QWidget):
         self._camera_device.markers_need_update = False
 
     # ----------------------------------------------------------------------
+    #                  ROI functionality
+    # ----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def rois_changed(self):
         for widget, marker, label in self._rois_widgets:
-            self._ui.imageView.view.removeItem(widget)
-            self._ui.imageView.view.removeItem(marker)
-            self._ui.imageView.view.removeItem(label)
+            self._ui.image_view.view.removeItem(widget)
+            self._ui.image_view.view.removeItem(marker)
+            self._ui.image_view.view.removeItem(label)
 
         self._rois_widgets = []
         for ind, values in enumerate(self._camera_device.rois):
@@ -198,9 +265,9 @@ class FrameViewer(QtWidgets.QWidget):
 
             marker_item = LineSegmentItem('cross')
             marker_item.setVisible(values['visible'])
-            self._ui.imageView.view.addItem(marker_item, ignoreBounds=True)
+            self._ui.image_view.view.addItem(marker_item, ignoreBounds=True)
 
-            self._ui.imageView.view.addItem(widget, ignoreBounds=True)
+            self._ui.image_view.view.addItem(widget, ignoreBounds=True)
             self._rois_widgets.append([widget, marker_item,
                                        self._add_label("ROI_{}".format(ind+1),
                                                        self._settings.node("camera_viewer/roi_label"),
@@ -254,10 +321,10 @@ class FrameViewer(QtWidgets.QWidget):
     def _visible_range_changed(self, viewBox):
         """
         """
-        self._viewRect = viewBox.viewRect()
+        self._view_rect = viewBox.viewRect()
 
-        self._peak_markers.new_scale(self._viewRect.width(), self._viewRect.height())
-        self._center_search_item.new_scale(self._viewRect.width(), self._viewRect.height())
+        self._peak_markers.new_scale(self._view_rect.width(), self._view_rect.height())
+        self._center_search_item.new_scale(self._view_rect.width(), self._view_rect.height())
 
         if self._last_frame is not None:
 
@@ -278,7 +345,7 @@ class FrameViewer(QtWidgets.QWidget):
 
                 if len(coordinates) > 100:
                     report_error('Too many ({}) peaks found. Show first 100. Adjust the threshold'.format(len(coordinates)),
-                                 self.log, self, True)
+                                 self._log, self, True)
                     coordinates = coordinates[:100]
             except:
                 coordinates = ()
@@ -297,8 +364,8 @@ class FrameViewer(QtWidgets.QWidget):
             return
 
         # take into account current view range
-        x, y = self._viewRect.x(), self._viewRect.y()
-        w, h = self._viewRect.width(), self._viewRect.height()
+        x, y = self._view_rect.x(), self._view_rect.y()
+        w, h = self._view_rect.width(), self._view_rect.height()
 
         frameW, frameH = self._last_frame.shape
         x, y = int(max(0, x)), int(max(0, y))
@@ -313,41 +380,10 @@ class FrameViewer(QtWidgets.QWidget):
             self._ui.wiProfileY.range_changed(dataSlice, 0, (x, y, w, h))
 
     # ----------------------------------------------------------------------
-    def start_stop_live_mode(self):
-        """
-        """
-        if self._camera_device and not self._camera_device.is_running():
-            self.start_live_mode()
-        else:
-            self.stop_live_mode()
-
-    # ----------------------------------------------------------------------
-    def start_live_mode(self):
-        """
-        """
-        if self._camera_device:
-            self._is_first_frame = True  # TMP TODO
-            self._acq_started = time.time()
-            self._n_frames = 0
-            self._need_to_refresh_image = True
-            self._camera_device.start()
-        else:
-            QtWidgets.QMessageBox.warning(self, "Initialization Error",
-                                      "{} not yet initialized".format(self._camera_device.device_id))
-
-    # ----------------------------------------------------------------------
-    def stop_live_mode(self):
-        """
-        """
-        if self._camera_device and self._camera_device.is_running():
-            self._camera_device.stop()
-            self.log.debug("{} stopped".format(self._camera_device.device_id))
-
-    # ----------------------------------------------------------------------
     def close(self):
         """
         """
-        self.log.debug("Closing FrameViewer")
+        self._log.debug("Closing FrameViewer")
 
         if self._camera_device and self._camera_device.is_running():
             self._camera_device.stop()
@@ -374,7 +410,7 @@ class FrameViewer(QtWidgets.QWidget):
             else:
                 colormap = 'grey'
 
-            self._ui.imageView.imageItem.setLookupTable(
+            self._ui.image_view.imageItem.setLookupTable(
                 pg.ColorMap(*zip(*Gradients[colormap.lower()]["ticks"])).getLookupTable())
 
             self.refresh_view()
@@ -410,19 +446,19 @@ class FrameViewer(QtWidgets.QWidget):
                 update_kwargs = {'levels': (self._camera_device.levels['level_min'], self._camera_device.levels['level_max'])}
 
             if self._need_to_refresh_image:
-                self._ui.imageView.setImage(self._last_frame, **set_kwargs)
+                self._ui.image_view.setImage(self._last_frame, **set_kwargs)
                 self._need_to_refresh_image = False
                 self._camera_device.image_need_refresh = False
                 try:
-                    self._ui.imageView.autoRange()
+                    self._ui.image_view.autoRange()
                 except:
                     pass
             else:
-                self._ui.imageView.imageItem.updateImage(self._last_frame, **update_kwargs)
+                self._ui.image_view.imageItem.updateImage(self._last_frame, **update_kwargs)
                 self._camera_device.image_need_repaint = False
 
-            self._peak_markers.new_scale(self._viewRect.width(), self._viewRect.height())
-            self._center_search_item.new_scale(self._viewRect.width(), self._viewRect.height())
+            self._peak_markers.new_scale(self._view_rect.width(), self._view_rect.height())
+            self._center_search_item.new_scale(self._view_rect.width(), self._view_rect.height())
 
             self._show_labels()
             self._calculate_statistics()
@@ -432,15 +468,15 @@ class FrameViewer(QtWidgets.QWidget):
 
             self.update_camera_label()
 
-            self._n_frames += 1
+            self._fps_counter += 1
             if time.time() - self._acq_started > 1:
-                self.status_changed.emit(self._n_frames)
-                self._n_frames = 0
+                self.status_changed.emit(self._fps_counter)
+                self._fps_counter = 0
                 self._acq_started = time.time()
 
             if self._camera_device.levels['auto_levels']:
-                self._camera_device.level_setting_change('level_min', int(self._ui.imageView.levelMin))
-                self._camera_device.level_setting_change('level_max', int(self._ui.imageView.levelMax))
+                self._camera_device.level_setting_change('level_min', int(self._ui.image_view.levelMin))
+                self._camera_device.level_setting_change('level_max', int(self._ui.image_view.levelMax))
 
         except Exception as err:
             print('Error during refresh view: {}'.format(err))
@@ -551,7 +587,7 @@ class FrameViewer(QtWidgets.QWidget):
     def _mouse_moved(self, pos):
         """
         """
-        pos = self._ui.imageView.view.mapSceneToView(pos)
+        pos = self._ui.image_view.view.mapSceneToView(pos)
         self.cursor_moved.emit(pos.x(), pos.y())
         if self._search_in_progress:
             self._center_search_points[1] = pos
@@ -563,7 +599,7 @@ class FrameViewer(QtWidgets.QWidget):
         """
         if event.double():
             try:
-                self._ui.imageView.autoRange()
+                self._ui.image_view.autoRange()
             except:
                 pass
 
@@ -572,13 +608,13 @@ class FrameViewer(QtWidgets.QWidget):
             action = self._context_menu.exec_(event._screenPos)
 
             if action == self._action_first_point:
-                self._center_search_points[0] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+                self._center_search_points[0] = self._ui.image_view.view.mapSceneToView(event.scenePos())
                 self._search_in_progress = True
                 self._action_second_point.setVisible(True)
                 self._action_clear_points.setEnabled(True)
                 self._center_search_item.setVisible(True)
             elif action == self._action_second_point:
-                self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+                self._center_search_points[1] = self._ui.image_view.view.mapSceneToView(event.scenePos())
                 self._action_second_point.setVisible(False)
                 self._search_in_progress = False
                 self._save_center_search()
@@ -592,7 +628,7 @@ class FrameViewer(QtWidgets.QWidget):
                 self._save_center_search()
 
         elif event.button() == 1 and self._search_in_progress:
-            self._center_search_points[1] = self._ui.imageView.view.mapSceneToView(event.scenePos())
+            self._center_search_points[1] = self._ui.image_view.view.mapSceneToView(event.scenePos())
             self._action_second_point.setVisible(False)
             self._search_in_progress = False
             self._save_center_search()
@@ -638,7 +674,7 @@ class FrameViewer(QtWidgets.QWidget):
         item.setFont(font)
         item.setVisible(visible)
 
-        self._ui.imageView.view.addItem(item, ignoreBounds=True)
+        self._ui.image_view.view.addItem(item, ignoreBounds=True)
 
         return item
 
@@ -648,7 +684,7 @@ class FrameViewer(QtWidgets.QWidget):
         Args:
             x, y (float), normalized to 0-1 range position
         """
-        [[xMin, xMax], [yMin, yMax]] = self._ui.imageView.view.viewRange()
+        [[xMin, xMax], [yMin, yMax]] = self._ui.image_view.view.viewRange()
 
         deltaX = abs(xMax - xMin)
         textX = xMax - deltaX * (1. - x)
@@ -666,7 +702,7 @@ class FrameViewer(QtWidgets.QWidget):
 
         fileName = self._get_image_file_name("Save Image")
         if fileName:
-            pixmap = QtGui.QScreen.grabWidget(self._ui.imageView)
+            pixmap = QtGui.QScreen.grabWidget(self._ui.image_view)
             pixmap.save(fileName)
 
     # ----------------------------------------------------------------------
@@ -680,12 +716,12 @@ class FrameViewer(QtWidgets.QWidget):
         defaultName = "data_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
                                           fmt)
 
-        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save To File", self._saveDataFolder + defaultName,
-                                                      filter=(self.tr("Ascii Files (*.csv)")
+        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save To File", self._save_data_folder + defaultName,
+                                                             filter=(self.tr("Ascii Files (*.csv)")
                                                               if fmt == "csv" else
                                                               self.tr("Numpy Files (*.npy)")))
 
-        self._saveDataFolder = QtCore.QFileInfo(fileTuple).path() + '/'
+        self._save_data_folder = QtCore.QFileInfo(fileTuple).path() + '/'
 
         fileName = str(fileTuple)
         fileName = fileName.strip()
@@ -712,7 +748,7 @@ class FrameViewer(QtWidgets.QWidget):
             self._printPainter = QtGui.QPainter(self._printer)
             self._printPainter.setRenderHint(QtGui.QPainter.Antialiasing)
 
-            self._ui.imageView.view.render(self._printPainter)
+            self._ui.image_view.view.render(self._printPainter)
 
     # ---------------------------------------------------------------------- 
     def to_clipboard(self):
@@ -720,7 +756,7 @@ class FrameViewer(QtWidgets.QWidget):
         """
         self.stop_live_mode()
 
-        pixmap = QtGui.QScreen.grabWidget(self._ui.imageView)
+        pixmap = QtGui.QScreen.grabWidget(self._ui.image_view)
         QtWidgets.qApp.clipboard().setPixmap(pixmap)
 
     # ----------------------------------------------------------------------
@@ -732,55 +768,18 @@ class FrameViewer(QtWidgets.QWidget):
 
         defaultName = "image_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
                                            self.DEFAULT_IMAGE_EXT)
-        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, title, self._saveImageFolder + defaultName,
-                                                      filesFilter)
+        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, title, self._save_image_folder + defaultName,
+                                                             filesFilter)
 
-        self._saveImageFolder = QtCore.QFileInfo(fileTuple).path() + '/'
+        self._save_image_folder = QtCore.QFileInfo(fileTuple).path() + '/'
 
         return str(fileTuple)
-
-    # ----------------------------------------------------------------------
-    def save_ui_settings(self, settings):
-        """
-        Args:
-            (QSettings)
-        """
-        settings.setValue("FrameViewer/splitterY1", self._ui.splitter_y1.saveState())
-        settings.setValue("FrameViewer/splitterY2", self._ui.splitter_y2.saveState())
-        settings.setValue("FrameViewer/splitterX", self._ui.splitter_x.saveState())
-
-        settings.setValue("FrameViewer/geometry", self.saveGeometry())
-
-    # ----------------------------------------------------------------------
-    def load_ui_settings(self, settings):
-        """
-        Args:
-            (QSettings)
-        """
-        try:
-            self._ui.splitter_y1.restoreState(settings.value("FrameViewer/splitterY1"))
-        except:
-            pass
-
-        try:
-            self._ui.splitter_y2.restoreState(settings.value("FrameViewer/splitterY2"))
-        except:
-            pass
-
-        try:
-            self._ui.splitter_x.restoreState(settings.value("FrameViewer/splitterX"))
-        except:
-            pass
-
-        try:
-            self.restoreGeometry(settings.value("FrameViewer/geometry"))
-        except:
-            pass
 
     # ----------------------------------------------------------------------
     def color_map_changed(self, selected_map):
 
         self.refresh_view()
+
 
 # ----------------------------------------------------------------------
 class ImageMarker(object):
@@ -788,16 +787,16 @@ class ImageMarker(object):
     """
 
     # ----------------------------------------------------------------------
-    def __init__(self, x, y, imageView):
+    def __init__(self, x, y, image_view):
         super(ImageMarker, self).__init__()
 
-        self.imageView = imageView
+        self.image_view = image_view
 
         self._markerV = pg.InfiniteLine(pos=x)
-        self.imageView.addItem(self._markerV, ignoreBounds=True)
+        self.image_view.addItem(self._markerV, ignoreBounds=True)
 
         self._markerH = pg.InfiniteLine(pos=y, angle=0)
-        self.imageView.addItem(self._markerH, ignoreBounds=True)
+        self.image_view.addItem(self._markerH, ignoreBounds=True)
 
     # ----------------------------------------------------------------------
     def setPos(self, x, y):
@@ -827,8 +826,8 @@ class ImageMarker(object):
 
     # ----------------------------------------------------------------------
     def delete_me(self):
-        self.imageView.removeItem(self._markerH)
-        self.imageView.removeItem(self._markerV)
+        self.image_view.removeItem(self._markerH)
+        self.image_view.removeItem(self._markerV)
 
 
 # ----------------------------------------------------------------------

@@ -17,7 +17,7 @@ import logging
 import socket
 
 from queue import Queue
-from src.utils.propagatingThread import ExcThread
+from src.utils.propagating_thread import ExcThread
 
 from PyQt5 import QtCore
 

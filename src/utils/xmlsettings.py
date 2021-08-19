@@ -32,7 +32,7 @@ class XmlSettings(object):
             return node.getAttribute(attribute)
 
     # ----------------------------------------------------------------------
-    def getNodes(self, nodePath, nodeName):
+    def get_nodes(self, nodePath, nodeName):
         """
         """
         with open(self.fileName, "r") as inFile:
@@ -58,7 +58,7 @@ class XmlSettings(object):
             return node.getElementsByTagName(path[-1])[0]           # returns first matching node always...
 
     # ----------------------------------------------------------------------
-    def hasattr(self, nodePath):
+    def has_node(self, nodePath):
         try:
             self.node(nodePath)
             return True
