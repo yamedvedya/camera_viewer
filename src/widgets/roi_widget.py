@@ -40,6 +40,8 @@ class ROI(QtWidgets.QWidget):
         self._ui.sb_roi_w.valueChanged.connect(lambda value: self.save_value('w', value))
         self._ui.sb_roi_h.valueChanged.connect(lambda value: self.save_value('h', value))
 
+        self._ui.but_color.clicked.connect(self._pick_my_color)
+
     # ----------------------------------------------------------------------
     def _block_signals(self, flag):
 
@@ -84,7 +86,19 @@ class ROI(QtWidgets.QWidget):
             getattr(self._ui, 'chk_show_{}'.format(ui)).setChecked(self.camera_device.rois[self.my_id]['mark'] == ui)
 
         self._ui.chb_roi_enable.setChecked(self.camera_device.rois[self.my_id]['visible'])
+
+        self._ui.but_color.setStyleSheet("QPushButton {background-color: " +
+                                         f"{self.camera_device.rois[self.my_id]['color']}" + ";}")
+
         self._block_signals(False)
+
+    # ----------------------------------------------------------------------
+    def _pick_my_color(self):
+        color = QtWidgets.QColorDialog.getColor()
+
+        if color.isValid():
+            self.camera_device.set_roi_value(self.my_id, 'color', color.name())
+            self.refresh_image.emit()
 
     # ----------------------------------------------------------------------
     def _enable_me(self, state):

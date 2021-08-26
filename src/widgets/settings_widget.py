@@ -11,10 +11,13 @@ except ImportError:
     pass
 
 from PyQt5 import QtCore, QtWidgets
+from distutils.util import strtobool
 import subprocess
 
+import pyqtgraph as pg
+
 from src.utils.errors import report_error
-from src.widgets.base_widget import BaseWidget
+from src.widgets.base_widget import BaseWidget, APP_NAME
 from src.gui.SettingsWidget_ui import Ui_SettingsWidget
 
 from src.utils.functions import refresh_combo_box
@@ -39,6 +42,15 @@ class SettingsWidget(BaseWidget):
         self._ui = Ui_SettingsWidget()
         self._ui.setupUi(self)
 
+        self.hist = pg.HistogramLUTWidget(self, orientation='horizontal')
+        self.hist.setBackground('w')
+        self._ui.vl_levels.addWidget(self.hist, 1)
+
+        self.hist.scene().sigMouseClicked.connect(self._hist_mouse_clicked)
+        self.hist.item.sigLevelsChanged.connect(self._switch_off_auto_levels)
+        self.hist.item.sigLookupTableChanged.connect(self.new_color_map)
+        self.hist.items()[-1].setMenuEnabled(False) # TODO better way
+
         self._tangoMutex = QtCore.QMutex()
         self._load_camera_settings()
 
@@ -56,7 +68,6 @@ class SettingsWidget(BaseWidget):
                                                       self.level_settings_changed('auto_levels', state == 2))
         self._ui.sb_max_level.valueChanged.connect(lambda value: self.level_settings_changed('level_max', value))
         self._ui.sb_min_level.valueChanged.connect(lambda value: self.level_settings_changed('level_min', value))
-        self._ui.cb_color_map.currentTextChanged.connect(lambda text: self.level_settings_changed('color_map', text))
         self._ui.bg_level.buttonToggled.connect((lambda button: self._new_level_mode(button)))
 
         self._ui.cmb_path.currentTextChanged.connect(lambda text: self._camera_device.save_settings('Path', text))
@@ -70,31 +81,51 @@ class SettingsWidget(BaseWidget):
         self._ui.but_save_dark_image.clicked.connect(self._save_dark_image)
         self._ui.but_load_dark_image.clicked.connect(self._load_dark_image)
 
+        self._ui.chk_additional_settings.clicked.connect(lambda state: self._ui.gb_ext_settings.setVisible(state))
+
         self._ui.chk_background.clicked.connect(lambda state: self._camera_device.save_settings('background', state))
         self._ui.dsb_sigmas.valueChanged.connect(lambda value: self._camera_device.save_settings('background_sigmas', value))
+
+    # ----------------------------------------------------------------------
+    def block_hist_signals(self, flag):
+        if flag:
+            self.hist.item.sigLevelsChanged.disconnect()
+            self.hist.item.sigLookupTableChanged.disconnect()
+        else:
+            self.hist.item.sigLevelsChanged.connect(self._switch_off_auto_levels)
+            self.hist.item.sigLookupTableChanged.connect(self.new_color_map)
+
+    # ----------------------------------------------------------------------
+    def _switch_off_auto_levels(self):
+        self._ui.chk_auto_levels.setChecked(False)
+        self.level_settings_changed('auto_levels', False)
+
+    # ----------------------------------------------------------------------
+    def _hist_mouse_clicked(self, event):
+        if event.double():
+            self._ui.chk_auto_levels.setChecked(True)
+            self.level_settings_changed('auto_levels', True)
+            self.hist.item.autoHistogramRange()
+
+    # ----------------------------------------------------------------------
+    def set_frame_to_hist(self, frame_view):
+        self.hist.item.setImageItem(frame_view)
 
     # ----------------------------------------------------------------------
     def refresh_view(self):
 
         self._block_signals(True)
+        self.block_hist_signals(True)
         self._ui.chk_auto_levels.setChecked(self._camera_device.levels['auto_levels'])
         self._ui.sb_min_level.setEnabled(not self._camera_device.levels['auto_levels'])
         self._ui.sb_max_level.setEnabled(not self._camera_device.levels['auto_levels'])
 
         if not self._ui.sb_min_level.hasFocus():
-            self._ui.sb_min_level.setValue(self._camera_device.levels['level_min'])
+            self._ui.sb_min_level.setValue(self._camera_device.levels['levels'][0])
         if not self._ui.sb_max_level.hasFocus():
-            self._ui.sb_max_level.setValue(self._camera_device.levels['level_max'])
+            self._ui.sb_max_level.setValue(self._camera_device.levels['levels'][1])
 
-        if not self._ui.cb_color_map.hasFocus():
-            index = self._ui.cb_color_map.findText(self._camera_device.levels['color_map'], QtCore.Qt.MatchFixedString)
-            self._ui.cb_color_map.setCurrentIndex(max(0, index))
-
-        max_level_limit = self._camera_device.levels['max_limit']
-        if max_level_limit == 0:
-            max_level_limit = 16000
-        self._ui.sb_max_level.setMaximum(max_level_limit)
-        self._ui.sb_min_level.setMaximum(max_level_limit)
+        self.hist.item.restoreState(self._camera_device.levels)
 
         self._ui.rb_lin_level.setChecked(self._camera_device.level_mode == 'lin')
         self._ui.rb_log_level.setChecked(self._camera_device.level_mode == 'log')
@@ -110,11 +141,26 @@ class SettingsWidget(BaseWidget):
         self._ui.chk_dark_image.setChecked(self._camera_device.subtract_dark_image)
 
         self._block_signals(False)
+        self.block_hist_signals(False)
+
+    # ----------------------------------------------------------------------
+    def new_color_map(self, lut_item):
+        lut = lut_item.saveState()
+        lut['auto_levels'] = self._ui.chk_auto_levels.isChecked()
+
+        self._camera_device.level_setting_change(lut)
+        self.refresh_image.emit()
 
     # ----------------------------------------------------------------------
     def level_settings_changed(self, param, value):
-        self._camera_device.level_setting_change(param, value)
-        self.refresh_image.emit()
+        lev = self.hist.item.getLevels()
+        if param == 'level_max':
+            lev[1] = float(value)
+        elif param == 'level_min':
+            lev[0] = float(value)
+
+        self.hist.item.setLevels(lev[0], lev[1])
+        self.new_color_map(self.hist.item)
 
     # ----------------------------------------------------------------------
     def _load_camera_settings(self):
@@ -286,6 +332,28 @@ class SettingsWidget(BaseWidget):
         self._log.info("Edit all params, server: {}".format(server))
 
         subprocess.Popen([self.PARAMS_EDITOR, server])
+
+    # ----------------------------------------------------------------------
+    def load_ui_settings(self, camera_name):
+        super(SettingsWidget, self).load_ui_settings(camera_name)
+
+        settings = QtCore.QSettings(APP_NAME)
+
+        state = False
+        try:
+            state = strtobool(settings.value(f"{WIDGET_NAME}_{camera_name}/AdditionalSettings"))
+        except:
+            pass
+
+        self._ui.gb_ext_settings.setVisible(state)
+        self._ui.chk_additional_settings.setChecked(state)
+
+    # ----------------------------------------------------------------------
+    def save_ui_settings(self, camera_name):
+        super(SettingsWidget, self).save_ui_settings(camera_name)
+
+        settings = QtCore.QSettings(APP_NAME)
+        settings.setValue(f"{WIDGET_NAME}_{camera_name}/AdditionalSettings", self._ui.chk_additional_settings.isChecked())
 
     # ----------------------------------------------------------------------
     def _block_signals(self, flag):

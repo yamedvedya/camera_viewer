@@ -9,6 +9,7 @@ import importlib
 import logging
 import threading
 import time
+import json
 
 import numpy as np
 from src.utils.errors import report_error
@@ -83,11 +84,29 @@ class DataSource2D(QtCore.QObject):
         self._worker = threading.Thread(target=self.run)
 
     # ----------------------------------------------------------------------
-    def start(self):
+    def start(self, auto_screen):
         """
         """
         self._reset_worker()
         self._worker.start()
+
+        if self.auto_screen and auto_screen:
+            self._device_proxy.move_motor(True)
+
+    # ----------------------------------------------------------------------
+    def stop(self, auto_screen):
+        """
+        """
+        if self._state != 'idle':
+            self._state = "abort"
+
+        while self._state != 'idle':
+            time.sleep(1e-3)
+
+        if self.auto_screen and auto_screen:
+            self._device_proxy.move_motor(False)
+
+        self.log.debug('CameraDevice stopped')
 
     # ----------------------------------------------------------------------
     def set_new_level_mode(self, mode):
@@ -141,18 +160,6 @@ class DataSource2D(QtCore.QObject):
             except Exception as err:
                 report_error(err, self.log, self._parent)
                 return False
-
-    # ----------------------------------------------------------------------
-    def stop(self):
-        """
-        """
-        if self._state != 'idle':
-            self._state = "abort"
-
-        while self._state != 'idle':
-            time.sleep(1e-3)
-
-        self.log.debug('CameraDevice stopped')
 
     # ----------------------------------------------------------------------
     def get_settings(self, setting, cast):
@@ -225,9 +232,7 @@ class DataSource2D(QtCore.QObject):
             self.newFrame.emit()
 
     # ----------------------------------------------------------------------
-    def close_camera(self, auto_screen):
-        if self.auto_screen and auto_screen:
-            self._device_proxy.move_motor(False)
+    def close_camera(self):
 
         if self._device_proxy is not None:
             self._device_proxy.close_camera()
@@ -250,11 +255,16 @@ class DataSource2D(QtCore.QObject):
                     self.got_first_frame = False
                     self._last_frame = np.zeros((1, 1))
 
-                    self.levels = {'auto_levels': self.get_settings('auto_levels', bool),
-                                   'level_min': self.get_settings('level_min', int),
-                                   'level_max': self.get_settings('level_max', int),
-                                   'color_map': self.get_settings('color_map', str),
-                                   'max_limit': self.get_settings('max_level_limit', int)}
+                    lut = self.get_settings('lut', str)
+                    if lut != '':
+                        self.levels = json.loads(lut)
+                    else:
+                        self.levels = {'gradient': {'mode': 'rgb',
+                                                    'ticks': [(0.0, (0, 0, 0, 255)), (1.0, (255, 255, 255, 255))],
+                                                    'ticksVisible': True},
+                                       'levels': (0, 255.0),
+                                       'mode': 'mono',
+                                       'auto_levels': True}
 
                     self.level_mode = self.get_settings('level_mode', str)
                     if self.level_mode == '':
@@ -276,7 +286,8 @@ class DataSource2D(QtCore.QObject):
                                           'h': self.get_settings('roi_{}_h'.format(ind), int),
                                           'bg': self.get_settings('roi_{}_bg'.format(ind), int),
                                           'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
-                                          'mark': self.get_settings('roi_{}_mark'.format(ind), str)})
+                                          'mark': self.get_settings('roi_{}_mark'.format(ind), str),
+                                          'color': self.get_settings('roi_{}_color'.format(ind), str)})
 
                         if ind == self._counter_roi:
                             for setting in ['x', 'y', 'w', 'h']:
@@ -294,7 +305,8 @@ class DataSource2D(QtCore.QObject):
                     for ind in range(self.get_settings('num_markers', int)):
                         self.markers.append({'x': self.get_settings('marker_{}_x'.format(ind), int),
                                              'y': self.get_settings('marker_{}_y'.format(ind), int),
-                                             'visible': self.get_settings('marker_{}_visible'.format(ind), bool)})
+                                             'visible': self.get_settings('marker_{}_visible'.format(ind), bool),
+                                             'color': self.get_settings('marker_{}_color'.format(ind), str)})
 
                     self.markers_changed = True
                     self.markers_need_update = True
@@ -312,11 +324,8 @@ class DataSource2D(QtCore.QObject):
 
                     self.peak_search_need_update = True
 
-                    if self.auto_screen and auto_screen:
-                        self._device_proxy.move_motor(True)
-
                     if self._device_proxy.is_running():
-                        self.start()
+                        self.start(auto_screen)
 
                     return True
 
@@ -337,7 +346,7 @@ class DataSource2D(QtCore.QObject):
         num_markers = len(self.markers)
         self.save_settings('num_markers', num_markers)
         for ind, marker in enumerate(self.markers):
-            for param in ['x', 'y', 'visible']:
+            for param in ['x', 'y', 'visible', 'color']:
                 self.save_settings('marker_{}_{}'.format(ind, param), marker[param])
 
     # ----------------------------------------------------------------------
@@ -349,7 +358,7 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def append_marker(self):
         self.markers_changed = True
-        self.markers.append({'x': 0, 'y': 0, 'visible': True})
+        self.markers.append({'x': 0, 'y': 0, 'visible': True, 'color': self.settings.option('colors', 'marker')})
         self._save_marker_settings()
 
     # ----------------------------------------------------------------------
@@ -399,7 +408,8 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def add_roi(self):
         self.roi_changed = True
-        self.rois.append({'x': 0, 'y': 0, 'w': 50, 'h': 50, 'bg': 0, 'visible': True, 'mark': ''})
+        self.rois.append({'x': 0, 'y': 0, 'w': 50, 'h': 50, 'bg': 0, 'visible': True, 'mark': '',
+                          'color': self.settings.option('colors', 'roi')})
         self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
                                              'min_x', 'min_y', 'min_v',
                                              'com_x', 'com_y', 'com_v',
@@ -415,10 +425,10 @@ class DataSource2D(QtCore.QObject):
         self._save_roi_settings()
 
     # ----------------------------------------------------------------------
-    def level_setting_change(self, setting, value):
+    def level_setting_change(self, lut_state):
         self.image_need_repaint = True
-        self.levels[setting] = value
-        self.save_settings(setting, value)
+        self.levels = lut_state
+        self.save_settings('lut', json.dumps(lut_state))
 
     # ----------------------------------------------------------------------
     def is_running(self):
@@ -435,7 +445,6 @@ class DataSource2D(QtCore.QObject):
     def move_motor(self, new_state=None):
 
         self._device_proxy.move_motor(new_state)
-        pass
 
     # ----------------------------------------------------------------------
     def motor_position(self):

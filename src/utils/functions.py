@@ -117,21 +117,6 @@ def refresh_combo_box(comboBox, text):
 
 
 # ----------------------------------------------------------------------
-def add_dock(parent, menu, WidgetClass, label, *args, **kwargs):
-    """
-    """
-    widget = WidgetClass(*args, **kwargs)
-
-    dock = QtWidgets.QDockWidget(label)
-    dock.setObjectName("{0}Dock".format("".join(label.split())))
-    dock.setWidget(widget)
-
-    parent.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
-    menu.addAction(dock.toggleViewAction())
-
-    return widget, dock
-
-# ----------------------------------------------------------------------
 def rotate(origin, point, angle):
     """
     Rotate a point counterclockwise by a given angle around a given origin.

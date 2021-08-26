@@ -7,6 +7,7 @@
 
 import PyTango
 import numpy as np
+import json
 
 from PyQt5 import QtCore
 from distutils.util import strtobool

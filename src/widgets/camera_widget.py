@@ -15,11 +15,12 @@ from src.widgets.peak_search_widget import PeakSearchWidget
 
 from src.devices.datasource2d import DataSource2D
 from src.gui.CameraWidget_ui import Ui_CameraWindow
-from src.utils.functions import add_dock
 
 
 # ----------------------------------------------------------------------
 class CameraWidget(QtWidgets.QMainWindow):
+
+    REFRESH_PERIOD = 1000
 
     # ----------------------------------------------------------------------
     def __init__(self, parent, settings, my_name):
@@ -33,7 +34,7 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._log = logging.getLogger("cam_logger")
 
         self.camera_device = DataSource2D(self)
-        if not self.camera_device.new_device_proxy(self.camera_name, parent.auto_screen_action.isChecked()):
+        if not self.camera_device.new_device_proxy(self.camera_name, self._parent.auto_screen_action.isChecked()):
             raise RuntimeError('Cannot start camera')
 
         self._ui = Ui_CameraWindow()
@@ -47,7 +48,34 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self._refresh_view_timer = QtCore.QTimer(self)
         self._refresh_view_timer.timeout.connect(self._refresh_view)
-        self._refresh_view_timer.start()
+        self._refresh_view_timer.start(self.REFRESH_PERIOD)
+
+    # ----------------------------------------------------------------------
+    def block_hist_signals(self, flag):
+        self._settings_widget.block_hist_signals(flag)
+
+    # ----------------------------------------------------------------------
+    def _start_stop_live_mode(self):
+
+        self._frame_viewer.start_stop_live_mode(self._parent.auto_screen_action.isChecked())
+
+    # ----------------------------------------------------------------------
+    def clean_close(self):
+        self._log.info(f"Closing {self.camera_name}...")
+
+        self._settings_widget.close()
+        self._frame_viewer.close()
+
+        self.camera_device.close_camera()
+
+        self._frame_viewer.save_ui_settings(self.camera_name)
+        self._settings_widget.save_ui_settings(self.camera_name)
+        self._markerroi_widget.save_ui_settings(self.camera_name)
+        self._peak_search_widget.save_ui_settings(self.camera_name)
+
+        self._save_ui_settings()
+
+        self._log.info(f"{self.camera_name} closed.")
 
     # ----------------------------------------------------------------------
     def _refresh_view(self):
@@ -66,25 +94,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._settings_widget.refresh_view()
         self._markerroi_widget.refresh_view()
         self._markerroi_widget.refresh_view()
-        self._frame_viewer.refresh_image()
-
-    # ----------------------------------------------------------------------
-    def clean_close(self):
-        self._log.info(f"Closing {self.camera_name}...")
-
-        self._settings_widget.close()
-        self._frame_viewer.close()
-
-        self.camera_device.close_camera(self._parent.auto_screen_action.isChecked())
-
-        self._frame_viewer.save_ui_settings(self.camera_name)
-        self._settings_widget.save_ui_settings(self.camera_name)
-        self._markerroi_widget.save_ui_settings(self.camera_name)
-        self._peak_search_widget.save_ui_settings(self.camera_name)
-
-        self._save_ui_settings()
-
-        self._log.info(f"{self.camera_name} closed.")
 
     # ----------------------------------------------------------------------
     def _display_camera_status(self, fps):
@@ -111,16 +120,16 @@ class CameraWidget(QtWidgets.QMainWindow):
                             QtWidgets.QMainWindow.AllowTabbedDocks)
 
         self._frame_viewer, self._frameViewer_dock = \
-            add_dock(self, self._ui.menu_widgets, FrameViewer, "Frame", self)
+            self._add_dock(FrameViewer, "Frame", self)
 
         self._settings_widget, self._settings_dock = \
-            add_dock(self, self._ui.menu_widgets, SettingsWidget, "Settings", self)
+            self._add_dock(SettingsWidget, "Settings", self)
 
         self._markerroi_widget, self._markerroi_dock = \
-            add_dock(self, self._ui.menu_widgets, MarkersROIsWidget, "Markers/ROIs", self)
+            self._add_dock(MarkersROIsWidget, "Markers/ROIs", self)
 
         self._peak_search_widget, self._peak_search_dock = \
-            add_dock(self, self._ui.menu_widgets, PeakSearchWidget, "Peak Search", self)
+            self._add_dock(PeakSearchWidget, "Peak Search", self)
 
         self._frame_viewer.load_ui_settings(self.camera_name)
         self._settings_widget.load_ui_settings(self.camera_name)
@@ -129,11 +138,12 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self._frame_viewer.status_changed.connect(self._display_camera_status)
         self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
-        self._frame_viewer.refresh_numbers.connect(self._settings_widget.refresh_view)
 
         self._settings_widget.refresh_image.connect(self._frame_viewer.refresh_image)
         self._markerroi_widget.refresh_image.connect(self._frame_viewer.refresh_image)
         self._peak_search_widget.refresh_image.connect(self._frame_viewer.refresh_image)
+
+        self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())
 
         self._init_actions()
 
@@ -149,7 +159,7 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._actionStartStop = QtWidgets.QAction(self)
         self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
         self._actionStartStop.setText("Start/Stop")
-        self._actionStartStop.triggered.connect(self._frame_viewer.start_stop_live_mode)
+        self._actionStartStop.triggered.connect(self._start_stop_live_mode)
 
         self._actionPrintImage = QtWidgets.QAction(self)
         self._actionPrintImage.setIcon(QtGui.QIcon(":/ico/print.png"))
@@ -222,6 +232,20 @@ class CameraWidget(QtWidgets.QMainWindow):
         self.statusBar().addPermanentWidget(self._lb_cursor_pos)
         self.statusBar().addPermanentWidget(self._lb_fps)
 
+    # ----------------------------------------------------------------------
+    def _add_dock(self, WidgetClass, label, *args, **kwargs):
+
+        widget = WidgetClass(*args, **kwargs)
+
+        dock = QtWidgets.QDockWidget(label)
+        dock.setObjectName("{0}Dock".format("".join(label.split())))
+        dock.setWidget(widget)
+
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+
+        self._ui.menu_widgets.addAction(dock.toggleViewAction())
+
+        return widget, dock
     # ----------------------------------------------------------------------
     def _save_ui_settings(self):
         """Save basic GUI settings.

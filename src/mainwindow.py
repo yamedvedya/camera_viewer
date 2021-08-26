@@ -14,7 +14,7 @@ import subprocess
 
 from functools import partial
 
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5 import QtWidgets, QtCore
 
 from distutils.util import strtobool
 
@@ -23,7 +23,6 @@ import pyqtgraph as pg
 from src.widgets.base_widget import APP_NAME
 from src.widgets.about_dialog import AboutDialog
 from src.widgets.camera_widget import CameraWidget
-from src.utils.functions import add_dock
 from src.utils.functions import (make_log_name, parse_log_level)
 from src.utils.xmlsettings import XmlSettings
 
@@ -111,7 +110,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         for camera in self._device_list:
             # try:
-            widget, dock = add_dock(self, self.menu_cameras, CameraWidget, f"{camera}", self, self._settings, camera)
+            widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self._settings, camera)
             widget.load_ui_settings()
             self._camera_widgets.append(widget)
             self._camera_docks.append(dock)
@@ -123,6 +122,27 @@ class MainWindow(QtWidgets.QMainWindow):
             #     open_mgs.setText(f"Cannot add {camera}: {err}")
             #     open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
             #     open_mgs.exec_()
+
+    # ----------------------------------------------------------------------
+    def add_dock(self, WidgetClass, label, *args, **kwargs):
+        """
+        """
+        widget = WidgetClass(*args, **kwargs)
+
+        dock = QtWidgets.QDockWidget(label)
+        dock.setObjectName("{0}Dock".format("".join(label.split())))
+        dock.setWidget(widget)
+
+        children = [child for child in self.findChildren(QtWidgets.QDockWidget)
+                    if isinstance(child.widget(), CameraWidget)]
+        if children:
+            self.tabifyDockWidget(children[-1], dock)
+        else:
+            self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+
+        self.menu_cameras.addAction(dock.toggleViewAction())
+
+        return widget, dock
 
     # ----------------------------------------------------------------------
     def _show_log_file(self, logType="main"):

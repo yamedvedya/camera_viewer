@@ -28,6 +28,7 @@ from src.gui.FrameViewer_ui import Ui_FrameViewer
 WIDGET_NAME = 'FrameViewer'
 SAVE_STATE_UIS = ['splitter_y1', 'splitter_y2', 'splitter_x']
 
+
 # ----------------------------------------------------------------------
 class FrameViewer(BaseWidget):
     """
@@ -138,6 +139,10 @@ class FrameViewer(BaseWidget):
         self._log.info("FrameView initialized successfully")
 
     # ----------------------------------------------------------------------
+    def get_image_view(self):
+        return self._ui.image_view.imageItem
+
+    # ----------------------------------------------------------------------
     def _init_ui(self):
         """
         finalizes UI setup
@@ -191,33 +196,33 @@ class FrameViewer(BaseWidget):
         self._deviceLabel.setText(self._camera_device.device_id)
 
     # ----------------------------------------------------------------------
-    def start_stop_live_mode(self):
+    def start_stop_live_mode(self, auto_screen):
         """
         """
         if self._camera_device and not self._camera_device.is_running():
-            self.start_live_mode()
+            self._start_live_mode(auto_screen)
         else:
-            self.stop_live_mode()
+            self._stop_live_mode(auto_screen)
 
     # ----------------------------------------------------------------------
-    def start_live_mode(self):
+    def _start_live_mode(self, auto_screen):
         """
         """
         if self._camera_device:
             self._acq_started = time.time()
             self._fps_counter = 0
             self._need_to_refresh_image = True
-            self._camera_device.start()
+            self._camera_device.start(auto_screen)
         else:
             QtWidgets.QMessageBox.warning(self, "Initialization Error",
                                       "{} not yet initialized".format(self._camera_device.device_id))
 
     # ----------------------------------------------------------------------
-    def stop_live_mode(self):
+    def _stop_live_mode(self, auto_screen):
         """
         """
         if self._camera_device and self._camera_device.is_running():
-            self._camera_device.stop()
+            self._camera_device.stop(auto_screen)
             self._log.debug("{} stopped".format(self._camera_device.device_id))
 
     # ----------------------------------------------------------------------
@@ -240,6 +245,7 @@ class FrameViewer(BaseWidget):
         for widget, marker in zip(self._marker_widgets, self._camera_device.markers):
             widget.setPos(marker['x'], marker['y'])
             widget.setVisible(marker['visible'])
+            widget.setColor(marker['color'])
 
         self._camera_device.markers_need_update = False
 
@@ -288,6 +294,7 @@ class FrameViewer(BaseWidget):
 
             roi.setPos([self._camera_device.rois[ind]['x'], self._camera_device.rois[ind]['y']])
             roi.setSize([self._camera_device.rois[ind]['w'], self._camera_device.rois[ind]['h']])
+            roi.setPen(self._camera_device.rois[ind]['color'])
 
             label.setPos(self._camera_device.rois[ind]['x'] + self._camera_device.rois[ind]['w'],
                          self._camera_device.rois[ind]['y'] + self._camera_device.rois[ind]['h'])
@@ -405,14 +412,6 @@ class FrameViewer(BaseWidget):
             self.update_marker()
 
         if self._camera_device.image_need_repaint:
-            if str(self._camera_device.levels['color_map']) != '':
-                colormap = self._camera_device.levels['color_map']
-            else:
-                colormap = 'grey'
-
-            self._ui.image_view.imageItem.setLookupTable(
-                pg.ColorMap(*zip(*Gradients[colormap.lower()]["ticks"])).getLookupTable())
-
             self.refresh_view()
 
         if self._camera_device.image_need_refresh:
@@ -442,8 +441,10 @@ class FrameViewer(BaseWidget):
                 set_kwargs['autoRange'] = True
                 update_kwargs = {'autoLevels': True}
             else:
-                set_kwargs['levels'] = (self._camera_device.levels['level_min'], self._camera_device.levels['level_max'])
-                update_kwargs = {'levels': (self._camera_device.levels['level_min'], self._camera_device.levels['level_max'])}
+                set_kwargs['levels'] = (self._camera_device.levels['levels'][0], self._camera_device.levels['levels'][1])
+                update_kwargs = {'levels': (self._camera_device.levels['levels'][0], self._camera_device.levels['levels'][1])}
+
+            self._parent.block_hist_signals(True)
 
             if self._need_to_refresh_image:
                 self._ui.image_view.setImage(self._last_frame, **set_kwargs)
@@ -456,6 +457,8 @@ class FrameViewer(BaseWidget):
             else:
                 self._ui.image_view.imageItem.updateImage(self._last_frame, **update_kwargs)
                 self._camera_device.image_need_repaint = False
+
+            self._parent.block_hist_signals(False)
 
             self._peak_markers.new_scale(self._view_rect.width(), self._view_rect.height())
             self._center_search_item.new_scale(self._view_rect.width(), self._view_rect.height())
@@ -473,10 +476,6 @@ class FrameViewer(BaseWidget):
                 self.status_changed.emit(self._fps_counter)
                 self._fps_counter = 0
                 self._acq_started = time.time()
-
-            if self._camera_device.levels['auto_levels']:
-                self._camera_device.level_setting_change('level_min', int(self._ui.image_view.levelMin))
-                self._camera_device.level_setting_change('level_max', int(self._ui.image_view.levelMax))
 
         except Exception as err:
             print('Error during refresh view: {}'.format(err))
@@ -829,6 +828,10 @@ class ImageMarker(object):
         self.image_view.removeItem(self._markerH)
         self.image_view.removeItem(self._markerV)
 
+    # ----------------------------------------------------------------------
+    def setColor(self, color):
+        self._markerH.setPen(pg.mkPen(color))
+        self._markerV.setPen(pg.mkPen(color))
 
 # ----------------------------------------------------------------------
 class PeakMarker(pg.GraphicsObject):

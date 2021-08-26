@@ -30,6 +30,7 @@ class Marker(QtWidgets.QWidget):
         self._ui.sb_x.valueChanged.connect(lambda value: self.save_value('x', value))
         self._ui.sb_y.valueChanged.connect(lambda value: self.save_value('y', value))
         self._ui.chk_visible.clicked.connect(lambda value: self.save_value('visible', value))
+        self._ui.but_color.clicked.connect(self._pick_my_color)
 
     # ----------------------------------------------------------------------
     def _block_signals(self, flag):
@@ -43,9 +44,20 @@ class Marker(QtWidgets.QWidget):
         self._ui.sb_x.setValue(self._camera_device.markers[self.my_id]['x'])
         self._ui.sb_y.setValue(self._camera_device.markers[self.my_id]['y'])
         self._ui.chk_visible.setChecked(self._camera_device.markers[self.my_id]['visible'])
+
+        self._ui.but_color.setStyleSheet("QPushButton {background-color: " +
+                                         f"{self._camera_device.markers[self.my_id]['color']}" + ";}")
         self._block_signals(False)
 
     # ----------------------------------------------------------------------
     def save_value(self, param, value):
         self._camera_device.set_marker_value(self.my_id, param, value)
         self.marker_changed.emit()
+
+    # ----------------------------------------------------------------------
+    def _pick_my_color(self):
+        color = QtWidgets.QColorDialog.getColor()
+
+        if color.isValid():
+            self._camera_device.set_marker_value(self.my_id, 'color', color.name())
+            self.marker_changed.emit()
