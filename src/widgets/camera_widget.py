@@ -30,6 +30,7 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self.settings = settings
         self.camera_name = my_name
+        self._parent = parent
 
         self._log = logging.getLogger("cam_logger")
 
@@ -43,8 +44,6 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self.camera_device.newFrame.connect(self._frame_viewer.refresh_view)
         self.camera_device.gotError.connect(lambda err_msg: report_error(err_msg, self.log, self, True))
-
-        self._parent = parent
 
         self._refresh_view_timer = QtCore.QTimer(self)
         self._refresh_view_timer.timeout.connect(self._refresh_view)

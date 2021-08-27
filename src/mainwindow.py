@@ -108,20 +108,22 @@ class MainWindow(QtWidgets.QMainWindow):
                             QtWidgets.QMainWindow.AllowNestedDocks |
                             QtWidgets.QMainWindow.AllowTabbedDocks)
 
-        for camera in self._device_list:
-            # try:
-            widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self._settings, camera)
-            widget.load_ui_settings()
-            self._camera_widgets.append(widget)
-            self._camera_docks.append(dock)
+        self.setTabPosition(QtCore.Qt.LeftDockWidgetArea, QtWidgets.QTabWidget.North)
 
-            # except Exception as err:
-            #     open_mgs = QtWidgets.QMessageBox()
-            #     open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
-            #     open_mgs.setWindowTitle(f"Error")
-            #     open_mgs.setText(f"Cannot add {camera}: {err}")
-            #     open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
-            #     open_mgs.exec_()
+        for camera in self._device_list:
+            try:
+                widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self._settings, camera)
+                widget.load_ui_settings()
+                self._camera_widgets.append(widget)
+                self._camera_docks.append(dock)
+
+            except Exception as err:
+                open_mgs = QtWidgets.QMessageBox()
+                open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
+                open_mgs.setWindowTitle(f"Error")
+                open_mgs.setText(f"Cannot add {camera}: {err}")
+                open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
+                open_mgs.exec_()
 
     # ----------------------------------------------------------------------
     def add_dock(self, WidgetClass, label, *args, **kwargs):
