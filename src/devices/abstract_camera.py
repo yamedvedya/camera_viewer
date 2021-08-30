@@ -31,8 +31,6 @@ class AbstractCamera(object):
         self._new_frame_flag = False
         self._eid = None
 
-        self.source_mode = None
-
         self._cid = settings.getAttribute("name")
 
         if settings.hasAttribute('flip_vertical'):

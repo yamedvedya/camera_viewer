@@ -12,7 +12,8 @@ import datetime
 import logging
 import math
 import os
-from PyQt5 import QtWidgets, QtCore
+
+import numpy as np
 
 
 # ----------------------------------------------------------------------
@@ -130,16 +131,19 @@ def rotate(origin, point, angle):
     qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
     return qx, qy
 
-
 # ----------------------------------------------------------------------
-# A little bit of unit testing...
-# ----------------------------------------------------------------------
-if __name__ == "__main__":
-    import random
-    random.seed(42)
+def FWHM(data):
+    """
+    simple calculator of peak FWHM
+    :param data:
+    :return:
+    """
+    try:
+        half_max = (np.amax(data) - np.amin(data)) / 2
 
-    for i in range(15):
-        value = (random.randint(1, 9) * math.pow(10, i) +
-                 random.randint(10, 1000))
-        print("Value: {}, rep: {}".format(value, roi_text(value, compact=True)))
-
+        diff = np.sign(data - half_max)
+        left_idx = np.where(diff > 0)[0][0]
+        right_idx = np.where(diff > 0)[0][-1]
+        return right_idx - left_idx  # return the difference (full width)
+    except:
+        return 0

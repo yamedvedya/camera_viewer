@@ -3,6 +3,7 @@
 # ----------------------------------------------------------------------
 
 """
+This class provides data from camera, keeps, loads, saves camera settings etc
 """
 
 import importlib
@@ -10,9 +11,15 @@ import logging
 import threading
 import time
 import json
+import math
 
+import scipy.ndimage.measurements as scipymeasure
 import numpy as np
+
+from skimage.feature import peak_local_max
+
 from src.utils.errors import report_error
+from src.utils.functions import FWHM
 
 from PyQt5 import QtCore
 
@@ -21,8 +28,13 @@ from PyQt5 import QtCore
 class DataSource2D(QtCore.QObject):
     """
     """
-    newFrame = QtCore.pyqtSignal()
-    gotError = QtCore.pyqtSignal(str)
+    new_frame = QtCore.pyqtSignal()
+
+    update_roi_statistics = QtCore.pyqtSignal()
+
+    update_peak_search = QtCore.pyqtSignal()
+
+    got_error = QtCore.pyqtSignal(str)
 
     # ----------------------------------------------------------------------
     def __init__(self, parent):
@@ -38,54 +50,160 @@ class DataSource2D(QtCore.QObject):
         self.device_id = ''
         self._base_id = ''
 
-        self.image_need_repaint = False
-        self.image_need_refresh = False
-
-        self.rois = []
-        self.rois_data = []
-        self.roi_need_update = False
-        self.roi_changed = False
-        self._counter_roi = 0
-
-        self.markers = []
-        self.markers_need_update = False
-        self.markers_changed = False
-
-        self.peak_search = {}
-        self.peak_search_need_update = False
-
-        self.levels = []
-        self.level_mode = 'lin'
-
         self.auto_screen = False
 
-        self._dark_image = None
-        self.subtract_dark_image = False
-
         self._device_proxy = None
-        self._worker = None
+        self._worker = None  # thread, which reads from camera
 
         self._frame_mutex = QtCore.QMutex()  # sync access to frame
-        self._last_frame = np.zeros((1, 1))
+        self._last_frame = np.zeros((1, 1))  # keeps last read frame
 
         self.got_first_frame = False
 
         self._state = "idle"
-        self.fps = 1
+        self.fps_limit = 1
+
+        self.set_new_image = False
+
+        # picture levels settings
+        self.levels = []
+        self.level_mode = 'lin'
+
+        # ROIs parameters and data
+        self.rois = []
+        self.rois_data = []
+        self._counter_roi = 0
+
+        # ROIs parameters and data
+        self.markers = []
+
+        # peak search parameters and data
+        self.peak_search = {}
+        self.peak_coordinates = []
+
+        self._dark_image = None
+        self.subtract_dark_image = False
 
     # ----------------------------------------------------------------------
-    def _reset_worker(self):
+    def new_device_proxy(self, name, auto_screen):
         """
-        """
-        if self._worker:
-            self._state = 'abort'
-            self._worker.join()
 
-        self._worker = threading.Thread(target=self.run)
+        :param name: str, camera name to be loaded from config
+        :param auto_screen: bool, is generally moving screens is allowed
+        :return: bool, success or not
+        """
+
+        for device in self.settings.get_nodes('camera_viewer', 'camera'):
+            if device.getAttribute('name') == name:
+
+                self._base_id = name
+
+                try:
+                    proxyClass = device.getAttribute("proxy")
+                    self.log.info("Loading device proxy {}...".format(proxyClass))
+
+                    module = importlib.import_module("devices.{}".format(proxyClass.lower()))
+                    self._device_proxy = getattr(module, proxyClass)(device, self.log)
+
+                    self.device_id = self._base_id + self._device_proxy.id
+
+                    # reset flags and variables
+                    self.got_first_frame = False
+                    self._last_frame = np.zeros((1, 1))
+
+                    # load LUT and levels settings
+                    lut = self.get_settings('lut', str)
+                    if lut != '':
+                        self.levels = json.loads(lut)
+                    else:
+                        self.levels = {'gradient': {'mode': 'rgb',
+                                                    'ticks': [(0.0, (0, 0, 0, 255)), (1.0, (255, 255, 255, 255))],
+                                                    'ticksVisible': True},
+                                       'levels': (0, 255.0),
+                                       'mode': 'mono',
+                                       'auto_levels': True}
+
+                    self.level_mode = self.get_settings('level_mode', str)
+                    if self.level_mode == '':
+                        self.level_mode = 'lin'
+
+                    self.auto_screen = self.get_settings('auto_screen', bool)
+
+                    # load ROI params
+                    self.rois = []
+                    self.rois_data = []
+
+                    # TODO find a better solution for Sardana counter....
+                    self._counter_roi = self.get_settings('counter_roi', int)
+                    self._counter_param = self.get_settings('counter_roi', int)
+
+                    for ind in range(self.get_settings('num_rois', int)):
+                        self.rois.append({'x': self.get_settings('roi_{}_x'.format(ind), int),
+                                          'y': self.get_settings('roi_{}_y'.format(ind), int),
+                                          'w': self.get_settings('roi_{}_w'.format(ind), int),
+                                          'h': self.get_settings('roi_{}_h'.format(ind), int),
+                                          'bg': self.get_settings('roi_{}_bg'.format(ind), int),
+                                          'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
+                                          'mark': self.get_settings('roi_{}_mark'.format(ind), str),
+                                          'color': self.get_settings('roi_{}_color'.format(ind), str)})
+
+                        if ind == self._counter_roi:
+                            for setting in ['x', 'y', 'w', 'h']:
+                                self.save_settings('counter_{}'.format(setting), self.rois[ind][setting])
+
+                        self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
+                                                             'min_x', 'min_y', 'min_v',
+                                                             'com_x', 'com_y', 'com_v',
+                                                             'fwhm_x', 'fwhm_y', 'sum']))
+
+                    # load markers params
+                    self.markers = []
+                    for ind in range(self.get_settings('num_markers', int)):
+                        self.markers.append({'x': self.get_settings('marker_{}_x'.format(ind), int),
+                                             'y': self.get_settings('marker_{}_y'.format(ind), int),
+                                             'visible': self.get_settings('marker_{}_visible'.format(ind), bool),
+                                             'color': self.get_settings('marker_{}_color'.format(ind), str)})
+
+                    # load peak search params
+                    self.peak_search = {'search': False, #TODO: need solution for wrong settings!
+                                        'search_mode': self.get_settings('peak_search_mode', bool),
+                                        'rel_threshold': self.get_settings('peak_rel_threshold', int),
+                                        'abs_threshold': self.get_settings('peak_abs_threshold', int)}
+
+                    if self.peak_search['rel_threshold'] == 0:
+                        self.peak_search['rel_threshold'] = 80
+
+                    if self.peak_search['abs_threshold'] == 0:
+                        self.peak_search['abs_threshold'] = 16000
+
+                    # if Tango server for camera already acquiring - start data thread
+                    if self._device_proxy.is_running():
+                        self.start(auto_screen)
+
+                    return True
+
+                except Exception as ex:
+                    self.log.error(ex)
+                    return False
+
+        return False
+
+    # ----------------------------------------------------------------------
+    def close_camera(self):
+        """
+        safe close for camera (e.g. to kill all threads)
+        :return: None
+        """
+
+        if self._device_proxy is not None:
+            self._device_proxy.close_camera()
 
     # ----------------------------------------------------------------------
     def start(self, auto_screen):
         """
+
+        :param auto_screen: is generally moving screens is allowed
+        :return:
         """
         self._reset_worker()
         self._worker.start()
@@ -93,9 +211,14 @@ class DataSource2D(QtCore.QObject):
         if self.auto_screen and auto_screen:
             self._device_proxy.move_motor(True)
 
+        self.log.debug('CameraDevice started')
+
     # ----------------------------------------------------------------------
     def stop(self, auto_screen):
         """
+
+        :param auto_screen: is generally moving screens is allowed
+        :return:
         """
         if self._state != 'idle':
             self._state = "abort"
@@ -109,34 +232,43 @@ class DataSource2D(QtCore.QObject):
         self.log.debug('CameraDevice stopped')
 
     # ----------------------------------------------------------------------
-    def set_new_level_mode(self, mode):
+    # --------------------- Data acquiring thread---------------------------
+    # ----------------------------------------------------------------------
+    def _reset_worker(self):
+        """
+        """
+        if self._worker:
+            self._state = 'abort'
+            self._worker.join()
 
-        if self.level_mode != mode:
-            self.level_mode = mode
-            self.save_settings('level_mode', mode)
-            if self.got_first_frame:
-                self.newFrame.emit()
+        self._worker = threading.Thread(target=self.run)
 
     # ----------------------------------------------------------------------
     def run(self):
         """
+        main thread cycle
+        :return:
         """
         if self._start_acquisition():
 
             while self._state == "running":
 
                 frame = self._device_proxy.maybe_read_frame()
+
                 if frame is not None:
                     self.got_first_frame = True
                     self._last_frame = frame
-                    self.newFrame.emit()
-                    self.device_id = self._base_id + self._device_proxy.id
+                    self.new_frame.emit()
+
+                    self.calculate_roi_statistics()
+                    self.find_peaks()
 
                 if self._device_proxy.error_flag:
-                    self.gotError.emit(str(self._device_proxy.error_msg))
+                    self.got_error.emit(str(self._device_proxy.error_msg))
                     self._state = "abort"
 
-                time.sleep(1/self.fps)
+                time.sleep(1 / self.fps_limit)  # to decrease processor load
+
             self.log.info("Closing {}...".format(self.device_id))
 
             if self._device_proxy:
@@ -147,7 +279,10 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def _start_acquisition(self):
         """
+        tries to start camera
+        :return: bool, success or not
         """
+
         if self._device_proxy:
 
             try:
@@ -162,25 +297,7 @@ class DataSource2D(QtCore.QObject):
                 return False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, setting, cast):
-
-        if self._device_proxy:
-            if setting == 'FPS':
-                self.fps = max(1, self._device_proxy.get_settings('FPS', int))
-                return self.fps
-            else:
-                return self._device_proxy.get_settings(setting, cast)
-        else:
-            return None
-
-    # ----------------------------------------------------------------------
-    def save_settings(self, setting, value):
-        if self._device_proxy:
-            if setting == 'FPS':
-                self.fps = value
-
-            self._device_proxy.save_settings(setting, value)
-
+    # ---------------------- Frame functionality ---------------------------
     # ----------------------------------------------------------------------
     def get_frame(self):
         """
@@ -208,139 +325,23 @@ class DataSource2D(QtCore.QObject):
             return frame
 
     # ----------------------------------------------------------------------
-    def set_dark_image(self):
-        self._dark_image = self._last_frame
-
-    # ----------------------------------------------------------------------
-    def load_dark_image(self, file_name):
-        self._dark_image = np.load(file_name)
-
-    # ----------------------------------------------------------------------
-    def save_dark_image(self, file_name):
-        np.save(file_name, self._dark_image)
-
-    # ----------------------------------------------------------------------
-    def has_dark_image(self):
-        return self._dark_image is not None
-
-    # ----------------------------------------------------------------------
-    def toggle_dark_image(self, state):
-        if self._dark_image is not None:
-            self.subtract_dark_image = state
-
+    def level_setting_change(self, lut_state):
+        self.levels = lut_state
+        self.save_settings('lut', json.dumps(lut_state))
         if self.got_first_frame:
-            self.newFrame.emit()
+            self.new_frame.emit()
 
     # ----------------------------------------------------------------------
-    def close_camera(self):
+    def set_new_level_mode(self, mode):
 
-        if self._device_proxy is not None:
-            self._device_proxy.close_camera()
-
-    # ----------------------------------------------------------------------
-    def new_device_proxy(self, name, auto_screen):
-
-        for device in self.settings.get_nodes('camera_viewer', 'camera'):
-            if device.getAttribute('name') == name:
-
-                self.device_id = name
-                self._base_id = name
-
-                try:
-                    proxyClass = device.getAttribute("proxy")
-                    self.log.info("Loading device proxy {}...".format(proxyClass))
-
-                    module = importlib.import_module("devices.{}".format(proxyClass.lower()))
-                    self._device_proxy = getattr(module, proxyClass)(device, self.log)
-                    self.got_first_frame = False
-                    self._last_frame = np.zeros((1, 1))
-
-                    lut = self.get_settings('lut', str)
-                    if lut != '':
-                        self.levels = json.loads(lut)
-                    else:
-                        self.levels = {'gradient': {'mode': 'rgb',
-                                                    'ticks': [(0.0, (0, 0, 0, 255)), (1.0, (255, 255, 255, 255))],
-                                                    'ticksVisible': True},
-                                       'levels': (0, 255.0),
-                                       'mode': 'mono',
-                                       'auto_levels': True}
-
-                    self.level_mode = self.get_settings('level_mode', str)
-                    if self.level_mode == '':
-                        self.level_mode = 'lin'
-
-                    self.image_need_repaint = True
-
-                    self.auto_screen = self.get_settings('auto_screen', bool)
-
-                    self.rois = []
-                    self.rois_data = []
-                    self._counter_roi = self.get_settings('counter_roi', int)
-                    self._counter_param = self.get_settings('counter_roi', int)
-
-                    for ind in range(self.get_settings('num_rois', int)):
-                        self.rois.append({'x': self.get_settings('roi_{}_x'.format(ind), int),
-                                          'y': self.get_settings('roi_{}_y'.format(ind), int),
-                                          'w': self.get_settings('roi_{}_w'.format(ind), int),
-                                          'h': self.get_settings('roi_{}_h'.format(ind), int),
-                                          'bg': self.get_settings('roi_{}_bg'.format(ind), int),
-                                          'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
-                                          'mark': self.get_settings('roi_{}_mark'.format(ind), str),
-                                          'color': self.get_settings('roi_{}_color'.format(ind), str)})
-
-                        if ind == self._counter_roi:
-                            for setting in ['x', 'y', 'w', 'h']:
-                                self.save_settings('counter_{}'.format(setting), self.rois[ind][setting])
-
-                        self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
-                                                             'min_x', 'min_y', 'min_v',
-                                                             'com_x', 'com_y', 'com_v',
-                                                             'fwhm_x', 'fwhm_y', 'sum']))
-
-                    self.roi_changed = True
-                    self.roi_need_update = True
-
-                    self.markers = []
-                    for ind in range(self.get_settings('num_markers', int)):
-                        self.markers.append({'x': self.get_settings('marker_{}_x'.format(ind), int),
-                                             'y': self.get_settings('marker_{}_y'.format(ind), int),
-                                             'visible': self.get_settings('marker_{}_visible'.format(ind), bool),
-                                             'color': self.get_settings('marker_{}_color'.format(ind), str)})
-
-                    self.markers_changed = True
-                    self.markers_need_update = True
-
-                    self.peak_search = {'search': False, #TODO: need solution for wrong settings!
-                                        'search_mode': self.get_settings('peak_search_mode', bool),
-                                        'rel_threshold': self.get_settings('peak_rel_threshold', int),
-                                        'abs_threshold': self.get_settings('peak_abs_threshold', int)}
-
-                    if self.peak_search['rel_threshold'] == 0:
-                        self.peak_search['rel_threshold'] = 80
-
-                    if self.peak_search['abs_threshold'] == 0:
-                        self.peak_search['abs_threshold'] = 16000
-
-                    self.peak_search_need_update = True
-
-                    if self._device_proxy.is_running():
-                        self.start(auto_screen)
-
-                    return True
-
-                except Exception as ex:
-                    self.log.error(ex)
-                    return False
-
-        return False
+        if self.level_mode != mode:
+            self.level_mode = mode
+            self.save_settings('level_mode', mode)
+            if self.got_first_frame:
+                self.new_frame.emit()
 
     # ----------------------------------------------------------------------
-    def set_peak_search_value(self, setting, value):
-        self.peak_search_need_update = True
-        self.peak_search[setting] = value
-        self.save_settings('peak_{}'.format(setting), value)
-
+    # ------------------- Markers functionality ----------------------------
     # ----------------------------------------------------------------------
     def _save_marker_settings(self):
         num_markers = len(self.markers)
@@ -357,18 +358,23 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def append_marker(self):
-        self.markers_changed = True
         self.markers.append({'x': 0, 'y': 0, 'visible': True, 'color': self.settings.option('colors', 'marker')})
         self._save_marker_settings()
 
     # ----------------------------------------------------------------------
     def delete_marker(self, index):
-        self.markers_changed = True
+
         del self.markers[index]
         self._save_marker_settings()
 
     # ----------------------------------------------------------------------
+    # ----------------------- ROI functionality ----------------------------
+    # ----------------------------------------------------------------------
     def _save_roi_settings(self):
+        """
+
+        :return:
+        """
         num_rois = len(self.rois)
         self.save_settings('num_rois', num_rois)
         for ind, roi in enumerate(self.rois):
@@ -377,7 +383,13 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def set_roi_value(self, roi_id, setting, value):
-        self.roi_need_update = True
+        """
+
+        :param roi_id:
+        :param setting:
+        :param value:
+        :return:
+        """
         self.rois[roi_id][setting] = value
         self.save_settings('roi_{}_{}'.format(roi_id, setting), value)
 
@@ -403,11 +415,19 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def get_active_roi_value(self, value):
+        """
+
+        :param value:
+        :return:
+        """
         return self.rois_data[self._counter_roi][value]
 
     # ----------------------------------------------------------------------
     def add_roi(self):
-        self.roi_changed = True
+        """
+
+        :return: None
+        """
         self.rois.append({'x': 0, 'y': 0, 'w': 50, 'h': 50, 'bg': 0, 'visible': True, 'mark': '',
                           'color': self.settings.option('colors', 'roi')})
         self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
@@ -419,19 +439,146 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def delete_roi(self, index):
-        self.roi_changed = True
+        """
+
+        :param index: roi to be deleted
+        :return:
+        """
+
         del self.rois[index]
         del self.rois_data[index]
         self._save_roi_settings()
 
     # ----------------------------------------------------------------------
-    def level_setting_change(self, lut_state):
-        self.image_need_repaint = True
-        self.levels = lut_state
-        self.save_settings('lut', json.dumps(lut_state))
+    def calculate_roi_statistics(self):
+        """
+        """
+        if self._last_frame is None:
+            return
+
+        for info, data in zip(self.rois, self.rois_data):
+            if info['visible']:
+
+                image_size = self.get_picture_clip()
+                _image_x_pos, _image_y_pos = image_size[0], image_size[1]
+                x, y, w, h = int(info['x'] - _image_x_pos), int(info['y'] - _image_y_pos), int(info['w']), int(info['h'])
+
+                array = self._last_frame[x:x + w, y:y + h]
+                if array != []:
+                    array[array < info['bg']] = 0  # All low values set to 0
+
+                    roi_sum = np.sum(array)
+
+                    try:
+                        roiExtrema = scipymeasure.extrema(array)  # all in one!
+                    except:
+                        roiExtrema = (0, 0, (0, 0), (0, 0))
+
+                    roi_max = (int(roiExtrema[3][0] + x + _image_x_pos), int(roiExtrema[3][1] + y + _image_y_pos))
+                    roi_min = (int(roiExtrema[2][0] + x + _image_x_pos), int(roiExtrema[2][1] + y + _image_y_pos))
+
+                    try:
+                        roi_com = scipymeasure.center_of_mass(array)
+                    except:
+                        roi_com = (0, 0)
+
+                    if math.isnan(roi_com[0]) or math.isnan(roi_com[1]):
+                        roi_com = (0, 0)
+
+                    roi_com = (int(roi_com[0] + x + _image_x_pos), int(roi_com[1] + y + _image_y_pos))
+
+                    try:
+                        intensity_at_com = self._last_frame[int(round(roi_com[0])), int(round(roi_com[1]))]
+                    except:
+                        intensity_at_com = [0, 0]
+
+                    roi_FWHM = (FWHM(np.sum(array, axis=1)), FWHM(np.sum(array, axis=0)))
+
+                    data['max_x'], data['max_y'] = roi_max
+                    data['max_v'] = np.round(roiExtrema[1], 3)
+
+                    data['min_x'], data['min_y'] = roi_min
+                    data['min_v'] = np.round(roiExtrema[0], 3)
+
+                    data['com_x'], data['com_y'] = roi_com
+                    data['com_v'] = np.round(intensity_at_com, 3)
+
+                    data['fwhm_x'], data['fwhm_y'] = roi_FWHM
+                    data['sum'] = np.round(roi_sum, 3)
+
+        self.update_roi_statistics.emit()
+
+    # ----------------------------------------------------------------------
+    # ------------- Peak search functionality ------------------------------
+    # ----------------------------------------------------------------------
+    def set_peak_search_value(self, setting, value):
+        self.peak_search[setting] = value
+        self.save_settings('peak_{}'.format(setting), value)
+        self.find_peaks()
+
+    # ----------------------------------------------------------------------
+    def find_peaks(self):
+        if self.peak_search['search']:
+            try:
+                if self.peak_search['search_mode']:
+                    coordinates = peak_local_max(self._last_frame,
+                                                 threshold_rel=self.peak_search['rel_threshold'] / 100)
+                else:
+                    coordinates = peak_local_max(self._last_frame,
+                                                 threshold_abs=self.peak_search['abs_threshold'])
+
+                if len(coordinates) > 100:
+                    report_error(
+                        'Too many ({}) peaks found. Show first 100. Adjust the threshold'.format(len(coordinates)),
+                        self._log, self, True)
+                    self.peak_coordinates = coordinates[:100]
+            except:
+                self.peak_coordinates = ()
+        else:
+            self.peak_coordinates = ()
+
+        self.update_peak_search.emit()
+
+    # ----------------------------------------------------------------------
+    # ---------------Communication with camera worker-----------------------
+    # ----------------------------------------------------------------------
+    def get_settings(self, setting, cast):
+        """
+
+        :param setting: str, settings name
+        :param cast: expected type
+        :return: cast(value), if there is no device proxy - None
+        """
+
+        if self._device_proxy:
+            if setting == 'FPS':
+                self.fps_limit = max(1, self._device_proxy.get_settings('FPS', int))
+                return self.fps_limit
+            else:
+                return self._device_proxy.get_settings(setting, cast)
+        else:
+            return None
+
+    # ----------------------------------------------------------------------
+    def save_settings(self, setting, value):
+        """
+
+        :param setting: str, settings name
+        :param value: value to save
+        :return:
+        """
+        if self._device_proxy:
+            if setting == 'FPS':
+                self.fps_limit = value
+
+            self._device_proxy.save_settings(setting, value)
 
     # ----------------------------------------------------------------------
     def is_running(self):
+        """
+
+        :return: bool, if there is no device proxy - None
+        """
         if self._device_proxy is None:
             return None
         else:
@@ -439,16 +586,28 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def has_motor(self):
+        """
+
+        :return: bool
+        """
         return self._device_proxy.has_motor()
 
     # ----------------------------------------------------------------------
     def move_motor(self, new_state=None):
+        """
+
+        :param new_state: True - move screen in, False - out
+        :return:
+        """
 
         self._device_proxy.move_motor(new_state)
 
     # ----------------------------------------------------------------------
     def motor_position(self):
+        """
 
+        :return: bool, True - move in, False - out; if there is no device proxy - None
+        """
         if self._device_proxy is not None:
             return self._device_proxy.motor_position()
 
@@ -456,6 +615,10 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def has_counter(self):
+        """
+
+        :return: bool, there is a corresponding Tango server or not
+        """
         if self._device_proxy is not None:
             return self._device_proxy.has_counter()
 
@@ -463,6 +626,10 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def get_counter(self):
+        """
+
+        :return: name of currently selected parameter in server
+        """
         if self._device_proxy is not None:
             return self._device_proxy.get_counter()
 
@@ -470,15 +637,22 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def set_counter(self, value):
+        """
+        set new paramater in server
+        :param value: str, parameter name
+        :return:
+        """
         self._device_proxy.set_counter(value)
 
     # ----------------------------------------------------------------------
     def visible_layouts(self):
+
         return self._device_proxy.visible_layouts
 
     # ----------------------------------------------------------------------
     def set_picture_clip(self, size):
-        self.image_need_refresh = True
+
+        self.set_new_image = True
         self.save_settings('view_x', size[0])
         self.save_settings('view_y', size[1])
         self.save_settings('view_w', size[2])
@@ -487,25 +661,91 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def get_picture_clip(self):
+        """
+
+        :return: (x, y, w, h), where x, y - top left corner coordinates
+        """
         return self._device_proxy.get_picture_clip()
 
     # ----------------------------------------------------------------------
     def get_max_picture_size(self):
+        """
+
+        :return: int, int, max frame width and heigth
+        """
         return self._device_proxy.get_settings('max_width', int), self._device_proxy.get_settings('max_height', int)
 
     # ----------------------------------------------------------------------
-    def get_device_source(self):
-        return self._device_proxy.source_mode
-
-    # ----------------------------------------------------------------------
     def get_reduction(self):
+        """
+
+        :return: int, reduction of camera resolution rate
+        """
         return self._device_proxy.get_reduction()
 
     # ----------------------------------------------------------------------
     def set_reduction(self, value):
+
         self._device_proxy.set_reduction(value)
+        self.set_new_image = True
+        if self.got_first_frame:
+            self.new_frame.emit()
 
     # ----------------------------------------------------------------------
     def set_auto_screen(self, state):
+        """
+         switch on or off screen motor
+        :param state: bool
+        :return:
+        """
         self.auto_screen = state
         self.save_settings('auto_screen', state)
+
+    # ----------------------------------------------------------------------
+    # -------------------- Dark image functionality ------------------------
+    # ----------------------------------------------------------------------
+    def set_dark_image(self):
+        """
+        saves current image as dark image
+        :return:
+        """
+        self._dark_image = self._last_frame
+
+    # ----------------------------------------------------------------------
+    def load_dark_image(self, file_name):
+        """
+        load dark image from file
+        :param file_name:
+        :return:
+        """
+        self._dark_image = np.load(file_name)
+
+    # ----------------------------------------------------------------------
+    def save_dark_image(self, file_name):
+        """
+        saves current image to the file
+        :param file_name:
+        :return:
+        """
+        np.save(file_name, self._dark_image)
+
+    # ----------------------------------------------------------------------
+    def has_dark_image(self):
+        """
+
+        :return: bool
+        """
+        return self._dark_image is not None
+
+    # ----------------------------------------------------------------------
+    def toggle_dark_image(self, state):
+        """
+
+        :param state: bool
+        :return:
+        """
+        if self._dark_image is not None:
+            self.subtract_dark_image = state
+
+        if self.got_first_frame:
+            self.new_frame.emit()

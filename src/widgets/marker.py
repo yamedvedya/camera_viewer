@@ -11,7 +11,7 @@ from src.gui.Marker_ui import Ui_Marker
 # ----------------------------------------------------------------------
 class Marker(QtWidgets.QWidget):
 
-    marker_changed = QtCore.pyqtSignal()
+    repaint_marker = QtCore.pyqtSignal()
     delete_me = QtCore.pyqtSignal(int)
 
     # ----------------------------------------------------------------------
@@ -52,7 +52,7 @@ class Marker(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def save_value(self, param, value):
         self._camera_device.set_marker_value(self.my_id, param, value)
-        self.marker_changed.emit()
+        self.repaint_marker.emit()
 
     # ----------------------------------------------------------------------
     def _pick_my_color(self):
@@ -60,4 +60,4 @@ class Marker(QtWidgets.QWidget):
 
         if color.isValid():
             self._camera_device.set_marker_value(self.my_id, 'color', color.name())
-            self.marker_changed.emit()
+            self.repaint_marker.emit()

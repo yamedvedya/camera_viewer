@@ -12,7 +12,7 @@ from src.gui.ROI_ui import Ui_Roi
 class ROI(QtWidgets.QWidget):
 
     delete_me = QtCore.pyqtSignal(int)
-    refresh_image = QtCore.pyqtSignal()
+    repaint_roi = QtCore.pyqtSignal()
 
     # ----------------------------------------------------------------------
     def __init__(self, id, camera_device):
@@ -61,11 +61,15 @@ class ROI(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def save_value(self, param, value):
+
         self.camera_device.set_roi_value(self.my_id, param, value)
-        self.refresh_image.emit()
+        self.camera_device.calculate_roi_statistics()
+
+        self.repaint_roi.emit()
 
     # ----------------------------------------------------------------------
     def update_values(self):
+
         self._block_signals(True)
         for ui in ['max_x', 'max_y', 'max_v',
                    'min_x', 'min_y', 'min_v',
@@ -98,7 +102,8 @@ class ROI(QtWidgets.QWidget):
 
         if color.isValid():
             self.camera_device.set_roi_value(self.my_id, 'color', color.name())
-            self.refresh_image.emit()
+
+            self.repaint_roi.emit()
 
     # ----------------------------------------------------------------------
     def _enable_me(self, state):
@@ -114,7 +119,8 @@ class ROI(QtWidgets.QWidget):
         self._ui.sb_roi_y.setEnabled(state)
 
         self.camera_device.set_roi_value(self.my_id, 'visible', state)
-        self.refresh_image.emit()
+
+        self.repaint_roi.emit()
 
     # ----------------------------------------------------------------------
     def _enable_cross(self, name):
@@ -125,4 +131,5 @@ class ROI(QtWidgets.QWidget):
             getattr(self._ui, 'chk_show_{}'.format(ui)).setChecked(name == ui)
 
         self.camera_device.set_roi_value(self.my_id, 'mark', name)
-        self.refresh_image.emit()
+
+        self.repaint_roi.emit()

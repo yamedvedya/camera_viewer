@@ -15,7 +15,11 @@ WIDGET_NAME = 'MarkersROIs'
 # ----------------------------------------------------------------------
 class MarkersROIsWidget(BaseWidget):
 
-    refresh_image = QtCore.pyqtSignal()
+    add_remove_roi = QtCore.pyqtSignal()
+    repaint_roi = QtCore.pyqtSignal()
+
+    add_remove_marker = QtCore.pyqtSignal()
+    repaint_marker = QtCore.pyqtSignal()
 
     # ----------------------------------------------------------------------
     def __init__(self, parent):
@@ -42,7 +46,7 @@ class MarkersROIsWidget(BaseWidget):
         self._ui.cmb_roi_as_counter.currentIndexChanged.connect(lambda ind: self._camera_device.set_counter_roi(ind))
 
     # ----------------------------------------------------------------------
-    def refresh_view(self):
+    def update_roi_statistics(self):
 
         for idx in range(self._ui.tb_rois.count()):
             self._ui.tb_rois.widget(idx).update_values()
@@ -61,7 +65,8 @@ class MarkersROIsWidget(BaseWidget):
     def _add_roi_widget(self, index):
         widget = ROI(index, self._camera_device)
         widget.delete_me.connect(self._delete_roi)
-        widget.refresh_image.connect(lambda: self.refresh_image.emit())
+        widget.repaint_roi.connect(lambda: self.repaint_roi.emit())
+
         self._ui.tb_rois.insertTab(index, widget, 'ROI_{}'.format(index+1))
         self._ui.tb_rois.setCurrentWidget(widget)
 
@@ -69,7 +74,7 @@ class MarkersROIsWidget(BaseWidget):
     def _add_roi(self):
         self._camera_device.add_roi()
         self._add_roi_widget(self._ui.tb_rois.count())
-        self.refresh_image.emit()
+        self.add_remove_roi.emit()
 
         self._refresh_roi_as_counter_cmb()
         self._ui.tb_rois.setVisible(True)
@@ -79,7 +84,7 @@ class MarkersROIsWidget(BaseWidget):
         self._ui.tb_rois.removeTab(idx)
 
         self._camera_device.delete_roi(idx)
-        self.refresh_image.emit()
+        self.add_remove_roi.emit()
 
         self._ui.tb_rois.setVisible(self._camera_device.num_roi())
         self._refresh_roi_as_counter_cmb()
@@ -116,14 +121,14 @@ class MarkersROIsWidget(BaseWidget):
     def _add_marker(self):
         self._camera_device.append_marker()
         self._update_marker_layout()
-        self.refresh_image.emit()
+        self.add_remove_marker.emit()
 
     # ----------------------------------------------------------------------
     def _delete_marker(self, id):
 
         self._camera_device.delete_marker(id)
         self._update_marker_layout()
-        self.refresh_image.emit()
+        self.add_remove_marker.emit()
 
     # ----------------------------------------------------------------------
     def _update_marker_layout(self):
@@ -140,7 +145,7 @@ class MarkersROIsWidget(BaseWidget):
         self._markers_widgets = []
         for ind in range(len(self._camera_device.markers)):
             widget = Marker(ind, self._camera_device)
-            widget.marker_changed.connect(lambda: self.refresh_image.emit())
+            widget.repaint_marker.connect(lambda: self.repaint_marker.emit())
             widget.delete_me.connect(self._delete_marker)
             layout.addWidget(widget)
             self._markers_widgets.append(widget)

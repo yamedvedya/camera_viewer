@@ -1,4 +1,10 @@
 # Created by matveyev at 19.08.2021
+"""
+  Widget for individual camera.
+  Has 4 dockable widgets: Frame viewer, Settings, ROI & Marker, PeakSearch.
+  Also has his own datasource instance
+
+"""
 
 import logging
 
@@ -20,7 +26,7 @@ from src.gui.CameraWidget_ui import Ui_CameraWindow
 # ----------------------------------------------------------------------
 class CameraWidget(QtWidgets.QMainWindow):
 
-    REFRESH_PERIOD = 1000
+    REFRESH_PERIOD = 1000 # how often we update the ROIs statistics and sync the settings with Tango
 
     # ----------------------------------------------------------------------
     def __init__(self, parent, settings, my_name):
@@ -36,14 +42,12 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self.camera_device = DataSource2D(self)
         if not self.camera_device.new_device_proxy(self.camera_name, self._parent.auto_screen_action.isChecked()):
-            raise RuntimeError('Cannot start camera')
+            self._log.error(f'Cannot start {my_name}')
+            raise RuntimeError(f'Cannot start {my_name}')
 
         self._ui = Ui_CameraWindow()
         self._ui.setupUi(self)
         self._init_ui()
-
-        self.camera_device.newFrame.connect(self._frame_viewer.refresh_view)
-        self.camera_device.gotError.connect(lambda err_msg: report_error(err_msg, self.log, self, True))
 
         self._refresh_view_timer = QtCore.QTimer(self)
         self._refresh_view_timer.timeout.connect(self._refresh_view)
@@ -51,19 +55,32 @@ class CameraWidget(QtWidgets.QMainWindow):
 
     # ----------------------------------------------------------------------
     def block_hist_signals(self, flag):
+        """
+            during the picture update in Frame viewer we need to disconnect histogram signals in Setting
+        :param flag: bool
+        :return:
+        """
         self._settings_widget.block_hist_signals(flag)
 
     # ----------------------------------------------------------------------
     def _start_stop_live_mode(self):
+        """
+
+        :return: None
+        """
 
         self._frame_viewer.start_stop_live_mode(self._parent.auto_screen_action.isChecked())
 
     # ----------------------------------------------------------------------
     def clean_close(self):
+        """
+
+        :return: None
+        """
         self._log.info(f"Closing {self.camera_name}...")
 
         self._settings_widget.close()
-        self._frame_viewer.close()
+        self._frame_viewer.close(self._parent.auto_screen_action.isChecked())
 
         self.camera_device.close_camera()
 
@@ -78,31 +95,40 @@ class CameraWidget(QtWidgets.QMainWindow):
 
     # ----------------------------------------------------------------------
     def _refresh_view(self):
+        """
+
+        :return: None
+        """
 
         state = self.camera_device.is_running()
         if state is None:
-            self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-            self._actionStartStop.setEnabled(False)
+            self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+            self._action_start_stop.setEnabled(False)
         elif state:
-            self._actionStartStop.setIcon(QtGui.QIcon(":/ico/stop.png"))
-            self._actionStartStop.setEnabled(True)
+            self._action_start_stop.setIcon(QtGui.QIcon(":/ico/stop.png"))
+            self._action_start_stop.setEnabled(True)
         else:
-            self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-            self._actionStartStop.setEnabled(True)
+            self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+            self._action_start_stop.setEnabled(True)
 
         self._settings_widget.refresh_view()
-        self._markerroi_widget.refresh_view()
-        self._markerroi_widget.refresh_view()
 
     # ----------------------------------------------------------------------
-    def _display_camera_status(self, fps):
+    def _display_fps(self, fps):
         """
+
+        :param fps: value, int
+        :return: None
         """
         self._lb_fps.setText("{:.2f} FPS".format(fps))
 
     # ----------------------------------------------------------------------
     def _viewer_cursor_moved(self, x, y):
         """
+
+        :param x: mouse coordinate
+        :param y: mouse coordinate
+        :return: None
         """
         self._lb_cursor_pos.setText("({:.2f}, {:.2f})".format(x, y))
 
@@ -110,7 +136,21 @@ class CameraWidget(QtWidgets.QMainWindow):
     # -------------------- UI initialization -------------------------------
     # ----------------------------------------------------------------------
     def _init_ui(self):
+
+        self._load_docks()
+
+        self._connect_signals()
+
+        self._init_actions()
+
+        self.addToolBar(self._init_tool_bar())
+
+        self._init_status_bar()
+
+    # ----------------------------------------------------------------------
+    def _load_docks(self):
         """
+         here we loads all widgets, dock them
         """
         self.setCentralWidget(None)
 
@@ -130,46 +170,75 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._peak_search_widget, self._peak_search_dock = \
             self._add_dock(PeakSearchWidget, "Peak Search", self)
 
+        # after all widgets are loaded we restore the user layout
         self._frame_viewer.load_ui_settings(self.camera_name)
         self._settings_widget.load_ui_settings(self.camera_name)
         self._markerroi_widget.load_ui_settings(self.camera_name)
         self._peak_search_widget.load_ui_settings(self.camera_name)
 
-        self._frame_viewer.status_changed.connect(self._display_camera_status)
+        # link between picture and histogram
+        self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())
+        self._frame_viewer.set_hist(self._settings_widget.get_hist())
+
+    # ----------------------------------------------------------------------
+    def _connect_signals(self):
+        """
+            connect signals between widgets
+        :return: None
+        """
+
+        self._frame_viewer.new_fps.connect(self._display_fps)
         self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
 
-        self._settings_widget.refresh_image.connect(self._frame_viewer.refresh_image)
-        self._markerroi_widget.refresh_image.connect(self._frame_viewer.refresh_image)
-        self._peak_search_widget.refresh_image.connect(self._frame_viewer.refresh_image)
+        self.camera_device.new_frame.connect(self._frame_viewer.new_frame)
 
-        self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())
+        self.camera_device.update_roi_statistics.connect(self._markerroi_widget.update_roi_statistics)
+        self.camera_device.update_roi_statistics.connect(self._frame_viewer.repaint_roi)
 
-        self._init_actions()
+        self.camera_device.update_peak_search.connect(self._frame_viewer.repaint_peak_search)
 
-        self._toolBar = self._init_tool_bar()
-        self.addToolBar(self._toolBar)
+        self.camera_device.got_error.connect(lambda err_msg: report_error(err_msg, self.log, self, True))
 
-        self._init_status_bar()
+        self._markerroi_widget.add_remove_marker.connect(self._frame_viewer.add_remove_marker)
+        self._markerroi_widget.repaint_marker.connect(self._frame_viewer.repaint_marker)
+
+        self._markerroi_widget.add_remove_roi.connect(self._frame_viewer.add_remove_roi)
+        self._markerroi_widget.repaint_roi.connect(self._frame_viewer.repaint_roi)
+
+    # ----------------------------------------------------------------------
+    def _add_dock(self, WidgetClass, label, *args, **kwargs):
+
+        widget = WidgetClass(*args, **kwargs)
+
+        dock = QtWidgets.QDockWidget(label)
+        dock.setObjectName("{0}Dock".format("".join(label.split())))
+        dock.setWidget(widget)
+
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+
+        self._ui.menu_widgets.addAction(dock.toggleViewAction())
+
+        return widget, dock
 
     # ----------------------------------------------------------------------
     def _init_actions(self):
         """
         """
-        self._actionStartStop = QtWidgets.QAction(self)
-        self._actionStartStop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-        self._actionStartStop.setText("Start/Stop")
-        self._actionStartStop.triggered.connect(self._start_stop_live_mode)
+        self._action_start_stop = QtWidgets.QAction(self)
+        self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+        self._action_start_stop.setText("Start/Stop")
+        self._action_start_stop.triggered.connect(self._start_stop_live_mode)
 
-        self._actionPrintImage = QtWidgets.QAction(self)
-        self._actionPrintImage.setIcon(QtGui.QIcon(":/ico/print.png"))
-        self._actionPrintImage.setText("Print Image")
-        self._actionPrintImage.triggered.connect(self._frame_viewer.print_image)
-        self._actionPrintImage.setEnabled(False)
+        self._action_print_image = QtWidgets.QAction(self)
+        self._action_print_image.setIcon(QtGui.QIcon(":/ico/print.png"))
+        self._action_print_image.setText("Print Image")
+        self._action_print_image.triggered.connect(self._frame_viewer.print_image)
+        self._action_print_image.setEnabled(False)
 
-        self._actionCopyImage = QtWidgets.QAction(self)
-        self._actionCopyImage.setIcon(QtGui.QIcon(":/ico/copy.png"))
-        self._actionCopyImage.setText("Copy to Clipboard")
-        self._actionCopyImage.triggered.connect(self._frame_viewer.to_clipboard)
+        self._action_copy_image = QtWidgets.QAction(self)
+        self._action_copy_image.setIcon(QtGui.QIcon(":/ico/copy.png"))
+        self._action_copy_image.setText("Copy to Clipboard")
+        self._action_copy_image.triggered.connect(self._frame_viewer.to_clipboard)
 
     # ----------------------------------------------------------------------
     def _make_save_menu(self, parent):
@@ -195,13 +264,10 @@ class CameraWidget(QtWidgets.QMainWindow):
     def _init_tool_bar(self):
         """
         """
-        if hasattr(self, '_toolBar'):
-            toolBar = self._toolBar
-        else:
-            toolBar = QtWidgets.QToolBar("Main toolbar", self)
-            toolBar.setObjectName("VimbaCam_ToolBar")
+        toolBar = QtWidgets.QToolBar("Main toolbar", self)
+        toolBar.setObjectName("VimbaCam_ToolBar")
 
-        toolBar.addAction(self._actionStartStop)
+        toolBar.addAction(self._action_start_stop)
         toolBar.addSeparator()
 
         # image saving
@@ -214,8 +280,8 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._tbSaveScan.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         toolBar.addWidget(self._tbSaveScan)
 
-        toolBar.addAction(self._actionPrintImage)
-        toolBar.addAction(self._actionCopyImage)
+        toolBar.addAction(self._action_print_image)
+        toolBar.addAction(self._action_copy_image)
         toolBar.addSeparator()
 
         return toolBar
@@ -231,20 +297,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         self.statusBar().addPermanentWidget(self._lb_cursor_pos)
         self.statusBar().addPermanentWidget(self._lb_fps)
 
-    # ----------------------------------------------------------------------
-    def _add_dock(self, WidgetClass, label, *args, **kwargs):
-
-        widget = WidgetClass(*args, **kwargs)
-
-        dock = QtWidgets.QDockWidget(label)
-        dock.setObjectName("{0}Dock".format("".join(label.split())))
-        dock.setWidget(widget)
-
-        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
-
-        self._ui.menu_widgets.addAction(dock.toggleViewAction())
-
-        return widget, dock
     # ----------------------------------------------------------------------
     def _save_ui_settings(self):
         """Save basic GUI settings.
