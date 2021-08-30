@@ -114,6 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self._settings, camera)
                 widget.load_ui_settings()
+                dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
                 self._camera_widgets.append(widget)
                 self._camera_docks.append(dock)
 

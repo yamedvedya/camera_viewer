@@ -212,6 +212,7 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         dock = QtWidgets.QDockWidget(label)
         dock.setObjectName("{0}Dock".format("".join(label.split())))
+        dock.setStyleSheet("""QDockWidget {font-size: 11pt; font-weight: normal}""")
         dock.setWidget(widget)
 
         self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
