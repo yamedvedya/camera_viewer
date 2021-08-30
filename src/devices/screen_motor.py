@@ -16,6 +16,7 @@ from queue import Queue, Empty
 
 REFRESH_PERIOD = 1
 
+
 # ----------------------------------------------------------------------
 class MotorExecutor(object):
 

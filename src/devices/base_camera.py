@@ -93,6 +93,14 @@ class BaseCamera(object):
             self._motor_worker.stop()
 
     # ----------------------------------------------------------------------
+    def start_acquisition(self):
+        raise RuntimeError('Not implemented')
+
+    # ----------------------------------------------------------------------
+    def stop_acquisition(self):
+        raise RuntimeError('Not implemented')
+
+    # ----------------------------------------------------------------------
     # ------------------------ Frame functionality -------------------------
     # ----------------------------------------------------------------------
     def maybe_read_frame(self):

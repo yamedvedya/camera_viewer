@@ -54,7 +54,10 @@ class TangoTineProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
-
+        """
+        start acquisition tread
+        :return:
+        """
         self._camera_read_thread = Thread(target=self._readout_frame)
         self._camera_read_thread_running = True
         self._camera_read_thread.start()
@@ -63,6 +66,10 @@ class TangoTineProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
+        """
+        stops acquisition tread
+        :return:
+        """
 
         if self._camera_read_thread_running:
             self._camera_read_thread_running = False
@@ -72,6 +79,10 @@ class TangoTineProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def is_running(self):
+        """
+
+        :return: bool
+        """
         return self._camera_read_thread_running
 
     # ----------------------------------------------------------------------
@@ -90,6 +101,12 @@ class TangoTineProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
+        """
+        here we catch some settings before read them from general settings
+        :param option:
+        :param cast:
+        :return:
+        """
         if option in ['max_width', 'max_height']:
             w, h = self._device_proxy.Frame.shape
             if option == 'max_width':
