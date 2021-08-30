@@ -14,7 +14,7 @@ import subprocess
 
 from functools import partial
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 from distutils.util import strtobool
 
@@ -65,11 +65,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._settings.has_node('roi_server') and self._settings.option("roi_server", "enable").lower() == "true":
             try:
                 self._roi_server = RoiServer(self._settings.option("roi_server", "host"),
-                                             self._settings.option("roi_server", "port"))
-
-                self._roi_server.set_camera_device(self._camera_device, self._device_list)
+                                             self._settings.option("roi_server", "port"),
+                                             self._device_list)
                 self._roi_server.start()
-                self._roi_server.change_camera.connect(lambda name: self.change_cam(str(name)))
             except Exception as err:
                 self.log.exception(err)
 
@@ -237,13 +235,26 @@ class MainWindow(QtWidgets.QMainWindow):
         except:
             pass
 
-        self._enable_auto_screens = False
+        enable_auto_screens = False
         try:
-            self._enable_auto_screens = strtobool(settings.value("AutoScreen"))
+            enable_auto_screens = strtobool(settings.value("AutoScreen"))
         except:
             pass
 
-        self.auto_screen_action.setChecked(self._enable_auto_screens)
+        self.auto_screen_action.setChecked(enable_auto_screens)
+        self._display_auto_screens(enable_auto_screens)
+
+    # ----------------------------------------------------------------------
+    def _display_auto_screens(self, state):
+        font = self.auto_screen_action.font()
+
+        if state:
+            self.auto_screen_action.setText('Auto screens ENABLED')
+        else:
+            self.auto_screen_action.setText('Auto screens DISABLED')
+
+        font.setBold(state)
+        self.auto_screen_action.setFont(font)
 
     # ----------------------------------------------------------------------
     def _init_menu(self):
@@ -251,8 +262,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menu_cameras = QtWidgets.QMenu('Cameras', self)
         self.menuBar().addMenu(self.menu_cameras)
 
-        self.auto_screen_action = QtWidgets.QAction('Enable auto screens', self)
+        self.auto_screen_action = QtWidgets.QAction('', self)
         self.auto_screen_action.setCheckable(True)
+        self.auto_screen_action.triggered.connect(self._display_auto_screens)
         self.menuBar().addAction(self.auto_screen_action)
 
         about_action = QtWidgets.QAction('About', self)

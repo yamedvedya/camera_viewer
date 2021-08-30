@@ -2,7 +2,7 @@
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtCore
 
-from functions import rotate
+from src.utils.functions import rotate
 
 
 # ----------------------------------------------------------------------

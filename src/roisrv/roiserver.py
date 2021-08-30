@@ -26,15 +26,13 @@ class RoiServer(QtCore.QObject):
     """
     """
 
-    change_camera = QtCore.pyqtSignal(str)
-
     SOCKET_TIMEOUT = .5                            # [s]
     MAX_REQUEST_LEN = 256
     MAX_CLIENT_NUMBER = 32
     CMD_LIST = ["get_sum",]
 
     # ----------------------------------------------------------------------
-    def __init__(self, host, port):
+    def __init__(self, host, port, cameras_list):
 
         super(RoiServer, self).__init__()
 
@@ -45,6 +43,8 @@ class RoiServer(QtCore.QObject):
         
         self.host = str(host)
         self.port = int(port)
+
+        self._cameras_list = cameras_list
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)      # TODO
@@ -60,11 +60,6 @@ class RoiServer(QtCore.QObject):
         
         self.log.info("ROI server host {}, port {}".format(self.host,
                                                            self.port))
-
-    # ----------------------------------------------------------------------
-    def set_camera_device(self, camera_device, cameras_list):
-        self._camera_device = camera_device
-        self._cameras_list = cameras_list
 
     # ----------------------------------------------------------------------
     def start(self):

@@ -15,6 +15,7 @@ from distutils.util import strtobool
 import subprocess
 
 import pyqtgraph as pg
+from packaging import version
 
 from src.utils.errors import report_error
 from src.widgets.base_widget import BaseWidget, APP_NAME
@@ -42,7 +43,11 @@ class SettingsWidget(BaseWidget):
         self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
 
         # picture histogram
-        self.hist = pg.HistogramLUTWidget(self, orientation='horizontal')
+        if version.parse(pg.__version__) >= version.parse('0.12.0'):
+            self.hist = pg.HistogramLUTWidget(self, orientation='horizontal')
+        else:
+            self.hist = pg.HistogramLUTWidget(self)
+
         self.hist.setBackground('w')
         self._ui.vl_levels.addWidget(self.hist, 1)
 

@@ -84,7 +84,7 @@ class ProjectionWidget(QtWidgets.QWidget):
         item = pg.PlotItem()
         item.showGrid(True, True)
         item.setMenuEnabled(False)
-        item.enableAutoScale()
+        item.enableAutoRange()
     
         plot = item.plot([], pen=self.PLOT_COLOR, name="")
  

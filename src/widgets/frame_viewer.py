@@ -18,8 +18,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
 
 from src.widgets.base_widget import BaseWidget
 from src.gui.FrameViewer_ui import Ui_FrameViewer
-from gui_elements import ImageMarker, PeakMarker, LineSegmentItem
-from src.utils.errors import report_error
+from src.utils.gui_elements import ImageMarker, PeakMarker, LineSegmentItem
 
 WIDGET_NAME = 'FrameViewer'
 SAVE_STATE_UIS = ['splitter_y1', 'splitter_y2', 'splitter_x']

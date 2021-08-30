@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     for out_dir in out_dirs:
         if not os.path.exists(out_dir):
-            os.mkdir(out_dir)
+            os.makedirs(out_dir)
             with open(out_dir + '/__init__.py', 'w'):
                 pass
 
