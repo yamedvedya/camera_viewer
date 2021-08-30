@@ -134,9 +134,14 @@ class FrameViewer(BaseWidget):
         # ----------------------------------------------------------------------
         #                        Labels
         # ----------------------------------------------------------------------
-        self._deviceLabel = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
-        self._datetimeLabel = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"), visible=True)
-        self._load_label = self._add_label("Load image", self._settings.node("camera_viewer/datetime_label"), visible=False)
+        self._device_label = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
+        self._device_label.setText(self._camera_device.device_id)
+
+        self._datetime_label = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"),
+                                               visible=True)
+
+        self._load_label = self._add_label("Load image", self._settings.node("camera_viewer/datetime_label"),
+                                           visible=False)
 
         if not self.load_camera():
             raise RuntimeError('Cannot set FrameViewer')
@@ -145,10 +150,19 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def get_image_view(self):
+        """
+
+        :return: image item to be set to LUT item
+        """
         return self._ui.image_view.imageItem
 
     # ----------------------------------------------------------------------
     def set_hist(self, hist):
+        """
+
+        :param hist: LUT item
+        :return: None
+        """
         self._hist = hist
 
     # ----------------------------------------------------------------------
@@ -187,6 +201,9 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def close(self, auto_screen):
         """
+
+        :param auto_screen: bool, general settings screen control
+        :return:
         """
         self._log.debug("Closing FrameViewer")
 
@@ -196,13 +213,11 @@ class FrameViewer(BaseWidget):
         super(FrameViewer, self).close()
 
     # ----------------------------------------------------------------------
-    def update_camera_label(self):
-
-        self._deviceLabel.setText(self._camera_device.device_id)
-
-    # ----------------------------------------------------------------------
     def _visible_range_changed(self, viewBox):
         """
+        slot for picture zoom signal
+        :param viewBox:
+        :return: None
         """
         self._view_rect = viewBox.viewRect()
 
@@ -220,6 +235,9 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def start_stop_live_mode(self, auto_screen):
         """
+
+        :param auto_screen: bool, general settings screen control
+        :return:
         """
         if self._camera_device and not self._camera_device.is_running():
             self._start_live_mode(auto_screen)
@@ -229,6 +247,9 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def _start_live_mode(self, auto_screen):
         """
+
+        :param auto_screen: bool, general settings screen control
+        :return:
         """
         if self._camera_device:
             self._acq_started = time.time()
@@ -242,6 +263,9 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def _stop_live_mode(self, auto_screen):
         """
+
+        :param auto_screen: bool, general settings screen control
+        :return:
         """
         if self._camera_device and self._camera_device.is_running():
             self._camera_device.stop(auto_screen)
@@ -252,6 +276,8 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def new_frame(self):
         """
+        slot for new frame signal from camera
+        :return:
         """
         if hasattr(self, "_load_label"):
             self._load_label.setVisible(True)
@@ -295,12 +321,10 @@ class FrameViewer(BaseWidget):
 
             self._redraw_projections()
 
-            # TODO check this part
             self._peak_markers.new_scale(self._view_rect.width(), self._view_rect.height())
             self._center_search_item.new_scale(self._view_rect.width(), self._view_rect.height())
 
             self._show_labels()
-            self.update_camera_label()
 
             # FPS counter
             self._fps_counter += 1
@@ -342,6 +366,10 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def repaint_peak_search(self):
+        """
+        called after peak search is done
+        :return:
+        """
         self._peak_markers.new_peaks(self._camera_device.peak_coordinates)
 
     # ----------------------------------------------------------------------
@@ -349,6 +377,11 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
 
     def add_remove_marker(self):
+        """
+        called when new roi added or lod deleted
+
+        :return:
+        """
         for widget in self._marker_widgets:
             widget.delete_me()
 
@@ -360,6 +393,11 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def repaint_marker(self):
+        """
+        called when user moves marker or changes color
+
+        :return:
+        """
         for widget, marker in zip(self._marker_widgets, self._camera_device.markers):
             widget.setPos(marker['x'], marker['y'])
             widget.setVisible(marker['visible'])
@@ -370,6 +408,11 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
 
     def add_remove_roi(self):
+        """
+        called when new roi added or lod deleted
+
+        :return: None
+        """
         for widget, marker, label in self._rois_widgets:
             self._ui.image_view.view.removeItem(widget)
             self._ui.image_view.view.removeItem(marker)
@@ -398,7 +441,10 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def repaint_roi(self):
-        """ROI coords changed elsewhere.
+        """
+        called when new statistics calculated, or ROI parameters changed
+
+        :return:
         """
         for ind, (roi, cross, label) in enumerate(self._rois_widgets):
 
@@ -431,7 +477,11 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def _roi_changed(self, rect, ind):
-        """Called when ROI emits sigRegionChanged signal.
+        """
+        called when ROI emits sigRegionChanged signal.
+        :param rect: new roi rect
+        :param ind: ROIs index
+        :return:
         """
         if self._last_frame is not None:
             pos, size = rect.pos(), rect.size()
@@ -451,6 +501,9 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def _mouse_moved(self, pos):
         """
+        slot for mouse events, utilized for center search
+        :param pos: mouse position
+        :return:
         """
         pos = self._ui.image_view.view.mapSceneToView(pos)
         self.cursor_moved.emit(pos.x(), pos.y())
@@ -461,6 +514,9 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def _mouse_clicked(self, event):
         """
+        slot for mouse events, mainly utilized for center search
+        :param event:
+        :return:
         """
         if event.double():
             try:
@@ -468,7 +524,7 @@ class FrameViewer(BaseWidget):
             except:
                 pass
 
-        elif event.button() == 2:
+        elif event.button() == 2:  # right click
 
             action = self._context_menu.exec_(event._screenPos)
 
@@ -478,13 +534,14 @@ class FrameViewer(BaseWidget):
                 self._action_second_point.setVisible(True)
                 self._action_clear_points.setEnabled(True)
                 self._center_search_item.setVisible(True)
+
             elif action == self._action_second_point:
                 self._center_search_points[1] = self._ui.image_view.view.mapSceneToView(event.scenePos())
                 self._action_second_point.setVisible(False)
                 self._search_in_progress = False
                 self._save_center_search()
-            else:
 
+            else:
                 self._center_search_points = [None, None]
                 self._action_second_point.setVisible(False)
                 self._action_clear_points.setEnabled(False)
@@ -492,7 +549,8 @@ class FrameViewer(BaseWidget):
                 self._search_in_progress = False
                 self._save_center_search()
 
-        elif event.button() == 1 and self._search_in_progress:
+        elif event.button() == 1 and self._search_in_progress:  # left click
+
             self._center_search_points[1] = self._ui.image_view.view.mapSceneToView(event.scenePos())
             self._action_second_point.setVisible(False)
             self._search_in_progress = False
@@ -502,6 +560,10 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def _save_center_search(self):
+        """
+        drops center search parameters
+        :return: None
+        """
         if self._center_search_points[0] is not None and self._center_search_points[1] is not None:
             coordinates = [self._center_search_points[0].x(), self._center_search_points[0].y(),
                            self._center_search_points[1].x(), self._center_search_points[1].y()]
@@ -511,6 +573,10 @@ class FrameViewer(BaseWidget):
 
     # ----------------------------------------------------------------------
     def _display_center_search(self):
+        """
+
+        :return:
+        """
         self._center_search_item.set_pos(self._center_search_points)
 
     # ----------------------------------------------------------------------
@@ -520,14 +586,14 @@ class FrameViewer(BaseWidget):
     def _show_labels(self):
         """
         """
-        if hasattr(self, "_deviceLabel"):
-            self._show_label(0.5, 0.04, self._deviceLabel)
+        if hasattr(self, "_device_label"):
+            self._show_label(0.5, 0.04, self._device_label)
 
-        if hasattr(self, "_datetimeLabel"):
+        if hasattr(self, "_datetime_label"):
             msg = datetime.now().strftime(self.DATETIME)
-            self._datetimeLabel.setText(msg)
+            self._datetime_label.setText(msg)
 
-            self._show_label(0.85, 0.9, self._datetimeLabel)
+            self._show_label(0.85, 0.9, self._datetime_label)
 
         if hasattr(self, "_load_label"):
             self._show_label(0.85, 0.04, self._load_label)
@@ -535,6 +601,11 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def _add_label(self, text, style=None, visible=True):
         """
+
+        :param text: str
+        :param style: style sheet
+        :param visible: bool
+        :return: pg text item
         """
         if not style:
             color = self.LABEL_COLOR
@@ -640,7 +711,7 @@ class FrameViewer(BaseWidget):
     # ----------------------------------------------------------------------
     def _get_image_file_name(self, title):
         """
-       """
+        """
         filesFilter = ";;".join(["(*.{})".format(ffilter) for ffilter in
                                  QtGui.QImageWriter.supportedImageFormats()])
 

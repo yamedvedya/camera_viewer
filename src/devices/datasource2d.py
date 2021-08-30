@@ -301,6 +301,8 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def get_frame(self):
         """
+        returns last frame after applying dark image and level mode
+        :return: 2d np.array
         """
         if self.subtract_dark_image and self._dark_image is not None:
             try:
@@ -325,7 +327,14 @@ class DataSource2D(QtCore.QObject):
             return frame
 
     # ----------------------------------------------------------------------
+    # ------------------- Levels functionality ----------------------------
+    # ----------------------------------------------------------------------
     def level_setting_change(self, lut_state):
+        """
+
+        :param lut_state: dict, levels settings
+        :return: None
+        """
         self.levels = lut_state
         self.save_settings('lut', json.dumps(lut_state))
         if self.got_first_frame:
@@ -333,7 +342,11 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def set_new_level_mode(self, mode):
+        """
 
+        :param mode: srt, mode: "lin", "sqrt", "log"
+        :return:
+        """
         if self.level_mode != mode:
             self.level_mode = mode
             self.save_settings('level_mode', mode)
@@ -344,6 +357,10 @@ class DataSource2D(QtCore.QObject):
     # ------------------- Markers functionality ----------------------------
     # ----------------------------------------------------------------------
     def _save_marker_settings(self):
+        """
+
+        :return: drops markers to settings
+        """
         num_markers = len(self.markers)
         self.save_settings('num_markers', num_markers)
         for ind, marker in enumerate(self.markers):
@@ -352,17 +369,32 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def set_marker_value(self, marker_id, setting, value):
-        self.markers_need_update = True
+        """
+
+        :param marker_id: int
+        :param setting: str, setting name
+        :param value: new value
+        :return:
+        """
         self.markers[marker_id][setting] = value
         self.save_settings('marker_{}_{}'.format(marker_id, setting), value)
 
     # ----------------------------------------------------------------------
     def append_marker(self):
+        """
+
+        :return: None
+        """
         self.markers.append({'x': 0, 'y': 0, 'visible': True, 'color': self.settings.option('colors', 'marker')})
         self._save_marker_settings()
 
     # ----------------------------------------------------------------------
     def delete_marker(self, index):
+        """
+
+        :param index: int, maker to be deleted
+        :return:
+        """
 
         del self.markers[index]
         self._save_marker_settings()
@@ -372,7 +404,7 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def _save_roi_settings(self):
         """
-
+        drops ROIs to settings
         :return:
         """
         num_rois = len(self.rois)
@@ -385,9 +417,9 @@ class DataSource2D(QtCore.QObject):
     def set_roi_value(self, roi_id, setting, value):
         """
 
-        :param roi_id:
-        :param setting:
-        :param value:
+        :param roi_id: int
+        :param setting: str, setting name
+        :param value:new value
         :return:
         """
         self.rois[roi_id][setting] = value
@@ -399,14 +431,27 @@ class DataSource2D(QtCore.QObject):
 
     # ----------------------------------------------------------------------
     def num_roi(self):
+        """
+        return how many ROIs are there
+        :return: int
+        """
         return len(self.rois)
 
     # ----------------------------------------------------------------------
     def get_counter_roi(self):
+        """
+
+        :return: int, which ROIs selected as counter for Sardana
+        """
         return self._counter_roi
 
     # ----------------------------------------------------------------------
     def set_counter_roi(self, value):
+        """
+        set new ROIs as counter for Sardana
+        :param value: int
+        :return:
+        """
         self._counter_roi = value
         self.save_settings('counter_roi', value)
         for setting in ['x', 'y', 'w', 'h']:
@@ -417,7 +462,7 @@ class DataSource2D(QtCore.QObject):
     def get_active_roi_value(self, value):
         """
 
-        :param value:
+        :param value: str, name of parameter
         :return:
         """
         return self.rois_data[self._counter_roi][value]
@@ -442,7 +487,7 @@ class DataSource2D(QtCore.QObject):
         """
 
         :param index: roi to be deleted
-        :return:
+        :return: None
         """
 
         del self.rois[index]
@@ -452,6 +497,9 @@ class DataSource2D(QtCore.QObject):
     # ----------------------------------------------------------------------
     def calculate_roi_statistics(self):
         """
+        calculates ROIs statistics after new frame comes of ROIs parameter changed
+
+        :return: None
         """
         if self._last_frame is None:
             return
@@ -512,12 +560,22 @@ class DataSource2D(QtCore.QObject):
     # ------------- Peak search functionality ------------------------------
     # ----------------------------------------------------------------------
     def set_peak_search_value(self, setting, value):
+        """
+
+        :param setting: str, parameter name
+        :param value: new value
+        :return:
+        """
         self.peak_search[setting] = value
         self.save_settings('peak_{}'.format(setting), value)
         self.find_peaks()
 
     # ----------------------------------------------------------------------
     def find_peaks(self):
+        """
+        finds peaks after new frame comes of parameter changed
+        :return: None
+        """
         if self.peak_search['search']:
             try:
                 if self.peak_search['search_mode']:

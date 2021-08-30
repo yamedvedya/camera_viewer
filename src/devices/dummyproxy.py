@@ -6,12 +6,12 @@
 """
 
 import numpy as np
-from abstract_camera import AbstractCamera
+from base_camera import BaseCamera
 from threading import Thread
 import time
 
 # ----------------------------------------------------------------------
-class DummyProxy(AbstractCamera):
+class DummyProxy(BaseCamera):
     """
     """
     FRAME_W = 500

@@ -11,7 +11,7 @@ import numpy as np
 from threading import Thread
 from distutils.util import strtobool
 
-from src.devices.abstract_camera import AbstractCamera
+from src.devices.base_camera import BaseCamera
 
 try:
     import PyTango
@@ -20,7 +20,7 @@ except ImportError:
 
 
 # ----------------------------------------------------------------------
-class VimbaProxy(AbstractCamera):
+class VimbaProxy(BaseCamera):
     """Proxy to a physical TANGO device.
     """
     SERVER_SETTINGS = {'low': {"PixelFormat": "Mono8", "ViewingMode": 1},

@@ -155,7 +155,9 @@ class SettingsWidget(BaseWidget):
             self._ui.rb_log_level.setChecked(self._camera_device.level_mode == 'log')
             self._ui.rb_sqrt_level.setChecked(self._camera_device.level_mode == 'sqrt')
 
-            self._ui.sb_reduce.setValue(self._camera_device.get_reduction())
+            if not self._ui.sb_reduce.hasFocus():
+                self._ui.sb_reduce.setValue(self._camera_device.get_reduction())
+
             self._ui.chk_auto_screen.setChecked(self._camera_device.auto_screen)
 
             self._ui.but_save_dark_image.setEnabled(self._camera_device.has_dark_image())

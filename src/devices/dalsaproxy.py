@@ -17,10 +17,10 @@ import os.path as ospath
 
 from PIL import Image
 
-from src.devices.abstract_camera import AbstractCamera
+from src.devices.base_camera import BaseCamera
 
 # ----------------------------------------------------------------------
-class DalsaProxy(AbstractCamera):
+class DalsaProxy(BaseCamera):
 
     _settings_map = {
                      'max_level_limit': (None, )

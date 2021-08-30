@@ -9,7 +9,7 @@
 import numpy as np
 import time
 from threading import Thread
-from src.devices.abstract_camera import AbstractCamera
+from src.devices.base_camera import BaseCamera
 
 try:
     import PyTango
@@ -18,7 +18,7 @@ except ImportError:
 
 
 # ----------------------------------------------------------------------
-class TangoTineProxy(AbstractCamera):
+class TangoTineProxy(BaseCamera):
     """Proxy to a physical TANGO device.
     """
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...

@@ -2,12 +2,12 @@
 # Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
-"""General camera class
+"""
+Base camera class
 """
 
 import PyTango
 import numpy as np
-import json
 
 from PyQt5 import QtCore
 from distutils.util import strtobool
@@ -16,12 +16,18 @@ from src.devices.screen_motor import MotorExecutor
 
 from src.mainwindow import APP_NAME
 
+
 # ----------------------------------------------------------------------
-class AbstractCamera(object):
+class BaseCamera(object):
 
     # ----------------------------------------------------------------------
     def __init__(self, settings, log):
-        super(AbstractCamera, self).__init__()
+        """
+
+        :param settings: config.xml
+        :param log:
+        """
+        super(BaseCamera, self).__init__()
 
         self._settings = settings
         self._log = log
@@ -29,10 +35,11 @@ class AbstractCamera(object):
         self.id = ''
 
         self._new_frame_flag = False
-        self._eid = None
+        self._eid = None  # Tango even ID
 
-        self._cid = settings.getAttribute("name")
+        self._my_name = settings.getAttribute("name")
 
+        # picture rotate and flip properties
         if settings.hasAttribute('flip_vertical'):
             self.flip_v = bool(strtobool(settings.getAttribute("flip_vertical")))
         else:
@@ -48,6 +55,7 @@ class AbstractCamera(object):
         else:
             self.rotate_angle = 0
 
+        # DeviceProxies instances
         if settings.hasAttribute('tango_server'):
             self._device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("tango_server")))
         else:
@@ -63,19 +71,34 @@ class AbstractCamera(object):
         else:
             self._roi_server = None
 
+        # if camera has a screen control
         if settings.hasAttribute('motor_type') and \
                 (str(settings.getAttribute("motor_type")).lower() not in ['none', 'no', '']):
             self._motor_worker = MotorExecutor(settings, log)
         else:
             self._motor_worker = None
 
+        # for high resolution cameras to decrease CPU load
         self.reduce_resolution = max(self.get_settings('Reduce', int), 1)
 
         self._picture_size = [0, 0, -1, -1]
 
     # ----------------------------------------------------------------------
+    def close_camera(self):
+        """
+        save camera close
+        :return:
+        """
+        if self._motor_worker is not None:
+            self._motor_worker.stop()
+
+    # ----------------------------------------------------------------------
+    # ------------------------ Frame functionality -------------------------
+    # ----------------------------------------------------------------------
     def maybe_read_frame(self):
         """
+
+        :return: None if no new picture or 2d np.array if there is a new frame
         """
         if not self._new_frame_flag:
             return None
@@ -85,6 +108,10 @@ class AbstractCamera(object):
 
     # ----------------------------------------------------------------------
     def rotate(self):
+        """
+        rotate and flip picture
+        :return: 2d np.array
+        """
 
         if self.flip_v and self.flip_h:
             self._last_frame = self._last_frame[::-1, ::-1]
@@ -99,7 +126,73 @@ class AbstractCamera(object):
         return self._last_frame[::self.reduce_resolution, ::self.reduce_resolution]
 
     # ----------------------------------------------------------------------
+    def is_running(self):
+        """
+
+        :return: bool
+        """
+        return True
+
+    # ----------------------------------------------------------------------
+    # ------------------------- Picture clip/resolution  -------------------
+    # ----------------------------------------------------------------------
+    def set_picture_clip(self, size):
+        """
+        sets picture clip
+
+        :param size: (x, y, w, h) - parameters of picture clip
+        :return: None
+        """
+
+        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
+
+        self.save_settings('view_x', size[0])
+        self.save_settings('view_y', size[1])
+        self.save_settings('view_w', size[2])
+        self.save_settings('view_h', size[3])
+
+    # ----------------------------------------------------------------------
+    def get_picture_clip(self):
+        """
+
+        :return: (x, y, w, h) - parameters of picture clip
+        """
+
+        return [self._picture_size[0], self._picture_size[1],
+                self._picture_size[2] - self._picture_size[0],
+                self._picture_size[3] - self._picture_size[1]]
+
+    # ----------------------------------------------------------------------
+    def get_reduction(self):
+        """
+
+        :return: int, picture reduction
+        """
+        return self.reduce_resolution
+
+    # ----------------------------------------------------------------------
+    def set_reduction(self, value):
+        """
+        sets picture reduction
+
+        :param value: int,
+        :return:
+        """
+        self.save_settings('Reduce', value)
+        self.reduce_resolution = value
+
+    # ----------------------------------------------------------------------
+    # ------------------------ Camera settings load/save -------------------
+    # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
+        """
+         reads the requested setting according the settings map
+
+        :param option: str, setting name
+        :param cast:
+        :return: None, of False (if cast == bool), '' (is cast == str) if there is no such settings,
+                 or cast(requested setting)
+        """
 
         if option in self._settings_map.keys():
             try:
@@ -121,9 +214,10 @@ class AbstractCamera(object):
                     raise RuntimeError('Unknown setting source')
             except:
                 value = None
+
         else:
             try:
-                value = QtCore.QSettings(APP_NAME).value("{}/{}".format(self._cid, option))
+                value = QtCore.QSettings(APP_NAME).value("{}/{}".format(self._my_name, option))
             except:
                 value = None
 
@@ -145,6 +239,7 @@ class AbstractCamera(object):
                 return int(float(value))
             else:
                 return cast(value)
+
         else:
             if cast == bool:
                 return False
@@ -157,34 +252,51 @@ class AbstractCamera(object):
 
     # ----------------------------------------------------------------------
     def save_settings(self, setting, value):
+        """
+        saves the requested setting according the settings map
 
+        :param setting: str, setting name
+        :param value: new vale to save
+        :return:
+        """
         if setting in self._settings_map.keys():
             if self._settings_map[setting][0] == 'roi_server' and self._roi_server is not None:
                 setattr(self._roi_server, self._settings_map[setting][1], value)
+
             elif self._settings_map[setting][0] == 'settings_proxy' and self._settings_proxy is not None:
                 self._settings_proxy.write_attribute(self._settings_map[setting][1], value)
+
             elif self._settings_map[setting][0] == 'device_proxy' and self._device_proxy is not None:
                 self._device_proxy.write_attribute(self._settings_map[setting][1], value)
+
             elif self._settings_map[setting][0] is None:
                 pass
+
             else:
                 raise RuntimeError('Unknown setting source')
         else:
-            QtCore.QSettings(APP_NAME).setValue("{}/{}".format(self._cid, setting), value)
+            QtCore.QSettings(APP_NAME).setValue("{}/{}".format(self._my_name, setting), value)
 
         if setting == 'Reduce':
             self.reduce_resolution = value
 
     # ----------------------------------------------------------------------
-    def is_running(self):
-        return True
-
+    # ------------------------ Screen control ------------------------------
     # ----------------------------------------------------------------------
     def has_motor(self):
+        """
+
+        :return: bool
+        """
         return self._motor_worker is not None
 
     # ----------------------------------------------------------------------
     def move_motor(self, state=None):
+        """
+
+        :param state:
+        :return:
+        """
         if self._motor_worker is not None:
             if state is None:
                 state = not self.motor_position()
@@ -193,17 +305,31 @@ class AbstractCamera(object):
 
     # ----------------------------------------------------------------------
     def motor_position(self):
+        """
+
+        :return: bool: True - screen in, False - screen out, None is there is no motor
+        """
         if self._motor_worker is not None:
             return self._motor_worker.motor_position()
         else:
             return None
 
     # ----------------------------------------------------------------------
+    # ------------------------ Sardana counter control ---------------------
+    # ----------------------------------------------------------------------
     def has_counter(self):
+        """
+
+        :return: bool
+        """
         return self._roi_server is not None
 
     # ----------------------------------------------------------------------
     def get_counter(self):
+        """
+
+        :return: str, current counter control
+        """
         if self._roi_server is not None:
             try:
                 return self._roi_server.scan_parameter
@@ -213,40 +339,14 @@ class AbstractCamera(object):
             return ''
 
     # ----------------------------------------------------------------------
-    def close_camera(self):
-        if self._motor_worker is not None:
-            self._motor_worker.stop()
-
-    # ----------------------------------------------------------------------
     def set_counter(self, value):
+        """
+
+        :param value: parameter to be set as a counter for Sardana control
+        :return:
+        """
         if self._roi_server is not None:
             try:
                 self._roi_server.scan_parameter = str(value)
             except:
                 pass
-
-    # ----------------------------------------------------------------------
-    def set_picture_clip(self, size):
-
-        self._picture_size = [size[0], size[1], size[0]+size[2], size[1]+size[3]]
-
-        self.save_settings('view_x', size[0])
-        self.save_settings('view_y', size[1])
-        self.save_settings('view_w', size[2])
-        self.save_settings('view_h', size[3])
-
-    # ----------------------------------------------------------------------
-    def get_picture_clip(self):
-
-        return [self._picture_size[0], self._picture_size[1],
-                self._picture_size[2] - self._picture_size[0],
-                self._picture_size[3] - self._picture_size[1]]
-
-    # ----------------------------------------------------------------------
-    def get_reduction(self):
-        return self.reduce_resolution
-
-    # ----------------------------------------------------------------------
-    def set_reduction(self, value):
-        self.save_settings('Reduce', value)
-        self.reduce_resolution = value

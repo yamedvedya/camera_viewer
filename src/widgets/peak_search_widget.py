@@ -8,6 +8,7 @@ from src.gui.PeakSearch_ui import Ui_PeakSearch
 
 WIDGET_NAME = 'PeakSearch'
 
+
 # ----------------------------------------------------------------------
 class PeakSearchWidget(BaseWidget):
 
