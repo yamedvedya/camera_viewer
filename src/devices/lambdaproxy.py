@@ -66,31 +66,31 @@ class LambdaProxy(BaseCamera):
     def start_acquisition(self):
 
         if self._source == 'Event':
-            if self._device_proxy is None:
-                raise RuntimeError('No device proxy')
+            if self._device_proxy is not None:
+                self._log.debug(f'{self._my_name}: starting acquisition: event mode')
 
-            self._eid = self._device_proxy.subscribe_event("LiveLastImageData",
-                                                           PyTango.EventType.DATA_READY_EVENT, self._on_event)
-            self._running = True
-            return True
+                self._eid = self._device_proxy.subscribe_event("LiveLastImageData",
+                                                               PyTango.EventType.DATA_READY_EVENT, self._on_event)
+                self._running = True
 
         elif self._source == 'Files':
+
             if self.path != '':
+                self._log.debug(f'{self._my_name}: starting acquisition: files mode')
+
                 self._my_observer = Observer()
                 self._my_observer.schedule(self._my_event_handler, self.path, recursive=True)
                 self._my_observer.start()
                 self._running = True
-                return True
-            else:
-                raise RuntimeError('Path is not exist')
-        else:
-            raise RuntimeError('Unknown mode')
+
+        return self._running
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
 
         if self._source == 'Event':
             self._device_proxy.unsubscribe_event(self._eid)
+
         elif self._source == 'Files':
             self._my_observer.stop()
             self._my_observer.join()
@@ -98,7 +98,7 @@ class LambdaProxy(BaseCamera):
             raise RuntimeError('Unknown mode')
         self._running = False
 
-        self._log.debug("Dalsa folder monitor unsubscribed")
+        self._log.debug(f"{self._my_name} stopping acquisition: unsubscribed")
 
     # ----------------------------------------------------------------------
     def _on_event(self, event):
@@ -137,23 +137,27 @@ class LambdaProxy(BaseCamera):
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
 
-        if option == 'Path':
-            path = super(LambdaProxy, self).get_settings(option, cast)
-            if path != '':
-                self._set_new_path(path)
-            return self.path
+        if option in ['Path', 'Source', 'max_width', 'max_height']:
 
-        elif option == 'Source':
-            source = super(LambdaProxy, self).get_settings(option, cast)
-            if source != '':
-                self._change_source(source)
-            return self._source
+            self._log.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
 
-        if option == 'max_width':
-            return 1556
+            if option == 'Path':
+                path = super(LambdaProxy, self).get_settings(option, cast)
+                if path != '':
+                    self._set_new_path(path)
+                return self.path
 
-        elif option == 'max_height':
-            return 516
+            elif option == 'Source':
+                source = super(LambdaProxy, self).get_settings(option, cast)
+                if source != '':
+                    self._change_source(source)
+                return self._source
+
+            if option == 'max_width':
+                return 1556
+
+            elif option == 'max_height':
+                return 516
 
         elif option == 'possible_sources':
 
@@ -166,14 +170,18 @@ class LambdaProxy(BaseCamera):
             return super(LambdaProxy, self).get_settings(option, cast)
 
     # ----------------------------------------------------------------------
-    def save_settings(self, setting, value):
-        if setting == 'Path':
-            self._set_new_path(value)
+    def save_settings(self, option, value):
 
-        elif setting == 'Source':
-            self._change_source(value)
+        if option in ['Path', 'Source']:
+            self._log.debug(f'{self._my_name}: setting {option}: new value {value}')
 
-        super(LambdaProxy, self).save_settings(setting, value)
+            if option == 'Path':
+                self._set_new_path(value)
+
+            elif option == 'Source':
+                self._change_source(value)
+
+        super(LambdaProxy, self).save_settings(option, value)
 
     # ----------------------------------------------------------------------
     def _change_source(self, source):

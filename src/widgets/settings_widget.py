@@ -93,7 +93,7 @@ class SettingsWidget(BaseWidget):
         self._ui.dsb_sigmas.valueChanged.connect(lambda value: self._camera_device.save_settings('background_sigmas', value))
 
     # ----------------------------------------------------------------------
-    def refresh_view(self):
+    def refresh_view(self, force_read=False):
         """
         called periodically from camera window and syncs settings with Tango, etc...
         :return:
@@ -101,51 +101,6 @@ class SettingsWidget(BaseWidget):
 
         with QtCore.QMutexLocker(self._my_mutex):
             self._block_signals(True)
-
-            motor_position = self._camera_device.motor_position()
-            if motor_position is not None:
-                self._ui.but_in_out.setText('Move Out' if motor_position else 'Move In')
-                self._ui.lb_screen_status.setText('Screen is In' if motor_position else 'Screen is Out')
-
-            if not self._ui.sb_exposure.hasFocus():
-                exposure_time = self._camera_device.get_settings('exposure', int)
-                self._ui.sb_exposure.setValue(exposure_time)
-
-            if not self._ui.sb_gain.hasFocus():
-                gain_value = self._camera_device.get_settings('gain', int)
-                self._ui.sb_gain.setValue(gain_value)
-
-            for ui in ['view_x', 'view_y']:
-                if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
-                    getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
-                    getattr(self._ui, 'sb_{}'.format(ui)).setValue(self._camera_device.get_settings(ui, int))
-
-            for ui in ['view_w', 'view_h']:
-                if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
-                    getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
-                    value = self._camera_device.get_settings(ui, int)
-                    if value == 0:
-                        value = 1
-                    getattr(self._ui, 'sb_{}'.format(ui)).setValue(value)
-
-            self._update_picture_size_limits()
-
-            if not self._ui.sb_FPS.hasFocus():
-                fps = self._camera_device.get_settings('FPS', int)
-                fps_max = self._camera_device.get_settings('FPSmax', int)
-                if fps == 0:
-                    fps = 25
-                if fps_max == 0:
-                    fps_max = 100
-
-                self._ui.sb_FPS.setMaximum(fps_max)
-                self._ui.sb_FPS.setValue(fps)
-
-            if not self._ui.chk_background.hasFocus():
-                self._ui.chk_background.setChecked(self._camera_device.get_settings('background', bool))
-
-            if not self._ui.dsb_sigmas.hasFocus():
-                self._ui.dsb_sigmas.setValue(self._camera_device.get_settings('background_sigmas', float))
 
             self._ui.chk_auto_levels.setChecked(self._camera_device.levels['auto_levels'])
             self._ui.sb_min_level.setEnabled(not self._camera_device.levels['auto_levels'])
@@ -160,16 +115,62 @@ class SettingsWidget(BaseWidget):
             self._ui.rb_log_level.setChecked(self._camera_device.level_mode == 'log')
             self._ui.rb_sqrt_level.setChecked(self._camera_device.level_mode == 'sqrt')
 
-            if not self._ui.sb_reduce.hasFocus():
-                self._ui.sb_reduce.setValue(self._camera_device.get_reduction())
+            if self._ui.chk_additional_settings.isChecked() or force_read:
+                if not self._ui.sb_exposure.hasFocus():
+                    exposure_time = self._camera_device.get_settings('exposure', int)
+                    self._ui.sb_exposure.setValue(exposure_time)
 
-            self._ui.chk_auto_screen.setChecked(self._camera_device.auto_screen)
+                if not self._ui.sb_gain.hasFocus():
+                    gain_value = self._camera_device.get_settings('gain', int)
+                    self._ui.sb_gain.setValue(gain_value)
 
-            self._ui.but_save_dark_image.setEnabled(self._camera_device.has_dark_image())
-            self._ui.chk_dark_image.setEnabled(self._camera_device.has_dark_image())
-            self._ui.but_acq_dark_image.setEnabled(self._camera_device.got_first_frame)
+                motor_position = self._camera_device.motor_position()
+                if motor_position is not None:
+                    self._ui.but_in_out.setText('Move Out' if motor_position else 'Move In')
+                    self._ui.lb_screen_status.setText('Screen is In' if motor_position else 'Screen is Out')
 
-            self._ui.chk_dark_image.setChecked(self._camera_device.subtract_dark_image)
+                for ui in ['view_x', 'view_y']:
+                    if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
+                        getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
+                        getattr(self._ui, 'sb_{}'.format(ui)).setValue(self._camera_device.get_settings(ui, int))
+
+                for ui in ['view_w', 'view_h']:
+                    if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
+                        getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
+                        value = self._camera_device.get_settings(ui, int)
+                        if value == 0:
+                            value = 1
+                        getattr(self._ui, 'sb_{}'.format(ui)).setValue(value)
+
+                self._update_picture_size_limits()
+
+                if not self._ui.sb_FPS.hasFocus():
+                    fps = self._camera_device.get_settings('FPS', int)
+                    fps_max = self._camera_device.get_settings('FPSmax', int)
+                    if fps == 0:
+                        fps = 25
+                    if fps_max == 0:
+                        fps_max = 100
+
+                    self._ui.sb_FPS.setMaximum(fps_max)
+                    self._ui.sb_FPS.setValue(fps)
+
+                if not self._ui.chk_background.hasFocus():
+                    self._ui.chk_background.setChecked(self._camera_device.get_settings('background', bool))
+
+                if not self._ui.dsb_sigmas.hasFocus():
+                    self._ui.dsb_sigmas.setValue(self._camera_device.get_settings('background_sigmas', float))
+
+                if not self._ui.sb_reduce.hasFocus():
+                    self._ui.sb_reduce.setValue(self._camera_device.get_reduction())
+
+                self._ui.chk_auto_screen.setChecked(self._camera_device.auto_screen)
+
+                self._ui.but_save_dark_image.setEnabled(self._camera_device.has_dark_image())
+                self._ui.chk_dark_image.setEnabled(self._camera_device.has_dark_image())
+                self._ui.but_acq_dark_image.setEnabled(self._camera_device.got_first_frame)
+
+                self._ui.chk_dark_image.setChecked(self._camera_device.subtract_dark_image)
 
             self._block_signals(False)
 
@@ -392,7 +393,7 @@ class SettingsWidget(BaseWidget):
                 self.hist.item.restoreState(self._camera_device.levels)
                 self.block_hist_signals(False)
 
-            self.refresh_view()
+            self.refresh_view(True)
 
         except Exception as err:
             report_error(err, self._log, self)

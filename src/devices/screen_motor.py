@@ -27,10 +27,15 @@ class MotorExecutor(object):
         super(MotorExecutor, self).__init__()
 
         self._log = log
+
+        self._my_name = settings.getAttribute("name")
         if str(settings.getAttribute("motor_type")).lower() == 'acromag':
             self._motor_type = 'Acromag'
-            self._valve_device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("valve_tango_server")))
+            server_name = str(settings.getAttribute("valve_tango_server"))
+            self._valve_device_proxy = PyTango.DeviceProxy(server_name)
             self._valve_channel = int(settings.getAttribute("valve_channel"))
+
+            self._log.debug(f'{self._my_name}: new Acromag motor: {server_name}:{self._valve_channel}')
 
         elif str(settings.getAttribute("motor_type")).lower() == 'fsbt':
             self._motor_type = 'FSBT'
@@ -48,11 +53,14 @@ class MotorExecutor(object):
 
             self._fsbt_worker.start()
 
+            self._log.debug(f'{self._my_name}: new FSBT motor: {self._motor_name}@{self._fsbt_host}:{self._fsbt_port}')
+
         else:
             raise RuntimeError('Unknown type of motor')
 
     # ----------------------------------------------------------------------
     def server_connection(self):
+
         if not self.get_connection_to_fsbt():
             self._fsbt_worker_status = 'stopped'
             return
@@ -84,17 +92,21 @@ class MotorExecutor(object):
 
     # ----------------------------------------------------------------------
     def stop(self):
+
         if self._motor_type == 'FSBT' and self._fsbt_worker_status != 'stopped':
             while not self._move_queue.empty() and self._fsbt_worker_status != 'stopped':
-                print('Need to finish queue')
+                self._log.debug(f'{self._my_name}: need to finish motor command queue')
                 time.sleep(0.1)
 
             self._run_server = False
             while self._fsbt_worker_status != 'stopped':
                 time.sleep(0.1)
 
+        self._log.debug(f'{self._my_name}: motor worker stopped')
+
     # ----------------------------------------------------------------------
     def motor_position(self):
+
         if self._motor_type == 'Acromag':
             _currentPos = list('{0:04b}'.format(int(self._valve_device_proxy.read_attribute("Register0").value)))
             return _currentPos[3 - self._valve_channel] == "1"
@@ -104,6 +116,8 @@ class MotorExecutor(object):
 
     # ----------------------------------------------------------------------
     def move_motor(self, new_state):
+
+        self._log.debug(f'{self._my_name}: new move command {new_state}')
 
         if self._motor_type == 'Acromag':
             _currentPos = list('{0:04b}'.format(int(self._valve_device_proxy.read_attribute("Register0").value)))

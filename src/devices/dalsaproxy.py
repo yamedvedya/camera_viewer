@@ -62,6 +62,9 @@ class DalsaProxy(BaseCamera):
     def start_acquisition(self):
 
         if self._source == 'Event':
+
+            self._log.debug(f'{self._my_name}: starting acquisition: event mode')
+
             if self._device_proxy is None:
                 raise RuntimeError('No device proxy')
 
@@ -74,6 +77,9 @@ class DalsaProxy(BaseCamera):
 
         elif self._source == 'Files':
             if self.path != '':
+
+                self._log.debug(f'{self._my_name}: starting acquisition: file mode')
+
                 self._my_observer = Observer()
                 self._my_observer.schedule(self._my_event_handler, self.path, recursive=True)
                 self._my_observer.start()
@@ -88,19 +94,27 @@ class DalsaProxy(BaseCamera):
     def stop_acquisition(self):
 
         if self._source == 'Event':
+            self._log.debug(f'{self._my_name}: stopping acquisition: event mode')
             self._device_proxy.unsubscribe_event(self._eid)
+
         elif self._source == 'Files':
+
+            self._log.debug(f'{self._my_name}: stopping acquisition: file mode')
             self._my_observer.stop()
             self._my_observer.join()
+
         else:
             raise RuntimeError('Unknown mode')
-        self._running = False
 
-        self._log.debug("Dalsa folder monitor unsubscribed")
+        self._running = False
 
     # ----------------------------------------------------------------------
     def _on_event(self, event):
+
         if not event.err:
+
+            self._log.debug(f'{self._my_name}: new tango event')
+
             data = event.device.read_attribute(event.attr_name.split('/')[6])
             self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
                                                     self._picture_size[1]:self._picture_size[3]]
@@ -108,11 +122,11 @@ class DalsaProxy(BaseCamera):
             self._new_frame_flag = True
         else:
             pass
-            # self._log.error('Tine error: {}'.format(self.error_msg))
-            # self.error_flag = True
-            # self.error_msg = event.errors
+
     # ----------------------------------------------------------------------
     def _on_created(self, event):
+
+        self._log.debug(f'{self._my_name}: new file system event')
 
         self.id = ' file: {}'.format(ospath.splitext(ospath.basename(event.src_path))[0])
 
@@ -122,6 +136,9 @@ class DalsaProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def _set_new_path(self, path):
+
+        self._log.debug(f'{self._my_name}: new file path: {path}')
+
         need_to_restart = self._running
         if self._running:
             self.stop_acquisition()
@@ -136,37 +153,45 @@ class DalsaProxy(BaseCamera):
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
 
-        if option == 'Path':
-            path = super(DalsaProxy, self).get_settings(option, cast)
-            if path != '':
-                self._set_new_path(path)
-            return self.path
+        if option in ['Path', 'Source', 'possible_sources', 'possible_folders']:
 
-        elif option == 'Source':
-            source = super(DalsaProxy, self).get_settings(option, cast)
-            if source != '':
-                self._change_source(source)
-            return self._source
+            self._log.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
 
-        elif option == 'possible_sources':
+            if option == 'Path':
+                path = super(DalsaProxy, self).get_settings(option, cast)
+                if path != '':
+                    self._set_new_path(path)
+                return self.path
 
-            return self._possible_sources
+            elif option == 'Source':
+                source = super(DalsaProxy, self).get_settings(option, cast)
+                if source != '':
+                    self._change_source(source)
+                return self._source
 
-        elif option == 'possible_folders':
-            return self._possible_folders
+            elif option == 'possible_sources':
+
+                return self._possible_sources
+
+            elif option == 'possible_folders':
+                return self._possible_folders
 
         else:
             return super(DalsaProxy, self).get_settings(option, cast)
 
     # ----------------------------------------------------------------------
-    def save_settings(self, setting, value):
-        if setting == 'Path':
-            self._set_new_path(value)
+    def save_settings(self, option, value):
 
-        elif setting == 'Source':
-            self._change_source(value)
+        if option in ['Path', 'Source']:
+            self._log.debug(f'{self._my_name}: setting {option}: new value {value}')
 
-        super(DalsaProxy, self).save_settings(setting, value)
+            if option == 'Path':
+                self._set_new_path(value)
+
+            elif option == 'Source':
+                self._change_source(value)
+
+        super(DalsaProxy, self).save_settings(option, value)
 
     # ----------------------------------------------------------------------
     def _change_source(self, source):

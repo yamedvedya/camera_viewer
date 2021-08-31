@@ -88,7 +88,11 @@ class VimbaProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
+
         if option == 'max_level_limit':
+
+            self._log.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
+
             if self._high_depth:
                 return 2 ** 12
             else:
@@ -102,6 +106,9 @@ class VimbaProxy(BaseCamera):
         """
 
         if self._device_proxy.state() == PyTango.DevState.ON:
+
+            self._log.debug(f'{self._my_name}: starting acquisition: event mode')
+
             self._mode = 'event'
             self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
                                                            PyTango.EventType.DATA_READY_EVENT,
@@ -112,11 +119,15 @@ class VimbaProxy(BaseCamera):
 
             return True
         elif self._device_proxy.state() == PyTango.DevState.MOVING:
+
+            self._log.debug(f'{self._my_name}: starting acquisition: thread mode')
+
             self._mode = 'attribute'
             self._frame_thread = Thread(target=self._read_frame)
             self._frame_thread_running = True
             self._frame_thread.start()
             return True
+
         else:
             self._log.warning("Camera should be in ON state (is it running already?)")
             return False

@@ -56,13 +56,23 @@ class TangoTineProxy(BaseCamera):
     def start_acquisition(self):
         """
         start acquisition tread
-        :return:
+        :return: bool
         """
-        self._camera_read_thread = Thread(target=self._readout_frame)
-        self._camera_read_thread_running = True
-        self._camera_read_thread.start()
 
-        return True
+        self._log.debug(f"{self._my_name} starting thread")
+
+        try:
+            self._camera_read_thread = Thread(target=self._readout_frame)
+            self._camera_read_thread_running = True
+            self._camera_read_thread.start()
+
+            return True
+
+        except Exception as err:
+
+            self._log.exception(err)
+
+        return False
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
@@ -75,7 +85,7 @@ class TangoTineProxy(BaseCamera):
             self._camera_read_thread_running = False
             self._camera_read_thread.join()
 
-        self._log.debug("TangoTineTango thread stoppped")
+        self._log.debug(f"{self._my_name} thread stopped")
 
     # ----------------------------------------------------------------------
     def is_running(self):
@@ -95,8 +105,13 @@ class TangoTineProxy(BaseCamera):
                 self._last_frame = self._device_proxy.Frame[self._picture_size[0]:self._picture_size[2],
                                                             self._picture_size[1]:self._picture_size[3]]
                 self._new_frame_flag = True
+                self._log.debug(f"{self._my_name} new frame")
+
                 time.sleep(self.period)
-            except:
+
+            except Exception as err:
+
+                self._log.exception(f"{self._my_name} exception during new frame: {err}")
                 self._camera_read_thread_running = False
 
     # ----------------------------------------------------------------------
@@ -107,17 +122,24 @@ class TangoTineProxy(BaseCamera):
         :param cast:
         :return:
         """
-        if option in ['max_width', 'max_height']:
-            w, h = self._device_proxy.Frame.shape
-            if option == 'max_width':
-                return w
-            else:
-                return h
 
-        elif option == 'FPSmax':
-            return 1000/self.period
+        if option in ['max_width', 'max_height', 'FPSmax']:
+
+            self._log.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
+
+            if option in ['max_width', 'max_height']:
+
+                w, h = self._device_proxy.Frame.shape
+                if option == 'max_width':
+                    return w
+                else:
+                    return h
+
+            elif option == 'FPSmax':
+                return 1000/self.period
 
         elif option == 'FPS':
             return max(1, super(TangoTineProxy, self).get_settings(option, cast))
+
         else:
             return super(TangoTineProxy, self).get_settings(option, cast)

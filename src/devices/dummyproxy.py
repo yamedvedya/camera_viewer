@@ -57,6 +57,7 @@ class DummyProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def close_camera(self):
+
         self._run = False
         while self._generator_thread_working or self._new_frame_thead_working:
             time.sleep(self._fps)
@@ -71,7 +72,8 @@ class DummyProxy(BaseCamera):
                 self._last_frame = self._data[self._picture_size[0]:self._picture_size[2],
                                               self._picture_size[1]:self._picture_size[3]]
                 self._new_frame_flag = True
-                # print('New frame after {}'.format(time.time() - _last_time))
+                self._log.debug(f"{self._my_name} new frame")
+
                 _last_time = time.time()
 
         self._new_frame_thead_working = False
@@ -92,6 +94,9 @@ class DummyProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
+
+        self._log.debug(f"{self._my_name} starting thread")
+
         self._generate = True
         return True
 
@@ -101,18 +106,26 @@ class DummyProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
-        if option == 'FPSmax':
-            return 200
-        elif option == 'max_width':
-            return self.FRAME_W
-        elif option == 'max_height':
-            return self.FRAME_H
+
+        if option in ['FPSmax', 'max_width', 'max_height']:
+
+            self._log.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
+
+            if option == 'FPSmax':
+                return 200
+            elif option == 'max_width':
+                return self.FRAME_W
+            elif option == 'max_height':
+                return self.FRAME_H
         else:
             return super(DummyProxy, self).get_settings(option, cast)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):
+
         if option == 'FPS':
+
+            self._log.debug(f'{self._my_name}: setting {option}: new value {value}')
             self._fps = value
 
         super(DummyProxy, self).save_settings(option, value)

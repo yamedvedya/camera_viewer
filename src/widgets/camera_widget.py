@@ -100,18 +100,22 @@ class CameraWidget(QtWidgets.QMainWindow):
         :return: None
         """
 
-        state = self.camera_device.is_running()
-        if state is None:
-            self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-            self._action_start_stop.setEnabled(False)
-        elif state:
-            self._action_start_stop.setIcon(QtGui.QIcon(":/ico/stop.png"))
-            self._action_start_stop.setEnabled(True)
-        else:
-            self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-            self._action_start_stop.setEnabled(True)
+        try:
+            state = self.camera_device.is_running()
+            if state is None:
+                self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+                self._action_start_stop.setEnabled(False)
+            elif state:
+                self._action_start_stop.setIcon(QtGui.QIcon(":/ico/stop.png"))
+                self._action_start_stop.setEnabled(True)
+            else:
+                self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+                self._action_start_stop.setEnabled(True)
+        except Exception as err:
+            self._log.exception(f"Exception: camera state: {err}")
 
-        self._settings_widget.refresh_view()
+        if self._settings_widget.isVisible():
+            self._settings_widget.refresh_view()
 
     # ----------------------------------------------------------------------
     def _display_fps(self, fps):

@@ -32,7 +32,7 @@ class BaseCamera(object):
         self._settings = settings
         self._log = log
 
-        self.id = ''
+        self.file_name = ''
 
         self._new_frame_flag = False
         self._eid = None  # Tango even ID
@@ -57,17 +57,23 @@ class BaseCamera(object):
 
         # DeviceProxies instances
         if settings.hasAttribute('tango_server'):
-            self._device_proxy = PyTango.DeviceProxy(str(settings.getAttribute("tango_server")))
+            name = str(settings.getAttribute("tango_server"))
+            self._device_proxy = PyTango.DeviceProxy(name)
+            self._log.debug(f'{self._my_name}: new tango proxy {name}')
         else:
             self._device_proxy = None
 
         if settings.hasAttribute('settings_server'):
-            self._settings_proxy = PyTango.DeviceProxy(str(settings.getAttribute("settings_server")))
+            name = str(settings.getAttribute("settings_server"))
+            self._settings_proxy = PyTango.DeviceProxy(name)
+            self._log.debug(f'{self._my_name}: new settings proxy {name}')
         else:
             self._settings_proxy = None
 
         if settings.hasAttribute('roi_server'):
-            self._roi_server = PyTango.DeviceProxy(str(settings.getAttribute("roi_server")))
+            name = str(settings.getAttribute("roi_server"))
+            self._roi_server = PyTango.DeviceProxy(name)
+            self._log.debug(f'{self._my_name}: new roi server {name}')
         else:
             self._roi_server = None
 
@@ -202,6 +208,8 @@ class BaseCamera(object):
                  or cast(requested setting)
         """
 
+        self._log.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
+
         if option in self._settings_map.keys():
             try:
                 if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:
@@ -259,33 +267,36 @@ class BaseCamera(object):
                 return None
 
     # ----------------------------------------------------------------------
-    def save_settings(self, setting, value):
+    def save_settings(self, option, value):
         """
         saves the requested setting according the settings map
 
-        :param setting: str, setting name
+        :param option: str, setting name
         :param value: new vale to save
         :return:
         """
-        if setting in self._settings_map.keys():
-            if self._settings_map[setting][0] == 'roi_server' and self._roi_server is not None:
-                setattr(self._roi_server, self._settings_map[setting][1], value)
 
-            elif self._settings_map[setting][0] == 'settings_proxy' and self._settings_proxy is not None:
-                self._settings_proxy.write_attribute(self._settings_map[setting][1], value)
+        self._log.debug(f'{self._my_name}: setting {option}: new value {value}')
 
-            elif self._settings_map[setting][0] == 'device_proxy' and self._device_proxy is not None:
-                self._device_proxy.write_attribute(self._settings_map[setting][1], value)
+        if option in self._settings_map.keys():
+            if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:
+                setattr(self._roi_server, self._settings_map[option][1], value)
 
-            elif self._settings_map[setting][0] is None:
+            elif self._settings_map[option][0] == 'settings_proxy' and self._settings_proxy is not None:
+                self._settings_proxy.write_attribute(self._settings_map[option][1], value)
+
+            elif self._settings_map[option][0] == 'device_proxy' and self._device_proxy is not None:
+                self._device_proxy.write_attribute(self._settings_map[option][1], value)
+
+            elif self._settings_map[option][0] is None:
                 pass
 
             else:
                 raise RuntimeError('Unknown setting source')
         else:
-            QtCore.QSettings(APP_NAME).setValue("{}/{}".format(self._my_name, setting), value)
+            QtCore.QSettings(APP_NAME).setValue("{}/{}".format(self._my_name, option), value)
 
-        if setting == 'Reduce':
+        if option == 'Reduce':
             self.reduce_resolution = value
 
     # ----------------------------------------------------------------------

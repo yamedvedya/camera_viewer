@@ -105,7 +105,7 @@ class DataSource2D(QtCore.QObject):
                     module = importlib.import_module("devices.{}".format(proxyClass.lower()))
                     self._device_proxy = getattr(module, proxyClass)(device, self.log)
 
-                    self.device_id = self._base_id + self._device_proxy.id
+                    self.device_id = self._base_id + self._device_proxy.file_name
 
                     # reset flags and variables
                     self.got_first_frame = False
