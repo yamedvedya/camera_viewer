@@ -117,7 +117,7 @@ class SettingsWidget(BaseWidget):
 
             if self._ui.chk_additional_settings.isChecked() or force_read:
                 if not self._ui.sb_exposure.hasFocus():
-                    exposure_time = self._camera_device.get_settings('exposure', int)
+                    exposure_time = self._camera_device.get_settings('exposure', float)
                     self._ui.sb_exposure.setValue(exposure_time)
 
                 if not self._ui.sb_gain.hasFocus():

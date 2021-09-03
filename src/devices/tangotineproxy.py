@@ -25,7 +25,7 @@ class TangoTineProxy(BaseCamera):
     #                    "ViewingMode": 1}
 
     _settings_map = {
-                     "exposure": ("device_proxy", "Exposure"),
+                     "exposure": ("device_proxy", "ExposureTime"),
                      "gain": ("device_proxy", "Gain"),
                      'max_level_limit': (None, ),
                      "counter_x": ('roi_server', 'roi_x'),
