@@ -52,8 +52,8 @@ class SettingsWidget(BaseWidget):
         self._ui.vl_levels.addWidget(self.hist, 1)
 
         self.hist.scene().sigMouseClicked.connect(self._hist_mouse_clicked)
-        self.hist.item.sigLevelsChanged.connect(self._switch_off_auto_levels)
-        self.hist.item.sigLookupTableChanged.connect(self.new_color_map)
+        self.hist.item.sigLevelChangeFinished.connect(self.new_levels)
+        self.hist.item.sigLookupTableChanged.connect(self.new_levels)
         self.hist.items()[-1].setMenuEnabled(False) # TODO better way
 
         # to prevent double code run
@@ -70,8 +70,7 @@ class SettingsWidget(BaseWidget):
         for ui in ['view_x', 'view_y', 'view_w', 'view_h']:
             getattr(self._ui, 'sb_{}'.format(ui)).editingFinished.connect(self._change_picture_size)
 
-        self._ui.chk_auto_levels.stateChanged.connect(lambda state:
-                                                      self._level_settings_changed('auto_levels', state == 2))
+        self._ui.chk_auto_levels.stateChanged.connect(lambda state: self._switch_auto_levels(state == 2))
         self._ui.sb_max_level.valueChanged.connect(lambda value: self._level_settings_changed('level_max', value))
         self._ui.sb_min_level.valueChanged.connect(lambda value: self._level_settings_changed('level_min', value))
         self._ui.bg_level.buttonToggled.connect((lambda button: self._new_level_mode(button)))
@@ -209,20 +208,21 @@ class SettingsWidget(BaseWidget):
         :return: None
         """
         if flag:
-            self.hist.item.sigLevelsChanged.disconnect()
+            self.hist.item.sigLevelChangeFinished.disconnect()
             self.hist.item.sigLookupTableChanged.disconnect()
         else:
-            self.hist.item.sigLevelsChanged.connect(self._switch_off_auto_levels)
-            self.hist.item.sigLookupTableChanged.connect(self.new_color_map)
+            self.hist.item.sigLevelChangeFinished.connect(self.new_levels)
+            self.hist.item.sigLookupTableChanged.connect(self.new_levels)
 
     # ----------------------------------------------------------------------
-    def _switch_off_auto_levels(self):
+    def _switch_auto_levels(self, state):
         """
         slot for histogram sigLevelsChanged signal
         :return:
         """
-        self._ui.chk_auto_levels.setChecked(False)
-        self._level_settings_changed('auto_levels', False)
+        self._level_settings_changed('auto_levels', state)
+        if state:
+            self.hist.item.autoHistogramRange()
 
     # ----------------------------------------------------------------------
     def _hist_mouse_clicked(self, event):
@@ -233,11 +233,9 @@ class SettingsWidget(BaseWidget):
         """
         if event.double():
             self._ui.chk_auto_levels.setChecked(True)
-            self._level_settings_changed('auto_levels', True)
-            self.hist.item.autoHistogramRange()
 
     # ----------------------------------------------------------------------
-    def new_color_map(self, lut_item):
+    def new_levels(self, lut_item):
         """
         slot for sigLookupTableChanged signal
         :param lut_item:
@@ -265,7 +263,7 @@ class SettingsWidget(BaseWidget):
             lev[0] = float(value)
 
         self.hist.item.setLevels(lev[0], lev[1])
-        self.new_color_map(self.hist.item)
+        self.new_levels(self.hist.item)
 
     # ----------------------------------------------------------------------
     def _new_level_mode(self, button):

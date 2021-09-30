@@ -457,7 +457,8 @@ class FrameViewer(BaseWidget):
 
             roi.setPos([roi_info['x'], roi_info['y']])
             roi.setSize([roi_info['w'], roi_info['h']])
-            roi.setPen(roi_info['color'])
+            if roi_info['color']:
+                roi.setPen(roi_info['color'])
 
             label.setPos(roi_info['x'] + roi_info['w'],
                          roi_info['y'] + roi_info['h'])
