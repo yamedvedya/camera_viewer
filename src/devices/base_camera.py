@@ -59,6 +59,8 @@ class BaseCamera(object):
         if settings.hasAttribute('tango_server'):
             name = str(settings.getAttribute("tango_server"))
             self._device_proxy = PyTango.DeviceProxy(name)
+            if self._device_proxy.state() == PyTango.DevState.FAULT:
+                raise RuntimeError(f'{name} in FAULT state!')
             self._log.debug(f'{self._my_name}: new tango proxy {name}')
         else:
             self._device_proxy = None
@@ -66,6 +68,8 @@ class BaseCamera(object):
         if settings.hasAttribute('settings_server'):
             name = str(settings.getAttribute("settings_server"))
             self._settings_proxy = PyTango.DeviceProxy(name)
+            if self._settings_proxy.state() == PyTango.DevState.FAULT:
+                raise RuntimeError(f'{name} in FAULT state!')
             self._log.debug(f'{self._my_name}: new settings proxy {name}')
         else:
             self._settings_proxy = None
@@ -73,6 +77,8 @@ class BaseCamera(object):
         if settings.hasAttribute('roi_server'):
             name = str(settings.getAttribute("roi_server"))
             self._roi_server = PyTango.DeviceProxy(name)
+            if self._roi_server.state() == PyTango.DevState.FAULT:
+                raise RuntimeError(f'{name} in FAULT state!')
             self._log.debug(f'{self._my_name}: new roi server {name}')
         else:
             self._roi_server = None

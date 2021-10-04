@@ -12,6 +12,7 @@ import threading
 import time
 import json
 import math
+import PyTango
 
 import scipy.ndimage.measurements as scipymeasure
 import numpy as np
@@ -180,13 +181,17 @@ class DataSource2D(QtCore.QObject):
                     if self._device_proxy.is_running():
                         self.start(auto_screen)
 
-                    return True
+                    return True, ''
+
+                except PyTango.DevFailed as ex:
+                    self.log.error(ex.args[0].desc)
+                    return False, ex.args[0].desc
 
                 except Exception as ex:
                     self.log.error(ex)
-                    return False
+                    return False, ex.__repr__()
 
-        return False
+        return False, 'Cannot find camera in config'
 
     # ----------------------------------------------------------------------
     def close_camera(self):
