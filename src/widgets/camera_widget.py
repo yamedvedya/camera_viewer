@@ -41,9 +41,9 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._log = logging.getLogger("cam_logger")
 
         self.camera_device = DataSource2D(self)
-        if not self.camera_device.new_device_proxy(self.camera_name, self._parent.auto_screen_action.isChecked()):
-            self._log.error(f'Cannot start {my_name}')
-            raise RuntimeError(f'Cannot start {my_name}')
+        state, msg = self.camera_device.new_device_proxy(self.camera_name, self._parent.auto_screen_action.isChecked())
+        if not state:
+            raise RuntimeError(f'{msg}')
 
         self._ui = Ui_CameraWindow()
         self._ui.setupUi(self)

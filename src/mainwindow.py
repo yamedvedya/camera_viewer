@@ -120,7 +120,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 open_mgs = QtWidgets.QMessageBox()
                 open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
                 open_mgs.setWindowTitle(f"Error")
-                open_mgs.setText(f"Cannot add {camera}: {err}")
+                open_mgs.setText(f"Cannot add {camera}:\n{err}")
                 open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
                 open_mgs.exec_()
 

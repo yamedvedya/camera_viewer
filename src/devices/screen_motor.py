@@ -33,6 +33,8 @@ class MotorExecutor(object):
             self._motor_type = 'Acromag'
             server_name = str(settings.getAttribute("valve_tango_server"))
             self._valve_device_proxy = PyTango.DeviceProxy(server_name)
+            if self._valve_device_proxy.state() == PyTango.DevState.FAULT:
+                raise RuntimeError(f'{server_name} in FAULT state!')
             self._valve_channel = int(settings.getAttribute("valve_channel"))
 
             self._log.debug(f'{self._my_name}: new Acromag motor: {server_name}:{self._valve_channel}')
