@@ -69,7 +69,11 @@ class CameraWidget(QtWidgets.QMainWindow):
         :return: None
         """
 
-        self._frame_viewer.start_stop_live_mode(self._parent.auto_screen_action.isChecked())
+        try:
+            self._frame_viewer.start_stop_live_mode(self._parent.auto_screen_action.isChecked())
+        except Exception as err:
+            self._log.exception(err)
+            report_error(err)
 
     # ----------------------------------------------------------------------
     def clean_close(self):
