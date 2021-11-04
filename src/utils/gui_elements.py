@@ -6,9 +6,11 @@ from src.utils.functions import rotate
 
 
 # ----------------------------------------------------------------------
-class ImageMarker(object):
+class ImageMarker(QtCore.QObject):
     """Infinite lines cross
     """
+
+    new_coordinates = QtCore.pyqtSignal(int, int)
 
     # ----------------------------------------------------------------------
     def __init__(self, x, y, image_view):
@@ -16,24 +18,29 @@ class ImageMarker(object):
 
         self.image_view = image_view
 
-        self._markerV = pg.InfiniteLine(pos=x)
+        self._markerV = pg.InfiniteLine(pos=x, movable=True)
+        self._markerV.sigPositionChanged.connect(self._new_coordinates)
         self.image_view.addItem(self._markerV, ignoreBounds=True)
 
-        self._markerH = pg.InfiniteLine(pos=y, angle=0)
+        self._markerH = pg.InfiniteLine(pos=y, angle=0, movable=True)
+        self._markerH.sigPositionChanged.connect(self._new_coordinates)
         self.image_view.addItem(self._markerH, ignoreBounds=True)
+
+    # ----------------------------------------------------------------------
+    def _new_coordinates(self):
+        self.new_coordinates.emit(int(self._markerV.pos().x()), int(self._markerH.pos().y()))
 
     # ----------------------------------------------------------------------
     def setPos(self, x, y):
         """
         """
+
+        self._markerV.sigPositionChanged.disconnect()
+        self._markerH.sigPositionChanged.disconnect()
         self._markerV.setPos(x)
         self._markerH.setPos(y)
-
-    # ----------------------------------------------------------------------
-    def pos(self):
-        """
-        """
-        return self._markerV.pos().x(), self._markerH.pos().y()
+        self._markerV.sigPositionChanged.connect(self._new_coordinates)
+        self._markerH.sigPositionChanged.connect(self._new_coordinates)
 
     # ----------------------------------------------------------------------
     def setVisible(self, flag):
@@ -50,11 +57,13 @@ class ImageMarker(object):
 
     # ----------------------------------------------------------------------
     def delete_me(self):
+
         self.image_view.removeItem(self._markerH)
         self.image_view.removeItem(self._markerV)
 
     # ----------------------------------------------------------------------
     def setColor(self, color):
+
         self._markerH.setPen(pg.mkPen(color))
         self._markerV.setPen(pg.mkPen(color))
 

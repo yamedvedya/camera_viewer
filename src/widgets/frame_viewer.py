@@ -386,9 +386,16 @@ class FrameViewer(BaseWidget):
 
         self._marker_widgets = []
         for ind, marker in enumerate(self._camera_device.markers):
-            self._marker_widgets.append(ImageMarker(marker['x'], marker['y'], self._ui.image_view))
+            marker = ImageMarker(marker['x'], marker['y'], self._ui.image_view)
+            marker.new_coordinates.connect(lambda x, y, id = ind: self._new_marker_coordinates(id, x, y))
+            self._marker_widgets.append(marker)
 
         self.repaint_marker()
+
+    # ----------------------------------------------------------------------
+    def _new_marker_coordinates(self, id, x, y):
+        self._camera_device.set_marker_value(id, 'x', x)
+        self._camera_device.set_marker_value(id, 'y', y)
 
     # ----------------------------------------------------------------------
     def repaint_marker(self):

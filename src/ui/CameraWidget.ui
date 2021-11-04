@@ -25,12 +25,6 @@
      <height>21</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menu_widgets">
-    <property name="title">
-     <string>Widgets</string>
-    </property>
-   </widget>
-   <addaction name="menu_widgets"/>
   </widget>
   <widget class="QStatusBar" name="statusbar">
    <property name="sizeGripEnabled">
