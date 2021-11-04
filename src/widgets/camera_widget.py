@@ -145,15 +145,13 @@ class CameraWidget(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def _init_ui(self):
 
+        self._init_tool_bar()
+
+        self._init_status_bar()
+
         self._load_docks()
 
         self._connect_signals()
-
-        self._init_actions()
-
-        self.addToolBar(self._init_tool_bar())
-
-        self._init_status_bar()
 
     # ----------------------------------------------------------------------
     def _load_docks(self):
@@ -213,6 +211,14 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._markerroi_widget.add_remove_roi.connect(self._frame_viewer.add_remove_roi)
         self._markerroi_widget.repaint_roi.connect(self._frame_viewer.repaint_roi)
 
+        self._action_start_stop.triggered.connect(self._start_stop_live_mode)
+        self._action_print_image.triggered.connect(self._frame_viewer.print_image)
+        self._action_copy_image.triggered.connect(self._frame_viewer.to_clipboard)
+
+        self._saveImgAction.triggered.connect(self._frame_viewer.save_to_image)
+        self._saveAsciiAction.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="csv"))
+        self._saveNumpyAction.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="npy"))
+
     # ----------------------------------------------------------------------
     def _add_dock(self, WidgetClass, label, *args, **kwargs):
 
@@ -225,29 +231,9 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
 
-        self._ui.menu_widgets.addAction(dock.toggleViewAction())
+        self.tool_bar.addAction(dock.toggleViewAction())
 
         return widget, dock
-
-    # ----------------------------------------------------------------------
-    def _init_actions(self):
-        """
-        """
-        self._action_start_stop = QtWidgets.QAction(self)
-        self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-        self._action_start_stop.setText("Start/Stop")
-        self._action_start_stop.triggered.connect(self._start_stop_live_mode)
-
-        self._action_print_image = QtWidgets.QAction(self)
-        self._action_print_image.setIcon(QtGui.QIcon(":/ico/print.png"))
-        self._action_print_image.setText("Print Image")
-        self._action_print_image.triggered.connect(self._frame_viewer.print_image)
-        self._action_print_image.setEnabled(False)
-
-        self._action_copy_image = QtWidgets.QAction(self)
-        self._action_copy_image.setIcon(QtGui.QIcon(":/ico/copy.png"))
-        self._action_copy_image.setText("Copy to Clipboard")
-        self._action_copy_image.triggered.connect(self._frame_viewer.to_clipboard)
 
     # ----------------------------------------------------------------------
     def _make_save_menu(self, parent):
@@ -258,26 +244,27 @@ class CameraWidget(QtWidgets.QMainWindow):
         saveMenu = QtWidgets.QMenu(parent)
 
         self._saveImgAction = saveMenu.addAction("Image")
-        self._saveImgAction.triggered.connect(self._frame_viewer.save_to_image)
 
         self._saveAsciiAction = saveMenu.addAction("ASCII")
-        self._saveAsciiAction.triggered.connect(partial(self._frame_viewer.save_to_file,
-                                                        fmt="csv"))
 
         self._saveNumpyAction = saveMenu.addAction("Numpy")
-        self._saveNumpyAction.triggered.connect(partial(self._frame_viewer.save_to_file,
-                                                        fmt="npy"))
+
         return saveMenu
 
     # ----------------------------------------------------------------------
     def _init_tool_bar(self):
         """
         """
-        toolBar = QtWidgets.QToolBar("Main toolbar", self)
-        toolBar.setObjectName("VimbaCam_ToolBar")
 
-        toolBar.addAction(self._action_start_stop)
-        toolBar.addSeparator()
+        self.tool_bar = QtWidgets.QToolBar("Main toolbar", self)
+        self.tool_bar.setObjectName("CameraViewer_ToolBar")
+
+        self._action_start_stop = QtWidgets.QAction(self)
+        self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+        self._action_start_stop.setText("Start/Stop")
+
+        self.tool_bar.addAction(self._action_start_stop)
+        self.tool_bar.addSeparator()
 
         # image saving
         self._tbSaveScan = QtWidgets.QToolButton(self)
@@ -287,13 +274,23 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._saveMenu = self._make_save_menu(self._tbSaveScan)
         self._tbSaveScan.setMenu(self._saveMenu)
         self._tbSaveScan.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-        toolBar.addWidget(self._tbSaveScan)
+        self.tool_bar.addWidget(self._tbSaveScan)
 
-        toolBar.addAction(self._action_print_image)
-        toolBar.addAction(self._action_copy_image)
-        toolBar.addSeparator()
+        self._action_print_image = QtWidgets.QAction(self)
+        self._action_print_image.setIcon(QtGui.QIcon(":/ico/print.png"))
+        self._action_print_image.setText("Print Image")
+        self._action_print_image.setEnabled(False)
+        self.tool_bar.addAction(self._action_print_image)
 
-        return toolBar
+        self._action_copy_image = QtWidgets.QAction(self)
+        self._action_copy_image.setIcon(QtGui.QIcon(":/ico/copy.png"))
+        self._action_copy_image.setText("Copy to Clipboard")
+        self.tool_bar.addAction(self._action_copy_image)
+
+        self.tool_bar.addSeparator()
+        self.tool_bar.addWidget(QtWidgets.QLabel('Widgets:'))
+
+        self.addToolBar(self.tool_bar)
 
     # ----------------------------------------------------------------------
     def _init_status_bar(self):
