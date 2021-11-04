@@ -77,7 +77,7 @@ class VimbaProxy(BaseCamera):
         self._last_frame = np.zeros((1, 1))
         self._last_time = time.time()
 
-        self._mode = None
+        self._mode = 'event'
         self._eid = None
         self._frame_thread = None
         self._frame_thread_running = False
@@ -122,6 +122,7 @@ class VimbaProxy(BaseCamera):
 
             self._log.debug(f'{self._my_name}: starting acquisition: thread mode')
 
+            self._stop_frame_thread = False
             self._mode = 'attribute'
             self._frame_thread = Thread(target=self._read_frame)
             self._frame_thread_running = True
@@ -152,12 +153,21 @@ class VimbaProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def is_running(self):
-        return self._device_proxy.state() == PyTango.DevState.MOVING
+        if self._mode == 'event':
+            return self._device_proxy.state() == PyTango.DevState.MOVING
+        else:
+            if self._device_proxy.state() != PyTango.DevState.MOVING:
+                return False
+            else:
+                return self._frame_thread_running
 
     # ----------------------------------------------------------------------
     def _read_frame(self):
         sleep_time = self.get_settings('FPS', int)
         while not self._stop_frame_thread:
+            if self._device_proxy.state() != PyTango.DevState.MOVING:
+                self._frame_thread_running = False
+                raise RuntimeError('Camera was stopped!')
             try:
                 self._last_frame = np.transpose(getattr(self._device_proxy, "Image{:d}".format(self._depth)))
                 self._new_frame_flag = True
