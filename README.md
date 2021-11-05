@@ -1,10 +1,14 @@
 # General info:
 This utility allows displaying images from 2d Tango detectors and to do simple analysis.
 
-Right now TTTGW (LM screens), Vimba cameras and Lambda detector are supported.
+Right now TangoTine (LM screens) and Vimba cameras are supported.
+
+Full instruction can be found here: https://confluence.desy.de/display/FSP23/Camera+viewer 
 
 # Installation:
-The utility is written in Python3+PyQt5 and utilize scipy and numpy packdges , so you need to setup this packages first. 
+To install run setup.sh
+
+The utility is written in Python3+PyQt5 and utilize scipy and numpy packdges. 
 
 ## Configuration @P23 
 The utility is installed @hasep23web and @hasep23sdd. You can start it by executing "camera" in the terminal. 
