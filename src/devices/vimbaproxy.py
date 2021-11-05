@@ -23,10 +23,12 @@ except ImportError:
 class VimbaProxy(BaseCamera):
     """Proxy to a physical TANGO device.
     """
-    SERVER_SETTINGS = {'low': {"PixelFormat": "Mono8", "ViewingMode": 1},
-                       'high': {"PixelFormat": "Mono12", "ViewingMode": 2},
-                       'brhigh': {"PixelFormat": "BayerGR12", "ViewingMode": 2},
-                       'bbhigh': {"PixelFormat": "BayerGB12", "ViewingMode": 2}}
+    SERVER_SETTINGS_HIGH = {'Mono12': {"PixelFormat": "Mono12", "ViewingMode": 2},
+                            'BayerGR12': {"PixelFormat": "BayerGR12", "ViewingMode": 2},
+                            'BayerRG12': {"PixelFormat": "BayerRG12", "ViewingMode": 2},
+                            'BayerGB12': {"PixelFormat": "BayerGB12", "ViewingMode": 2}}
+
+    SERVER_SETTINGS_LOW = {"PixelFormat": "Mono8", "ViewingMode": 1}
 
     START_DELAY = 1
     STOP_DELAY = 0.5
@@ -55,22 +57,13 @@ class VimbaProxy(BaseCamera):
         else:
             self._high_depth = False
 
+        accepted_format = None
+
         if self._high_depth:
             valid_formats = self._device_proxy.read_attribute('PixelFormat_Values').value
-            if "Mono12" in valid_formats:
-                settings = 'high'
-                self._depth = 16
-            elif 'BayerGR12' in valid_formats:
-                settings = 'brhigh'
-                self._depth = 16
-            elif 'BayerGB12' in valid_formats:
-                settings = 'bbhigh'
-                self._depth = 16
-            else:
-                raise RuntimeError('Unknown pixel format')
-        else:
-            settings = 'low'
-            self._depth = 8
+            for pixel_format in self.SERVER_SETTINGS_HIGH.keys():
+                if pixel_format in valid_formats:
+                    accepted_format = pixel_format
 
         self.error_msg = ''
         self.error_flag = False
@@ -83,8 +76,14 @@ class VimbaProxy(BaseCamera):
         self._frame_thread_running = False
         self._stop_frame_thread = False
 
-        for k, v in self.SERVER_SETTINGS[settings].items():
-            self._device_proxy.write_attribute(k, v)
+        if accepted_format is not None:
+            self._depth = 16
+            for k, v in self.SERVER_SETTINGS_HIGH[accepted_format].items():
+                self._device_proxy.write_attribute(k, v)
+        else:
+            self._depth = 8
+            for k, v in self.SERVER_SETTINGS_LOW[accepted_format].items():
+                self._device_proxy.write_attribute(k, v)
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
