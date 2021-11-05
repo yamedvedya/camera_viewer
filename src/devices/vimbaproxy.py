@@ -7,6 +7,7 @@
 
 import time
 import numpy as np
+import struct
 
 from threading import Thread
 from distutils.util import strtobool
@@ -23,16 +24,23 @@ except ImportError:
 class VimbaProxy(BaseCamera):
     """Proxy to a physical TANGO device.
     """
-    SERVER_SETTINGS = {'low': {"PixelFormat": "Mono8", "ViewingMode": 1},
-                       'high': {"PixelFormat": "Mono12", "ViewingMode": 2},
-                       'brhigh': {"PixelFormat": "BayerGR12", "ViewingMode": 2},
-                       'bbhigh': {"PixelFormat": "BayerGB12", "ViewingMode": 2}}
+    SERVER_SETTINGS = {'bw':    {'low': [1, 'Image8'],
+                                 'high': [2, 'Image16']},
+                       'color': {'low': [5, 'ImageRGB'],
+                                 'high': [5, 'ImageRGB']}
+                       }
+
+    PIXEL_FORMATS = {'color': {'high': [],
+                               'low': ['RGB8Packed']},
+                     'bw':    {'high': ["Mono12", "BayerGR12", "BayerRG12", "BayerGB12"],
+                               'low': ['Mono8']}
+                     }
 
     START_DELAY = 1
     STOP_DELAY = 0.5
 
     _settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
-                     "gain": ["device_proxy", ""],
+                     "gain": ["device_proxy", "Gain"],
                      'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
                      'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
                      'view_x': ("device_proxy", "OffsetX"),
@@ -51,26 +59,59 @@ class VimbaProxy(BaseCamera):
 
         self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
         if settings.hasAttribute('high_depth'):
-            self._high_depth = strtobool(settings.getAttribute("high_depth"))
+            high_depth = strtobool(settings.getAttribute("high_depth"))
         else:
-            self._high_depth = False
+            high_depth = False
 
-        if self._high_depth:
-            valid_formats = self._device_proxy.read_attribute('PixelFormat_Values').value
-            if "Mono12" in valid_formats:
-                settings = 'high'
-                self._depth = 16
-            elif 'BayerGR12' in valid_formats:
-                settings = 'brhigh'
-                self._depth = 16
-            elif 'BayerGB12' in valid_formats:
-                settings = 'bbhigh'
-                self._depth = 16
-            else:
-                raise RuntimeError('Unknown pixel format')
+        if settings.hasAttribute('color'):
+            color = strtobool(settings.getAttribute("color"))
         else:
-            settings = 'low'
-            self._depth = 8
+            color = False
+
+        accepted_format = None
+
+        if self._device_proxy.state() != PyTango.DevState.MOVING:
+            valid_formats = self._device_proxy.read_attribute('PixelFormat_Values').value
+        else:
+            valid_formats = self._device_proxy.pixelformat
+        if color:
+            if high_depth:
+                for pixel_format in self.PIXEL_FORMATS['color']['high']:
+                    if pixel_format in valid_formats:
+                        accepted_format = pixel_format
+                        self._high_depth = True
+                        self._color = True
+            if accepted_format is None:
+                for pixel_format in self.PIXEL_FORMATS['color']['low']:
+                    if pixel_format in valid_formats:
+                        accepted_format = pixel_format
+                        self._high_depth = False
+                        self._color = True
+
+        if accepted_format is None:
+            if high_depth:
+                for pixel_format in self.PIXEL_FORMATS['bw']['high']:
+                    if pixel_format in valid_formats:
+                        accepted_format = pixel_format
+                        self._high_depth = True
+                        self._color = False
+            if accepted_format is None:
+                for pixel_format in self.PIXEL_FORMATS['bw']['low']:
+                    if pixel_format in valid_formats:
+                        accepted_format = pixel_format
+                        self._high_depth = False
+                        self._color = False
+
+        if accepted_format is None:
+            raise RuntimeError('Cannot find acceptable pixel format!')
+
+        if self._device_proxy.state() != PyTango.DevState.MOVING:
+            self._device_proxy.pixelformat = accepted_format
+            self._device_proxy.viewingmode = \
+            self.SERVER_SETTINGS['color' if self._color else 'bw']['high' if self._high_depth else 'low'][0]
+
+        self._image_source = \
+            self.SERVER_SETTINGS['color' if self._color else 'bw']['high' if self._high_depth else 'low'][1]
 
         self.error_msg = ''
         self.error_flag = False
@@ -83,9 +124,6 @@ class VimbaProxy(BaseCamera):
         self._frame_thread_running = False
         self._stop_frame_thread = False
 
-        for k, v in self.SERVER_SETTINGS[settings].items():
-            self._device_proxy.write_attribute(k, v)
-
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast):
 
@@ -97,8 +135,20 @@ class VimbaProxy(BaseCamera):
                 return 2 ** 12
             else:
                 return 2 ** 8
+
+        elif option == 'exposure':
+            return super(VimbaProxy, self).get_settings(option, cast) / 1000
+
         else:
             return super(VimbaProxy, self).get_settings(option, cast)
+
+    # ----------------------------------------------------------------------
+    def save_settings(self, option, value):
+
+        if option == 'exposure':
+            super(VimbaProxy, self).save_settings(option, value*1000)
+        else:
+            super(VimbaProxy, self).save_settings(option, value)
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
@@ -110,7 +160,7 @@ class VimbaProxy(BaseCamera):
             self._log.debug(f'{self._my_name}: starting acquisition: event mode')
 
             self._mode = 'event'
-            self._eid = self._device_proxy.subscribe_event("Image{:d}".format(self._depth),
+            self._eid = self._device_proxy.subscribe_event(self._image_source,
                                                            PyTango.EventType.DATA_READY_EVENT,
                                                            self._readout_frame, [], True)
 
@@ -169,7 +219,7 @@ class VimbaProxy(BaseCamera):
                 self._frame_thread_running = False
                 raise RuntimeError('Camera was stopped!')
             try:
-                self._last_frame = np.transpose(getattr(self._device_proxy, "Image{:d}".format(self._depth)))
+                self._last_frame = self._process_frame(getattr(self._device_proxy, self._image_source))
                 self._new_frame_flag = True
             except Exception as err:
                 self._log.error('Vimba error: {}'.format(err))
@@ -185,7 +235,7 @@ class VimbaProxy(BaseCamera):
         if not event.err:
             try:
                 data = event.device.read_attribute(event.attr_name.split('/')[6])
-                self._last_frame = np.transpose(data.value)
+                self._last_frame = self._process_frame(data.value)
                 self._new_frame_flag = True
 
             except Exception as err:
@@ -196,6 +246,19 @@ class VimbaProxy(BaseCamera):
             self._log.error('Vimba error: {}'.format(self.error_msg))
             self.error_flag = True
             self.error_msg = event.errors
+
+    # ----------------------------------------------------------------------
+    def _process_frame(self, data):
+        data = np.transpose(data)
+        if self._color:
+            c_data = np.zeros(data.shape + (3,), dtype=np.ubyte)
+            c_data[..., 0] = data & 255
+            c_data[..., 1] = (data >> 8) & 255
+            c_data[..., 2] = (data >> 16) & 255
+
+            return c_data
+        else:
+            return data
 
     # ----------------------------------------------------------------------
     def close_camera(self):

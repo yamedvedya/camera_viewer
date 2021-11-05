@@ -33,7 +33,8 @@ The camera configuration is stored in the config.xml
 
 - *tango_server* is the image source server
 
-- If you want a 12 bit mode of Vimba camera: *high_depth*="True"
+- If you want a 12 bit mode of Vimba camera: *high_depth*= 'True'
+- If you want a RGB mode of Vimba camera: *color*= 'True'
 
 
 - In case you have an associated LMAnalysis server you can add it by:
