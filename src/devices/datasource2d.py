@@ -340,6 +340,7 @@ class DataSource2D(QtCore.QObject):
         :param lut_state: dict, levels settings
         :return: None
         """
+        lut_state['levels'] = (int(lut_state['levels'][0]), int(lut_state['levels'][1]))
         self.levels = lut_state
         self.save_settings('lut', json.dumps(lut_state))
         if self.got_first_frame:

@@ -351,11 +351,13 @@ class FrameViewer(BaseWidget):
         x, y = self._view_rect.x(), self._view_rect.y()
         w, h = self._view_rect.width(), self._view_rect.height()
 
-        frameW, frameH = self._last_frame.shape
+        frameW, frameH = self._last_frame.shape[:2]
         x, y = int(max(0, x)), int(max(0, y))
         w, h = int(min(w, frameW)), int(min(h, frameH))
 
         dataSlice = self._last_frame[x:x + w, y:y + h]
+        if len(dataSlice.shape) > 2:
+            dataSlice = (dataSlice[...,0] * 65536 + dataSlice[...,1] * 256 + dataSlice[...,2])/16777215
 
         if self._ui.wiProfileX.frameSize().height() > epsilon:
             self._ui.wiProfileX.range_changed(dataSlice, 1, (x, y, w, h))
@@ -492,7 +494,7 @@ class FrameViewer(BaseWidget):
         """
         if self._last_frame is not None:
             pos, size = rect.pos(), rect.size()
-            max_w, max_h = self._last_frame.shape
+            max_w, max_h = self._last_frame.shape[:2]
 
             self._camera_device.set_roi_value(ind, 'x', max(int(pos.x()), 0))
             self._camera_device.set_roi_value(ind, 'y', max(int(pos.y()), 0))
