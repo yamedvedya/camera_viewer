@@ -84,7 +84,7 @@ rotate = '2'
     />
 ```
 
-Here is an example of TangoVimba camera, running at 12 bit mode, with associated Acromag motor, which picture need to be 90 deg rotated:
+Here is an example of TangoVimba camera, running at 12 bit bw mode, with associated Acromag motor, which picture need to be 90 deg rotated:
 
 
 ```xml
