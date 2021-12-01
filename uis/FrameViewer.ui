@@ -71,13 +71,13 @@
   <customwidget>
    <class>ImageViewNoKeyboard</class>
    <extends>QWidget</extends>
-   <header>widgets.image_view</header>
+   <header>petra_camera.widgets.image_view</header>
    <container>1</container>
   </customwidget>
   <customwidget>
    <class>ProjectionWidget</class>
    <extends>QWidget</extends>
-   <header>widgets.projection_widget</header>
+   <header>petra_camera.widgets.projection_widget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

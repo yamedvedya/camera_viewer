@@ -133,10 +133,10 @@ dmypy.json
 # Project related ignores
 /.idea
 /config
-/src/logs/
-/src/gui
-!src/gui/__init__.py
-/src/ui_vimbacam
+/petra_camera/logs/
+/petra_camera/gui
+!petra_camera/gui/__init__.py
+/petra_camera/ui_vimbacam
 /tmp/
 /logs
 /config.xml

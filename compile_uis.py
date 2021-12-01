@@ -7,7 +7,7 @@ import sys
 
 # ----------------------------------------------------------------------
 in_dirs = ["uis"]
-out_dirs = ["src/gui"]
+out_dirs = ["petra_camera/gui"]
 
 ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
                 "linux": "python -m PyQt5.uic.pyuic",

@@ -3,18 +3,18 @@ This utility allows displaying images from 2d Tango detectors and to do simple a
 
 Right now TangoTine (LM screens) and Vimba cameras are supported.
 
-Full instruction can be found here: https://confluence.desy.de/display/FSP23/Camera+viewer 
+Full instruction can be found here: https://confluence.desy.de/display/FSP23/Camera+viewer
 
-# Installation:
-To install run setup.sh
+Logs are stored in the ~/.petra_camera folder
 
-The utility is written in Python3+PyQt5 and utilize scipy and numpy packdges. 
-
-## Configuration @P23 
-The utility is installed @hasep23web and @hasep23sdd. You can start it by executing "camera" in the terminal. 
+If you wnat logs to be printed in terminal windows add --log option
 
 # Add new camera:
-The camera configuration is stored in the config.xml
+The camera configuration is stored in the ~/.petra_camera folder
+
+By default the default.xml is loading
+
+If you want to force another config add -p or --profile option with file name
 
 ## This is example of minimum entry to add camera:
 ```xml
