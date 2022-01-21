@@ -132,9 +132,3 @@ dmypy.json
 
 # Project related ignores
 /.idea
-/config
-/petra_camera/logs/
-/tmp/
-/logs
-/config.xml
-icons_rc.py
