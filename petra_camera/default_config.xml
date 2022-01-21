@@ -1,0 +1,17 @@
+<camera_viewer version="1.0">
+<!--  General section   -->
+    <roi_server enable="true" host="" port="23358"/>
+
+    <title_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255" />
+    <roi_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255" />
+    <datetime_label font="Arial,10" bg_color="30,144,255,220" fg_color="255,255,255,255" />
+
+    <save_folder default= "/home/p23user/Pictures/"/>
+
+    <center_search cross = '0.2' circle= '5'/>
+
+    <colors roi="#ff0000" marker="#ff0000"/>
+
+<!--Cameras section-->
+
+</camera_viewer>
