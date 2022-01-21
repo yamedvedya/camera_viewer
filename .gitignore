@@ -134,9 +134,6 @@ dmypy.json
 /.idea
 /config
 /petra_camera/logs/
-/petra_camera/gui
-!petra_camera/gui/__init__.py
-/petra_camera/ui_vimbacam
 /tmp/
 /logs
 /config.xml
