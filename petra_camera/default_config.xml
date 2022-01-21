@@ -14,4 +14,9 @@
 
 <!--Cameras section-->
 
+    <camera name="Dummy"
+            proxy="DummyProxy"
+            motor_type = 'None'
+    />
+
 </camera_viewer>

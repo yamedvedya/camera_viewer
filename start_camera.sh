@@ -3,4 +3,4 @@ cd $BASEDIR
 
 export VIEWERPATH=$PWD/
 export PYTHONPATH=$PYTHONPATH:$VIEWERPATH
-./venv/bin/python ./src/main.py
+./venv/bin/python ./petra_camera.py

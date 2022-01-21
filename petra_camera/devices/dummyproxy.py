@@ -24,7 +24,7 @@ class DummyProxy(BaseCamera):
     FRAME_W = 500
     FRAME_H = 500
 
-    NOISE = 0.27
+    NOISE = 10
 
     _settings_map = {'max_width': ('self', 'FRAME_W'),
                      'max_height': ('self', 'FRAME_H')}
@@ -41,7 +41,7 @@ class DummyProxy(BaseCamera):
         y += -1.0
 
         mean, sigma = 0, 0.2
-        self._baseData = np.exp(-((np.sqrt(x * x + y * y * 4) - mean) ** 2 / (2.0 * sigma ** 2)))
+        self._baseData = 100 * np.exp(-((np.sqrt(x * x + y * y * 4) - mean) ** 4 / (2.0 * sigma ** 2)))
         self._data = self._baseData
 
         self.error_flag = False
