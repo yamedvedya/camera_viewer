@@ -12,10 +12,13 @@ class PostInstallCommand(install):
     def run(self):
         print("Run pre-setup")
         # Set version
-        cmd = "git log -1 --format='%at' | xargs -I{} date -d @{} +'%Y/%m/%d %H:%M:%S'"
-        version = check_output(cmd, stderr=STDOUT, shell=True, universal_newlines=True)
-        version = version.replace("\n", "")
-        file = open('petra_camera/version.py', 'w')
+        cmd = 'git log -1 --pretty=format:"%ad" --date=format:"%Y-%m-%d %H:%M:%S"'
+        try:
+            version = check_output(cmd, stderr=STDOUT, shell=True, universal_newlines=True)
+            version = version.replace("\n", "")
+        except:
+            version = 'unknown'
+        file = open('petra_viewer/version.py', 'w')
         file.write('__version__="{}"'.format(version))
         file.close()
 
@@ -31,7 +34,7 @@ NAME = 'petra_camera'
 DESCRIPTION = 'Simple viewer for cameras, used at PETRA III source'
 EMAIL = 'yury.matveev@desy.de'
 AUTHOR = 'Yury Matveyev'
-REQUIRES_PYTHON = '>=3.6'
+REQUIRES_PYTHON = '>=3.7'
 VERSION = '0.3.0'
 
 # What packages are required for this module to be executed?
