@@ -1,5 +1,5 @@
 BASEDIR=`dirname $0`
-cd $BASEDIR
+cd $BASEDIR || exit
 
 export VIEWERPATH=$PWD/
 export PYTHONPATH=$PYTHONPATH:$VIEWERPATH

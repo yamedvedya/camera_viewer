@@ -8,6 +8,12 @@
 
 import logging
 
+try:
+    import skimage
+    peak_search = True
+except:
+    peak_search = False
+
 from functools import partial
 from PyQt5 import QtCore, QtWidgets, QtGui
 
@@ -90,7 +96,8 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._frame_viewer.save_ui_settings(self.camera_name)
         self._settings_widget.save_ui_settings(self.camera_name)
         self._markerroi_widget.save_ui_settings(self.camera_name)
-        self._peak_search_widget.save_ui_settings(self.camera_name)
+        if self._peak_search_widget is not None:
+            self._peak_search_widget.save_ui_settings(self.camera_name)
 
         self._save_ui_settings()
 
@@ -172,14 +179,18 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._markerroi_widget, self._markerroi_dock = \
             self._add_dock(MarkersROIsWidget, "Markers/ROIs", self)
 
-        self._peak_search_widget, self._peak_search_dock = \
-            self._add_dock(PeakSearchWidget, "Peak Search", self)
+        if peak_search:
+            self._peak_search_widget, self._peak_search_dock = \
+                self._add_dock(PeakSearchWidget, "Peak Search", self)
+        else:
+            self._peak_search_widget, self._peak_search_dock = None, None
 
-        # after all widgets are loaded we restore the user layout
+            # after all widgets are loaded we restore the user layout
         self._frame_viewer.load_ui_settings(self.camera_name)
         self._settings_widget.load_ui_settings(self.camera_name)
         self._markerroi_widget.load_ui_settings(self.camera_name)
-        self._peak_search_widget.load_ui_settings(self.camera_name)
+        if self._peak_search_widget is not None:
+            self._peak_search_widget.load_ui_settings(self.camera_name)
 
         # link between picture and histogram
         self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())

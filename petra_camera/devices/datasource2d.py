@@ -17,7 +17,11 @@ import PyTango
 import scipy.ndimage.measurements as scipymeasure
 import numpy as np
 
-from skimage.feature import peak_local_max
+try:
+    from skimage.feature import peak_local_max
+    peak_search = True
+except:
+    peak_search = False
 
 from petra_camera.utils.errors import report_error
 from petra_camera.utils.functions import FWHM
@@ -583,21 +587,24 @@ class DataSource2D(QtCore.QObject):
         finds peaks after new frame comes of parameter changed
         :return: None
         """
-        if self.peak_search['search']:
-            try:
-                if self.peak_search['search_mode']:
-                    coordinates = peak_local_max(self._last_frame,
-                                                 threshold_rel=self.peak_search['rel_threshold'] / 100)
-                else:
-                    coordinates = peak_local_max(self._last_frame,
-                                                 threshold_abs=self.peak_search['abs_threshold'])
+        if peak_search:
+            if self.peak_search['search']:
+                try:
+                    if self.peak_search['search_mode']:
+                        coordinates = peak_local_max(self._last_frame,
+                                                     threshold_rel=self.peak_search['rel_threshold'] / 100)
+                    else:
+                        coordinates = peak_local_max(self._last_frame,
+                                                     threshold_abs=self.peak_search['abs_threshold'])
 
-                if len(coordinates) > 100:
-                    report_error(
-                        'Too many ({}) peaks found. Show first 100. Adjust the threshold'.format(len(coordinates)),
-                        self, True)
-                    self.peak_coordinates = coordinates[:100]
-            except:
+                    if len(coordinates) > 100:
+                        report_error(
+                            'Too many ({}) peaks found. Show first 100. Adjust the threshold'.format(len(coordinates)),
+                            self, True)
+                        self.peak_coordinates = coordinates[:100]
+                except:
+                    self.peak_coordinates = ()
+            else:
                 self.peak_coordinates = ()
         else:
             self.peak_coordinates = ()

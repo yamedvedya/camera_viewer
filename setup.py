@@ -32,12 +32,15 @@ DESCRIPTION = 'Simple viewer for cameras, used at PETRA III source'
 EMAIL = 'yury.matveev@desy.de'
 AUTHOR = 'Yury Matveyev'
 REQUIRES_PYTHON = '>=3.6'
-VERSION = '0.0.2'
+VERSION = '0.3.0'
 
 # What packages are required for this module to be executed?
-REQUIRED = [
-    'watchdog', 'pyqtgraph', 'psutil', 'scikit-image', 'numpy', 'scipy',
+REQUIRED = ['pyqtgraph', 'psutil', 'numpy', 'scipy',
 ]
+
+EXTRA_REQUIRED = {'LAMBDA': ['watchdog'],
+                  'PEAK': ['scikit-image']
+                  }
 
 # Import the README and use it as the long-description.
 # Note: this will only work if 'README.md' is present in your MANIFEST.in file!
@@ -72,6 +75,7 @@ setup(
         'install': PostInstallCommand,
     },
     install_requires=REQUIRED,
+    extras_require=EXTRA_REQUIRED,
     include_package_data=True,
     license='GPLv3',
     entry_points={
