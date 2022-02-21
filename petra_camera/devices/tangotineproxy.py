@@ -42,14 +42,14 @@ class TangoTineProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def __init__(self, settings):
-        super(TangoTineProxy, self).__init__(settings)
-
         self._settings_map = dict(_base_settings_map)
-        if self._roi_server is not None:
+        if settings.hasAttribute('roi_server'):
             self._settings_map.update({"counter_x": ('roi_server', 'roi_x'),
                                        "counter_y": ('roi_server', 'roi_y'),
                                        "counter_w": ('roi_server', 'roi_w'),
                                        "counter_h": ('roi_server', 'roi_h')})
+
+        super(TangoTineProxy, self).__init__(settings)
 
         self._last_frame = np.zeros((1, 1))
 
