@@ -20,6 +20,14 @@ from petra_camera.main_window import APP_NAME
 
 logger = logging.getLogger(APP_NAME)
 
+_base_settings_map = {
+    "exposure": ("device_proxy", "ExposureTime"),
+    "gain": ("device_proxy", "Gain"),
+    'max_level_limit': (None,),
+    "background": ("device_proxy", "SubtractBackground"),
+    "background_sigmas": ("device_proxy", "BackgroundSigmas"),
+}
+
 
 # ----------------------------------------------------------------------
 class TangoTineProxy(BaseCamera):
@@ -28,23 +36,20 @@ class TangoTineProxy(BaseCamera):
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...
     #                    "ViewingMode": 1}
 
-    _settings_map = {
-                     "exposure": ("device_proxy", "ExposureTime"),
-                     "gain": ("device_proxy", "Gain"),
-                     'max_level_limit': (None, ),
-                     "counter_x": ('roi_server', 'roi_x'),
-                     "counter_y": ('roi_server', 'roi_y'),
-                     "counter_w": ('roi_server', 'roi_w'),
-                     "counter_h": ('roi_server', 'roi_h'),
-                     "background": ("device_proxy", "SubtractBackground"),
-                     "background_sigmas": ("device_proxy", "BackgroundSigmas"),
-                     }
+
 
     visible_layouts = ('FPS', 'exposure', 'background')
 
     # ----------------------------------------------------------------------
     def __init__(self, settings):
         super(TangoTineProxy, self).__init__(settings)
+
+        self._settings_map = dict(_base_settings_map)
+        if self._roi_server is not None:
+            self._settings_map.update({"counter_x": ('roi_server', 'roi_x'),
+                                       "counter_y": ('roi_server', 'roi_y'),
+                                       "counter_w": ('roi_server', 'roi_w'),
+                                       "counter_h": ('roi_server', 'roi_h')})
 
         self._last_frame = np.zeros((1, 1))
 

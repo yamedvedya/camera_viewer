@@ -300,7 +300,7 @@ class BaseCamera(object):
                 pass
 
             else:
-                raise RuntimeError('Unknown setting source')
+                raise RuntimeError(f'Unknown setting source {self._settings_map[option][0]}')
         else:
             QtCore.QSettings(APP_NAME).setValue("{}/{}".format(self._my_name, option), value)
 
