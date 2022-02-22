@@ -39,27 +39,27 @@ class BaseCamera(object):
         self._new_frame_flag = False
         self._eid = None  # Tango even ID
 
-        self._my_name = settings.getAttribute("name")
+        self._my_name = settings.get("name")
 
         # picture rotate and flip properties
-        if settings.hasAttribute('flip_vertical'):
-            self.flip_v = bool(strtobool(settings.getAttribute("flip_vertical")))
+        if 'flip_vertical' in settings.keys():
+            self.flip_v = bool(strtobool(settings.get("flip_vertical")))
         else:
             self.flip_v = False
 
-        if settings.hasAttribute('flip_horizontal'):
-            self.flip_h = bool(strtobool(settings.getAttribute("flip_horizontal")))
+        if 'flip_horizontal' in settings.keys():
+            self.flip_h = bool(strtobool(settings.get("flip_horizontal")))
         else:
             self.flip_h = False
 
-        if settings.hasAttribute('rotate'):
-            self.rotate_angle = int(settings.getAttribute("rotate"))
+        if 'rotate' in settings.keys():
+            self.rotate_angle = int(settings.get("rotate"))
         else:
             self.rotate_angle = 0
 
         # DeviceProxies instances
-        if settings.hasAttribute('tango_server'):
-            name = str(settings.getAttribute("tango_server"))
+        if 'tango_server' in settings.keys():
+            name = str(settings.get("tango_server"))
             self._device_proxy = PyTango.DeviceProxy(name)
             if self._device_proxy.state() == PyTango.DevState.FAULT:
                 raise RuntimeError(f'{name} in FAULT state!')
@@ -67,8 +67,8 @@ class BaseCamera(object):
         else:
             self._device_proxy = None
 
-        if settings.hasAttribute('settings_server'):
-            name = str(settings.getAttribute("settings_server"))
+        if 'settings_server' in settings.keys():
+            name = str(settings.get("settings_server"))
             self._settings_proxy = PyTango.DeviceProxy(name)
             if self._settings_proxy.state() == PyTango.DevState.FAULT:
                 raise RuntimeError(f'{name} in FAULT state!')
@@ -76,8 +76,8 @@ class BaseCamera(object):
         else:
             self._settings_proxy = None
 
-        if settings.hasAttribute('roi_server'):
-            name = str(settings.getAttribute("roi_server"))
+        if 'roi_server' in settings.keys():
+            name = str(settings.get("roi_server"))
             self._roi_server = PyTango.DeviceProxy(name)
             if self._roi_server.state() == PyTango.DevState.FAULT:
                 raise RuntimeError(f'{name} in FAULT state!')
@@ -86,8 +86,8 @@ class BaseCamera(object):
             self._roi_server = None
 
         # if camera has a screen control
-        if settings.hasAttribute('motor_type') and \
-                (str(settings.getAttribute("motor_type")).lower() not in ['none', 'no', '']):
+        if 'motor_type' in settings.keys() and \
+                (str(settings.get("motor_type")).lower() not in ['none', 'no', '']):
             self._motor_worker = MotorExecutor(settings)
         else:
             self._motor_worker = None

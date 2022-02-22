@@ -20,6 +20,7 @@ from PyQt5 import QtWidgets, QtCore
 from distutils.util import strtobool
 
 from petra_camera.widgets.about_dialog import AboutDialog
+from petra_camera.widgets.general_settings import ProgramSetup
 from petra_camera.widgets.camera_widget import CameraWidget
 from petra_camera.utils.xmlsettings import XmlSettings
 
@@ -53,17 +54,17 @@ class PETRACamera(QtWidgets.QMainWindow):
         pg.setConfigOption("leftButtonPan", False)
 
         self.options = options
-        self._settings = self.get_settings(options)
+        self.settings = self.get_settings(options)
         self._device_list = self._get_cameras_list()
         self._camera_widgets = []
         self._camera_docks = []
         self._add_cameras()
 
         self._roi_server = []
-        if self._settings.has_node('roi_server') and self._settings.option("roi_server", "enable").lower() == "true":
+        if self.settings.has_node('roi_server') and self.settings.option("roi_server", "enable").lower() == "true":
             try:
-                self._roi_server = RoiServer(self._settings.option("roi_server", "host"),
-                                             self._settings.option("roi_server", "port"),
+                self._roi_server = RoiServer(self.settings.option("roi_server", "host"),
+                                             self.settings.option("roi_server", "port"),
                                              self._device_list)
                 self._roi_server.start()
             except Exception as err:
@@ -86,18 +87,19 @@ class PETRACamera(QtWidgets.QMainWindow):
         if not file_name.endswith('.xml'):
             file_name += '.xml'
 
-        if not os.path.exists(os.path.join(home, file_name)):
-            file = QtWidgets.QFileDialog.getOpenFileName(self, 'Cannot find settings file, please locate it',
-                                                         str(Path.home()), 'XML settings (*.xml)')
-            if file[0]:
-                return XmlSettings(file[0])
-        else:
-            return XmlSettings(os.path.join(home, file_name))
-
         if not os.path.exists(home):
             os.mkdir(home)
 
-        if not os.path.exists(os.path.join(home, file_name)):
+        if file_name != 'default.xml':
+            if not os.path.exists(os.path.join(home, file_name)):
+                file = QtWidgets.QFileDialog.getOpenFileName(self, 'Cannot find settings file, please locate it',
+                                                             str(Path.home()), 'XML settings (*.xml)')
+                if file[0]:
+                    shutil.copy(file[0], os.path.join(home, 'default.xml'))
+            else:
+                shutil.copy(os.path.join(home, file_name), os.path.join(home, 'default.xml'))
+
+        if not os.path.exists(os.path.join(home, 'default.xml')):
             shutil.copy(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.xml'),
                         os.path.join(home, 'default.xml'))
 
@@ -107,8 +109,8 @@ class PETRACamera(QtWidgets.QMainWindow):
     def _get_cameras_list(self):
 
         cam_list = []
-        for device in self._settings.get_nodes('camera_viewer', 'camera'):
-            cam_list.append(device.getAttribute('name'))
+        for device in self.settings.get_nodes('camera'):
+            cam_list.append(device.get('name'))
 
         cam_list.sort()
 
@@ -130,7 +132,7 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         for camera in self._device_list:
             try:
-                widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self._settings, camera)
+                widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self.settings, camera)
                 widget.load_ui_settings()
                 dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
                 self._camera_widgets.append(widget)
@@ -170,6 +172,11 @@ class PETRACamera(QtWidgets.QMainWindow):
         """
         """
         AboutDialog(self).exec_()
+
+    # ----------------------------------------------------------------------
+    def _show_settings(self):
+
+        ProgramSetup(self).exec_()
 
     # ----------------------------------------------------------------------
     def closeEvent(self, event):
@@ -264,6 +271,10 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.menu_cameras = QtWidgets.QMenu('Cameras', self)
         self.menuBar().addMenu(self.menu_cameras)
+
+        settings = QtWidgets.QAction('Program settings', self)
+        settings.triggered.connect(self._show_settings)
+        self.menuBar().addAction(settings)
 
         self.auto_screen_action = QtWidgets.QAction('', self)
         self.auto_screen_action.setCheckable(True)

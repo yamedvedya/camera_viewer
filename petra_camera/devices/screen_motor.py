@@ -31,24 +31,24 @@ class MotorExecutor(object):
     def __init__(self, settings):
         super(MotorExecutor, self).__init__()
 
-        self._my_name = settings.getAttribute("name")
-        if str(settings.getAttribute("motor_type")).lower() == 'acromag':
+        self._my_name = settings.get("name")
+        if str(settings.get("motor_type")).lower() == 'acromag':
             self._motor_type = 'Acromag'
-            server_name = str(settings.getAttribute("valve_tango_server"))
+            server_name = str(settings.get("valve_tango_server"))
             self._valve_device_proxy = PyTango.DeviceProxy(server_name)
             if self._valve_device_proxy.state() == PyTango.DevState.FAULT:
                 raise RuntimeError(f'{server_name} in FAULT state!')
-            self._valve_channel = int(settings.getAttribute("valve_channel"))
+            self._valve_channel = int(settings.get("valve_channel"))
 
             logger.debug(f'{self._my_name}: new Acromag motor: {server_name}:{self._valve_channel}')
 
-        elif str(settings.getAttribute("motor_type")).lower() == 'fsbt':
+        elif str(settings.get("motor_type")).lower() == 'fsbt':
             self._motor_type = 'FSBT'
-            self._motor_name = str(settings.getAttribute("motor_name"))
+            self._motor_name = str(settings.get("motor_name"))
 
             self._fsbt_server = None
-            self._fsbt_host = str(settings.getAttribute("motor_host"))
-            self._fsbt_port = int(settings.getAttribute("motor_port"))
+            self._fsbt_host = str(settings.get("motor_host"))
+            self._fsbt_port = int(settings.get("motor_port"))
 
             self._fsbt_worker = threading.Thread(target=self.server_connection)
             self._fsbt_worker_status = 'running'

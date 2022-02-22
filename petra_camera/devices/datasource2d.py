@@ -99,13 +99,13 @@ class DataSource2D(QtCore.QObject):
         :return: bool, success or not
         """
 
-        for device in self.settings.get_nodes('camera_viewer', 'camera'):
-            if device.getAttribute('name') == name:
+        for device in self.settings.get_nodes('camera'):
+            if device.get('name') == name:
 
                 self._base_id = name
 
                 try:
-                    proxyClass = device.getAttribute("proxy")
+                    proxyClass = device.get("proxy")
                     logger.info("Loading device proxy {}...".format(proxyClass))
 
                     module = importlib.import_module("petra_camera.devices.{}".format(proxyClass.lower()))
@@ -396,7 +396,7 @@ class DataSource2D(QtCore.QObject):
 
         :return: None
         """
-        self.markers.append({'x': 0, 'y': 0, 'visible': True, 'color': self.settings.option('colors', 'marker')})
+        self.markers.append({'x': 0, 'y': 0, 'visible': True, 'color': self.settings.option('marker', 'fr_color')})
         self._save_marker_settings()
 
     # ----------------------------------------------------------------------
@@ -485,7 +485,7 @@ class DataSource2D(QtCore.QObject):
         :return: None
         """
         self.rois.append({'x': 0, 'y': 0, 'w': 50, 'h': 50, 'bg': 0, 'visible': True, 'mark': '',
-                          'color': self.settings.option('colors', 'roi')})
+                          'color': self.settings.option('roi', 'fr_color')})
         self.rois_data.append(dict.fromkeys(['max_x', 'max_y', 'max_v',
                                              'min_x', 'min_y', 'min_v',
                                              'com_x', 'com_y', 'com_v',

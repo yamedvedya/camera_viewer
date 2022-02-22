@@ -1,66 +1,55 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # ----------------------------------------------------------------------
-# Author:        sebastian.piec@desy.de
+# Author:        yury.matveev@desy.de
 # ----------------------------------------------------------------------
 
 """Parse settings given in xml files
 """
 
-from xml.dom.minidom import parseString
+import xml.etree.cElementTree as ET
 
 
 # ----------------------------------------------------------------------
 class XmlSettings(object):
 
     # ----------------------------------------------------------------------
-    def __init__(self, fileName):
-        self.fileName = fileName
+    def __init__(self, file_name):
+        self.file_name = file_name
 
     # ----------------------------------------------------------------------
-    def option(self, nodePath, attribute):
+    def option(self, node_path, attribute):
         """Retrieve option's value from a config file.
         """
-        with open(self.fileName, "r") as inFile:        # read over-and-over??? TODO
-            path = nodePath.split("/")
 
-            node = parseString(inFile.read())
-            for nodeName in path:
-                node = node.getElementsByTagName(nodeName)[0]     # take first node always...
-
-            return node.getAttribute(attribute)
+        return self.node(node_path).get(attribute)
 
     # ----------------------------------------------------------------------
-    def get_nodes(self, nodePath, nodeName):
+    def get_nodes(self, node_name, node_path=None):
         """
         """
-        with open(self.fileName, "r") as inFile:
-            path = nodePath.split("/")[:-1]
 
-            node = parseString(inFile.read())
-            for nodeName in path:
-                node = node.getElementsByTagName(nodeName)[0]
-
-            return node.getElementsByTagName(nodeName)
+        return self.node(node_path).findall(node_name)
 
     # ----------------------------------------------------------------------
-    def node(self, nodePath):
+    def node(self, node_path=None):
         """
         """
-        with open(self.fileName, "r") as f:
-            path = nodePath.split("/")
+        root = ET.parse(self.file_name).getroot()
+        if node_path is not None:
+            for node in node_path.split("/"):
+                if root.find(node) is not None:
+                    root = root.find(node)
+                else:
+                    raise RuntimeError('Wrong xml path')
 
-            node = parseString(f.read())
-            for nodeName in path[:-1]:
-                node = node.getElementsByTagName(nodeName)[0]
-
-            return node.getElementsByTagName(path[-1])[0]           # returns first matching node always...
+        return root
 
     # ----------------------------------------------------------------------
-    def has_node(self, nodePath):
+    def has_node(self, node_path):
         try:
-            self.node(nodePath)
+            self.node(node_path)
             return True
         except:
             return False

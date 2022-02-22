@@ -36,13 +36,13 @@ class DalsaProxy(BaseCamera):
     def __init__(self, settings):
         super(DalsaProxy, self).__init__(settings)
 
-        if settings.hasAttribute('folders'):
-            self._possible_folders = [item.strip() for item in settings.getAttribute("folders").split(';')]
+        if 'folders' in settings.keys():
+            self._possible_folders = [item.strip() for item in settings.get("folders").split(';')]
         else:
             self._possible_folders = ['/gpfs/current/raw/', '/gpfs/commissioning/raw/']
 
-        if settings.hasAttribute('sources'):
-            self._possible_sources = [item.strip() for item in settings.getAttribute("folders").split(';')]
+        if 'sources' in settings.keys():
+            self._possible_sources = [item.strip() for item in settings.get("folders").split(';')]
         else:
             self._possible_sources = ['Event', 'Files']
 

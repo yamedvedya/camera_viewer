@@ -138,13 +138,13 @@ class FrameViewer(BaseWidget):
         # ----------------------------------------------------------------------
         #                        Labels
         # ----------------------------------------------------------------------
-        self._device_label = self._add_label('', self._settings.node("camera_viewer/title_label"), visible=True)
+        self._device_label = self._add_label('', self._settings.node("title"), visible=True)
         self._device_label.setText(self._camera_device.device_id)
 
-        self._datetime_label = self._add_label("Time", self._settings.node("camera_viewer/datetime_label"),
+        self._datetime_label = self._add_label("Time", self._settings.node("title"),
                                                visible=True)
 
-        self._load_label = self._add_label("Load image", self._settings.node("camera_viewer/datetime_label"),
+        self._load_label = self._add_label("Load image", self._settings.node("title"),
                                            visible=False)
 
         if not self.load_camera():
@@ -447,7 +447,7 @@ class FrameViewer(BaseWidget):
             self._ui.image_view.view.addItem(widget, ignoreBounds=True)
             self._rois_widgets.append([widget, marker_item,
                                        self._add_label("ROI_{}".format(ind+1),
-                                                       self._settings.node("camera_viewer/roi_label"),
+                                                       self._settings.node("roi"),
                                                        visible=values['visible'])])
 
         self.repaint_roi()
@@ -626,9 +626,9 @@ class FrameViewer(BaseWidget):
             fill = self.LABEL_BRUSH
             font = QtGui.QFont("Arial", 10)
         else:
-            color = tuple(int(v) for v in style.getAttribute("fg_color").split(","))
-            fill = tuple(int(v) for v in style.getAttribute("bg_color").split(","))
-            font = style.getAttribute("font").split(",")
+            color = tuple(int(v) for v in style.get("fg_color").split(","))
+            fill = tuple(int(v) for v in style.get("bg_color").split(","))
+            font = style.get("font").split(",")
             font = QtGui.QFont(font[0], int(font[1]))
 
         item = pg.TextItem(text=text, color=color, fill=fill)

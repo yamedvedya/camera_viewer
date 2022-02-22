@@ -43,7 +43,7 @@ class TangoTineProxy(BaseCamera):
     # ----------------------------------------------------------------------
     def __init__(self, settings):
         self._settings_map = dict(_base_settings_map)
-        if settings.hasAttribute('roi_server'):
+        if 'roi_server' in settings.keys():
             self._settings_map.update({"counter_x": ('roi_server', 'roi_x'),
                                        "counter_y": ('roi_server', 'roi_y'),
                                        "counter_w": ('roi_server', 'roi_w'),

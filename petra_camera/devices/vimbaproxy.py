@@ -61,13 +61,13 @@ class VimbaProxy(BaseCamera):
         super(VimbaProxy, self).__init__(settings)
 
         self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
-        if settings.hasAttribute('high_depth'):
-            high_depth = strtobool(settings.getAttribute("high_depth"))
+        if 'high_depth' in settings.keys():
+            high_depth = strtobool(settings.get("high_depth"))
         else:
             high_depth = False
 
-        if settings.hasAttribute('color'):
-            color = strtobool(settings.getAttribute("color"))
+        if 'color' in settings.keys():
+            color = strtobool(settings.get("color"))
         else:
             color = False
 
