@@ -1,0 +1,18 @@
+<camera_viewer version="1.0">
+
+    <save_folder default= "/home/p23user/Pictures/"/>
+
+    <roi_server enable="true" host="" port="23358"/>
+    <roi font="Arial,10" bg_color="#1e90ff" fg_color="#ffffff" fr_color="#ff0000"/>
+    <title font="Arial,10" bg_color="#1e90ff" fg_color="#ffffff" />
+
+    <center_search cross = '0.2' circle= '5'/>
+
+    <marker fr_color="#ff0000"/>
+
+    <camera name="Dummy"
+            proxy="DummyProxy"
+            motor_type = 'None'
+    />
+
+</camera_viewer>
