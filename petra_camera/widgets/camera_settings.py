@@ -121,7 +121,7 @@ class CameraSettings(QtWidgets.QWidget):
             data_to_save.append(('motor_host', self._ui.le_fsbt_host.text()))
             data_to_save.append(('motor_port', self._ui.le_fsbt_port.text()))
 
-        elif self._ui.cmb_camera_type.currentText() == 'Vimba':
+        elif self._ui.cmb_motor_type.currentText() == 'Acromag':
             data_to_save.append(('motor_type', 'Acromag'))
             data_to_save.append(('valve_tango_server', self._ui.le_acromag_server.text()))
             data_to_save.append(('valve_channel', self._ui.le_acromag_valve.text()))
