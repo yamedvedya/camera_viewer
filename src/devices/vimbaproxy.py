@@ -7,7 +7,6 @@
 
 import time
 import numpy as np
-import struct
 
 from threading import Thread
 from distutils.util import strtobool
@@ -38,6 +37,8 @@ class VimbaProxy(BaseCamera):
 
     START_DELAY = 1
     STOP_DELAY = 0.5
+
+    START_ATTEMPTS = 2
 
     _settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
                      "gain": ["device_proxy", "Gain"],
@@ -164,7 +165,14 @@ class VimbaProxy(BaseCamera):
                                                            PyTango.EventType.DATA_READY_EVENT,
                                                            self._readout_frame, [], True)
 
-            self._device_proxy.command_inout("StartAcquisition")
+            attemp = 0
+            while attemp < self.START_ATTEMPTS:
+                try:
+                    self._device_proxy.command_inout("StartAcquisition")
+                    break
+                except:
+                    attemp += 1
+
             time.sleep(self.START_DELAY)  # ? TODO
 
             return True
