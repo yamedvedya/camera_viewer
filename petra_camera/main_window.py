@@ -116,7 +116,11 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         cam_list = []
         for device in self.settings.get_nodes('camera'):
-            cam_list.append(device.get('name'))
+            if 'enabled' in device.keys():
+                if strtobool(device.get('enabled')):
+                    cam_list.append(device.get('name'))
+            else:
+                cam_list.append(device.get('name'))
 
         cam_list.sort()
 

@@ -33,6 +33,11 @@ class CameraSettings(QtWidgets.QWidget):
         if settings_node is not None:
             self._ui.le_name.setText(settings_node.get('name'))
 
+            if 'enabled' in settings_node.keys():
+                self._ui.chk_enabled.setChecked(strtobool(settings_node.get('enabled')))
+            else:
+                self._ui.chk_enabled.setChecked(True)
+
             camera_type = settings_node.get('proxy')
             if camera_type == 'DummyProxy':
                 refresh_combo_box(self._ui.cmb_camera_type, 'Dummy')
@@ -58,10 +63,12 @@ class CameraSettings(QtWidgets.QWidget):
                 self._ui.le_fsbt_motor_name.setText(settings_node.get('motor_name'))
                 self._ui.le_fsbt_host.setText(settings_node.get('motor_host'))
                 self._ui.le_fsbt_port.setText(settings_node.get('motor_port'))
+                self._ui.fr_fsbt.setVisible(True)
             elif motor_type == 'Acromag':
                 refresh_combo_box(self._ui.cmb_motor_type, 'Acromag')
                 self._ui.le_acromag_server.setText(settings_node.get('valve_tango_server'))
                 self._ui.le_acromag_valve.setText(settings_node.get('valve_channel'))
+                self._ui.fr_acromag.setVisible(True)
             else:
                 refresh_combo_box(self._ui.cmb_motor_type, 'None')
 
@@ -96,7 +103,8 @@ class CameraSettings(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def get_data(self):
-        data_to_save = [('name', self._ui.le_name.text())]
+        data_to_save = [('name', self._ui.le_name.text()),
+                        ('enabled', str(self._ui.chk_enabled.isChecked()))]
 
         if self._ui.cmb_camera_type.currentText() == 'LMScreen':
             type = 'TangoTineProxy'

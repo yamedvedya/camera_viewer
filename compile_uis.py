@@ -11,11 +11,11 @@ out_dirs = ["petra_camera/gui"]
 
 ui_compilers = {"linux2": "python -m PyQt5.uic.pyuic",
                 "linux": "python -m PyQt5.uic.pyuic",
-                "win32": "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyuic5.exe"}
+                "win32": "pyuic5.exe"}
 
 rc_compilers = {"linux2": "pyrcc5",
                 "linux": "pyrcc5",
-                "win32":  "C://Users//matveyev//AppData//Local//Programs//Python//Python37-32//Scripts//pyrcc5.exe"}
+                "win32":  "pyrcc5.exe"}
 
 
 # ----------------------------------------------------------------------
