@@ -43,7 +43,14 @@ class TangoTineProxy(BaseCamera):
     # ----------------------------------------------------------------------
     def __init__(self, settings):
         self._settings_map = dict(_base_settings_map)
-        if 'roi_server' in settings.keys():
+        if PyTango.DeviceProxy(str(settings.get("tango_server"))).info().dev_class == 'LMScreen':
+            self._settings_map.update({"counter_x": ('device_proxy', 'roi_x'),
+                                       "counter_y": ('device_proxy', 'roi_y'),
+                                       "counter_w": ('device_proxy', 'roi_w'),
+                                       "counter_h": ('device_proxy', 'roi_h')})
+            self.counter_source = '_device_proxy'
+            self.counter_name = 'value_parameter'
+        elif 'roi_server' in settings.keys():
             self._settings_map.update({"counter_x": ('roi_server', 'roi_x'),
                                        "counter_y": ('roi_server', 'roi_y'),
                                        "counter_w": ('roi_server', 'roi_w'),

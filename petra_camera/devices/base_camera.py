@@ -23,6 +23,9 @@ logger = logging.getLogger(APP_NAME)
 # ----------------------------------------------------------------------
 class BaseCamera(object):
 
+    counter_source = '_roi_server'
+    counter_name = 'scan_parameter'
+
     # ----------------------------------------------------------------------
     def __init__(self, settings):
         """
@@ -349,7 +352,7 @@ class BaseCamera(object):
 
         :return: bool
         """
-        return self._roi_server is not None
+        return getattr(self, self.counter_source) is not None
 
     # ----------------------------------------------------------------------
     def get_counter(self):
@@ -357,9 +360,9 @@ class BaseCamera(object):
 
         :return: str, current counter control
         """
-        if self._roi_server is not None:
+        if getattr(self, self.counter_source) is not None:
             try:
-                return self._roi_server.scan_parameter
+                return getattr(getattr(self, self.counter_source), self.counter_name)
             except:
                 return ''
         else:
@@ -372,8 +375,8 @@ class BaseCamera(object):
         :param value: parameter to be set as a counter for Sardana control
         :return:
         """
-        if self._roi_server is not None:
+        if getattr(self, self.counter_source) is not None:
             try:
-                self._roi_server.scan_parameter = str(value)
+                setattr(getattr(self, self.counter_source), self.counter_name, value)
             except:
                 pass
