@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>591</width>
+    <width>629</width>
     <height>799</height>
    </rect>
   </property>
@@ -71,7 +71,21 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="cmd_roi_label_color">
+            <widget class="QPushButton" name="cmd_roi_label_font">
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_14">
+             <property name="text">
+              <string>ROI label font color</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="cmd_roi_label_font_color">
              <property name="text">
               <string/>
              </property>
@@ -142,7 +156,21 @@
            <item>
             <widget class="QLabel" name="label_5">
              <property name="text">
-              <string>Titlefont</string>
+              <string>Title font</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="cmd_title_font">
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_15">
+             <property name="text">
+              <string>Title font color</string>
              </property>
             </widget>
            </item>
@@ -284,7 +312,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QTabWidget" name="tabWidget">
+    <widget class="QTabWidget" name="tb_cameras">
      <property name="currentIndex">
       <number>-1</number>
      </property>

@@ -67,7 +67,7 @@ class DummyProxy(BaseCamera):
 
         self._run = False
         while self._generator_thread_working or self._new_frame_thead_working:
-            time.sleep(self._fps)
+            time.sleep(1/self._fps)
 
     # ----------------------------------------------------------------------
     def _new_frame(self):

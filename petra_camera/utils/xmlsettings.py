@@ -19,6 +19,33 @@ class XmlSettings(object):
         self.file_name = file_name
 
     # ----------------------------------------------------------------------
+    def set_options(self, general_settings, cameras_settings):
+
+        et_tree = ET.parse(self.file_name)
+        root = et_tree.getroot()
+        for node, values in general_settings:
+            try:
+                node = self.node(node, root)
+            except:
+                node = self.make_node(root, node)
+
+            for attribute, value in values:
+                node.set(attribute, str(value))
+
+        for el in root.findall('camera'):
+            root.remove(el)
+
+        el = None
+        for camera in cameras_settings:
+            el = ET.SubElement(root, 'camera', dict((key, value) for (key, value) in camera))
+            el.tail = '\n\n\t'
+
+        if el is not None:
+            el.tail = '\n\n'
+
+        et_tree.write(self.file_name)
+
+    # ----------------------------------------------------------------------
     def option(self, node_path, attribute):
         """Retrieve option's value from a config file.
         """
@@ -33,10 +60,22 @@ class XmlSettings(object):
         return self.node(node_path).findall(node_name)
 
     # ----------------------------------------------------------------------
-    def node(self, node_path=None):
+    def make_node(self, root, node_path):
+        for node in node_path.split("/"):
+            if root.find(node) is not None:
+                root = root.find(node)
+            else:
+                root = ET.SubElement(root, node)
+
+        return root
+
+    # ----------------------------------------------------------------------
+    def node(self, node_path=None, root=None):
         """
         """
-        root = ET.parse(self.file_name).getroot()
+        if root is None:
+            root = ET.parse(self.file_name).getroot()
+
         if node_path is not None:
             for node in node_path.split("/"):
                 if root.find(node) is not None:

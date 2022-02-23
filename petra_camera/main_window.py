@@ -55,6 +55,21 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.options = options
         self.settings = self.get_settings(options)
+
+        self._init_viewer()
+
+        self.setWindowTitle("Camera Viewer ({}@{})".format(getpass.getuser(), socket.gethostname()))
+
+        self._init_status_bar()
+        self._status_timer = QtCore.QTimer(self)
+        self._status_timer.timeout.connect(self._refresh_status_bar)
+        self._status_timer.start(self.STATUS_TICK)
+
+        logger.info("Initialized successfully")
+
+    # ----------------------------------------------------------------------
+    def _init_viewer(self):
+
         self._device_list = self._get_cameras_list()
         self._camera_widgets = []
         self._camera_docks = []
@@ -69,15 +84,6 @@ class PETRACamera(QtWidgets.QMainWindow):
                 self._roi_server.start()
             except Exception as err:
                 logger.exception(err)
-
-        self.setWindowTitle("Camera Viewer ({}@{})".format(getpass.getuser(), socket.gethostname()))
-
-        self._init_status_bar()
-        self._status_timer = QtCore.QTimer(self)
-        self._status_timer.timeout.connect(self._refresh_status_bar)
-        self._status_timer.start(self.STATUS_TICK)
-
-        logger.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
     def get_settings(self, options):
@@ -176,7 +182,17 @@ class PETRACamera(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def _show_settings(self):
 
-        ProgramSetup(self).exec_()
+        if ProgramSetup(self).exec_():
+            logger.info("Closing all cameras...")
+
+            self.stop_cameras()
+
+            for widget, dock in zip(self._camera_widgets, self._camera_docks):
+                self.removeDockWidget(dock)
+                del widget
+                del dock
+
+            self._init_viewer()
 
     # ----------------------------------------------------------------------
     def closeEvent(self, event):
@@ -188,10 +204,7 @@ class PETRACamera(QtWidgets.QMainWindow):
             event.ignore()
 
     # ----------------------------------------------------------------------
-    def clean_close(self):
-        """
-        """
-        logger.info("Closing the app...")
+    def stop_cameras(self):
 
         for widget in self._camera_widgets:
             widget.clean_close()
@@ -199,6 +212,14 @@ class PETRACamera(QtWidgets.QMainWindow):
         if hasattr(self, '_roi_server') and self._roi_server:
             logger.info("Stopping ROI server...")
             self._roi_server.stop()
+
+    # ----------------------------------------------------------------------
+    def clean_close(self):
+        """
+        """
+        logger.info("Closing the app...")
+
+        self.stop_cameras()
 
         if hasattr(self, '_status_timer'):
             self._status_timer.stop()
