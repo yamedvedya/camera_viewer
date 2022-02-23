@@ -95,7 +95,12 @@ class BaseCamera(object):
         # for high resolution cameras to decrease CPU load
         self.reduce_resolution = max(self.get_settings('Reduce', int), 1)
 
-        self._picture_size = [0, 0, -1, -1]
+        size_x = self.get_settings('view_x', int)
+        size_y = self.get_settings('view_y', int)
+        size_w = self.get_settings('view_w', int)
+        size_h = self.get_settings('view_h', int)
+
+        self._picture_size = [size_x, size_y, size_x + size_w, size_y + size_h]
 
     # ----------------------------------------------------------------------
     def close_camera(self):
