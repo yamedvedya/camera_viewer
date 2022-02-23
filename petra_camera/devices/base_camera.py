@@ -29,9 +29,6 @@ class BaseCamera(object):
     # ----------------------------------------------------------------------
     def __init__(self, settings):
         """
-
-        :param settings: config.xml
-        :param log:
         """
         super(BaseCamera, self).__init__()
 
