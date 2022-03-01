@@ -18,7 +18,7 @@ class PostInstallCommand(install):
             version = version.replace("\n", "")
         except:
             version = 'unknown'
-        file = open('petra_viewer/version.py', 'w')
+        file = open('petra_camera/version.py', 'w')
         file.write('__version__="{}"'.format(version))
         file.close()
 
@@ -35,7 +35,7 @@ DESCRIPTION = 'Simple viewer for cameras, used at PETRA III source'
 EMAIL = 'yury.matveev@desy.de'
 AUTHOR = 'Yury Matveyev'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.3.0'
+VERSION = '0.6.2'
 
 # What packages are required for this module to be executed?
 REQUIRED = ['pyqtgraph', 'psutil', 'numpy', 'scipy',
@@ -86,6 +86,9 @@ setup(
             'petra_camera = petra_camera:main',
         ],
     },
+
+    scripts=['petra_camera/petra_camera.sh'],
+
     classifiers=[
         # Trove classifiers
         # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
