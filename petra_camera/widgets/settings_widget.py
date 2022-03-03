@@ -4,6 +4,7 @@
 
 """
 """
+import threading
 
 try:
     import PyTango
@@ -11,6 +12,7 @@ except ImportError:
     pass
 import subprocess
 import logging
+import time
 
 import pyqtgraph as pg
 from packaging import version
@@ -62,6 +64,14 @@ class SettingsWidget(BaseWidget):
 
         # to prevent double code run
         self._my_mutex = QtCore.QMutex()
+
+        self._start_settings_read = threading.Event()
+        self._stop_settings_reader = threading.Event()
+
+        self._settings_reader = SettingsReader(self._camera_device,
+                                               self._start_settings_read, self._stop_settings_reader)
+        self._settings_reader.settings_ready.connect(self.display_tango_settings)
+        self._settings_reader.start()
 
         self._load_camera_settings()
 
@@ -119,53 +129,7 @@ class SettingsWidget(BaseWidget):
             self._ui.rb_sqrt_level.setChecked(self._camera_device.level_mode == 'sqrt')
 
             if self._ui.chk_additional_settings.isChecked() or force_read:
-                if not self._ui.sb_exposure.hasFocus():
-                    exposure_time = self._camera_device.get_settings('exposure', float)
-                    self._ui.sb_exposure.setValue(exposure_time)
-
-                if not self._ui.sb_gain.hasFocus():
-                    gain_value = self._camera_device.get_settings('gain', int)
-                    self._ui.sb_gain.setValue(gain_value)
-
-                motor_position = self._camera_device.motor_position()
-                if motor_position is not None:
-                    self._ui.but_in_out.setText('Move Out' if motor_position else 'Move In')
-                    self._ui.lb_screen_status.setText('Screen is In' if motor_position else 'Screen is Out')
-
-                for ui in ['view_x', 'view_y']:
-                    if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
-                        getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
-                        getattr(self._ui, 'sb_{}'.format(ui)).setValue(self._camera_device.get_settings(ui, int))
-
-                for ui in ['view_w', 'view_h']:
-                    if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
-                        getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
-                        value = self._camera_device.get_settings(ui, int)
-                        if value == 0:
-                            value = 1
-                        getattr(self._ui, 'sb_{}'.format(ui)).setValue(value)
-
-                self._update_picture_size_limits()
-
-                if not self._ui.sb_FPS.hasFocus():
-                    fps = self._camera_device.get_settings('FPS', int)
-                    fps_max = self._camera_device.get_settings('FPSmax', int)
-                    if fps == 0:
-                        fps = 25
-                    if fps_max == 0:
-                        fps_max = 100
-
-                    self._ui.sb_FPS.setMaximum(fps_max)
-                    self._ui.sb_FPS.setValue(fps)
-
-                if not self._ui.chk_background.hasFocus():
-                    self._ui.chk_background.setChecked(self._camera_device.get_settings('background', bool))
-
-                if not self._ui.dsb_sigmas.hasFocus():
-                    self._ui.dsb_sigmas.setValue(self._camera_device.get_settings('background_sigmas', float))
-
-                if not self._ui.sb_reduce.hasFocus():
-                    self._ui.sb_reduce.setValue(self._camera_device.get_reduction())
+                self._start_settings_read.set()
 
                 self._ui.chk_auto_screen.setChecked(self._camera_device.auto_screen)
 
@@ -174,6 +138,48 @@ class SettingsWidget(BaseWidget):
                 self._ui.but_acq_dark_image.setEnabled(self._camera_device.got_first_frame)
 
                 self._ui.chk_dark_image.setChecked(self._camera_device.subtract_dark_image)
+
+    # ----------------------------------------------------------------------
+    def display_tango_settings(self):
+
+        with QtCore.QMutexLocker(self._my_mutex):
+            self.blockSignals(True)
+
+            if not self._ui.sb_exposure.hasFocus():
+                self._ui.sb_exposure.setValue(self._settings_reader.exposure_time)
+
+            if not self._ui.sb_gain.hasFocus():
+                self._ui.sb_gain.setValue(self._settings_reader.gain_value)
+
+            motor_position = self._settings_reader.motor_position
+            if motor_position is not None:
+                self._ui.but_in_out.setText('Move Out' if motor_position else 'Move In')
+                self._ui.lb_screen_status.setText('Screen is In' if motor_position else 'Screen is Out')
+
+            for ui in ['view_x', 'view_y']:
+                if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
+                    getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
+                    getattr(self._ui, 'sb_{}'.format(ui)).setValue(getattr(self._settings_reader, ui))
+
+            for ui in ['view_w', 'view_h']:
+                if not getattr(self._ui, 'sb_{}'.format(ui)).hasFocus():
+                    getattr(self._ui, 'sb_{}'.format(ui)).setMaximum(1e6)
+                    getattr(self._ui, 'sb_{}'.format(ui)).setValue(getattr(self._settings_reader, ui))
+
+            self._update_picture_size_limits()
+
+            if not self._ui.sb_FPS.hasFocus():
+                self._ui.sb_FPS.setMaximum(self._settings_reader.fps_max)
+                self._ui.sb_FPS.setValue(self._settings_reader.fps)
+
+            if not self._ui.chk_background.hasFocus():
+                self._ui.chk_background.setChecked(self._settings_reader.background)
+
+            if not self._ui.dsb_sigmas.hasFocus():
+                self._ui.dsb_sigmas.setValue(self._settings_reader.background_sigmas)
+
+            if not self._ui.sb_reduce.hasFocus():
+                self._ui.sb_reduce.setValue(self._settings_reader.reduce)
 
             self._block_signals(False)
 
@@ -437,3 +443,79 @@ class SettingsWidget(BaseWidget):
 
         settings = QtCore.QSettings(APP_NAME)
         settings.setValue(f"{WIDGET_NAME}_{camera_name}/AdditionalSettings", self._ui.chk_additional_settings.isChecked())
+
+    # ----------------------------------------------------------------------
+    def close(self):
+        """
+
+        :return:
+        """
+        logger.debug("Closing Settings Widget")
+
+        self._stop_settings_reader.set()
+        while self._settings_reader.isRunning():
+            time.sleep(1)
+
+        super(SettingsWidget, self).close()
+
+
+# ----------------------------------------------------------------------
+class SettingsReader(QtCore.QThread):
+
+    settings_ready = QtCore.pyqtSignal()
+
+    def __init__(self, camera_device, settings_request, stop_request):
+        super().__init__()
+        self._camera_device = camera_device
+        self._settings_request = settings_request
+        self._stop_request = stop_request
+
+        self.exposure_time = None
+        self.gain_value = None
+        self.motor_position = None
+
+        self.view_x = None
+        self.view_y = None
+        self.view_w = None
+        self.view_h = None
+
+        self.fps = None
+        self.fps_max = None
+
+        self.background = None
+        self.background_sigmas = None
+        self.reduce = None
+
+    # ----------------------------------------------------------------------
+    def run(self):
+        while not self._stop_request.is_set():
+            if self._settings_request.is_set():
+
+                self.exposure_time = self._camera_device.get_settings('exposure', float)
+                self.gain_value = self._camera_device.get_settings('gain', int)
+                self.motor_position = self._camera_device.motor_position()
+
+                for ui in ['view_x', 'view_y']:
+                    setattr(self, ui, self._camera_device.get_settings(ui, int))
+
+                for ui in ['view_w', 'view_h']:
+                    value = self._camera_device.get_settings(ui, int)
+                    if value == 0:
+                        value = 1
+                    setattr(self, ui, value)
+
+                self.fps = self._camera_device.get_settings('FPS', int)
+                self.fps_max = self._camera_device.get_settings('FPSmax', int)
+                if self.fps == 0:
+                    self.fps = 25
+                if self.fps_max == 0:
+                    self.fps_max = 100
+
+                self.background = self._camera_device.get_settings('background', bool)
+                self.background_sigmas = self._camera_device.get_settings('background_sigmas', float)
+                self.reduce = self._camera_device.get_reduction()
+
+                self.settings_ready.emit()
+                self._settings_request.clear()
+
+            QtCore.QThread.msleep(100)

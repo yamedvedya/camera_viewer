@@ -131,7 +131,7 @@ class TangoTineProxy(BaseCamera):
                 self._camera_read_thread_running = False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast):
+    def get_settings(self, option, cast, do_rotate=True):
         """
         here we catch some settings before read them from general settings
         :param option:
@@ -145,7 +145,11 @@ class TangoTineProxy(BaseCamera):
 
             if option in ['max_width', 'max_height']:
 
-                w, h = self._device_proxy.Frame.shape
+                if self._frame_size is None:
+                    w, h = self._device_proxy.Frame.shape
+                else:
+                    w, h = self._frame_size
+
                 if option == 'max_width':
                     return w
                 else:
@@ -155,7 +159,7 @@ class TangoTineProxy(BaseCamera):
                 return 1000/self.period
 
         elif option == 'FPS':
-            return max(1, super(TangoTineProxy, self).get_settings(option, cast))
+            return max(1, super(TangoTineProxy, self).get_settings(option, cast, do_rotate))
 
         else:
-            return super(TangoTineProxy, self).get_settings(option, cast)
+            return super(TangoTineProxy, self).get_settings(option, cast, do_rotate)

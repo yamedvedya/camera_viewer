@@ -8,6 +8,7 @@ Base camera class
 
 import PyTango
 import logging
+import time
 import numpy as np
 
 from PyQt5 import QtCore
@@ -36,6 +37,8 @@ class BaseCamera(object):
 
         self.file_name = ''
 
+        self._frame_size = None
+
         self._new_frame_flag = False
         self._eid = None  # Tango even ID
 
@@ -53,7 +56,7 @@ class BaseCamera(object):
             self.flip_h = False
 
         if 'rotate' in settings.keys():
-            self.rotate_angle = int(settings.get("rotate"))
+            self.rotate_angle = int(settings.get("rotate")) % 4
         else:
             self.rotate_angle = 0
 
@@ -163,6 +166,13 @@ class BaseCamera(object):
     # ----------------------------------------------------------------------
     # ------------------------- Picture clip/resolution  -------------------
     # ----------------------------------------------------------------------
+    def _get_frame_size(self):
+        if self._frame_size is None:
+            self._frame_size = self.get_settings('max_width', int), self.get_settings('max_height', int)
+
+        return self._frame_size
+
+    # ----------------------------------------------------------------------
     def set_picture_clip(self, size):
         """
         sets picture clip
@@ -177,6 +187,8 @@ class BaseCamera(object):
         self.save_settings('view_y', size[1])
         self.save_settings('view_w', size[2])
         self.save_settings('view_h', size[3])
+
+        self._frame_size = size[2], size[3]
 
     # ----------------------------------------------------------------------
     def get_picture_clip(self):
@@ -211,7 +223,7 @@ class BaseCamera(object):
     # ----------------------------------------------------------------------
     # ------------------------ Camera settings load/save -------------------
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast):
+    def get_settings(self, option, cast, do_rotate=True):
         """
          reads the requested setting according the settings map
 
@@ -221,7 +233,7 @@ class BaseCamera(object):
                  or cast(requested setting)
         """
 
-        logger.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
+        _start_time = time.time()
 
         if option in self._settings_map.keys():
             try:
@@ -260,24 +272,78 @@ class BaseCamera(object):
         if value is not None:
             if cast == bool:
                 try:
-                    return strtobool(str(value))
+                    value = strtobool(str(value))
                 except:
                     print('Cannot convert settings {} {} to bool'.format(option, value))
-                    return False
+                    value = False
             elif cast == int:
-                return int(float(value))
+                value = int(float(value))
             else:
-                return cast(value)
+                value = cast(value)
 
         else:
             if cast == bool:
-                return False
+                value = False
             elif cast in [int, float]:
-                return cast(0)
+                value = cast(0)
             elif cast == str:
-                return ''
+                value = ''
             else:
-                return None
+                value = None
+
+        if do_rotate and option in ["counter_x", "counter_y", "counter_w", "counter_h"]:
+
+            value = self.get_settings(option, cast, False)
+            w, h = self._get_frame_size()
+
+            if self.rotate_angle != 0:
+                if option == "counter_x":
+                    if self.rotate_angle == 1:
+                        if self.flip_v:
+                            value = self.get_settings("counter_y", int, False)
+                        else:
+                            value = h - self.get_settings("counter_y", int, False) - \
+                                    self.get_settings("counter_h", int, False)
+
+                    elif self.rotate_angle == 2 and not self.flip_h:
+                            value = w - self.get_settings("counter_x", int, False) - \
+                                    self.get_settings("counter_w", int, False)
+
+                    elif self.rotate_angle == 3:
+                        if self.flip_v:
+                            value = h - self.get_settings("counter_y", int, False) - \
+                                    self.get_settings("counter_h", int, False)
+                        else:
+                            value = self.get_settings("counter_y", int, False)
+
+                elif option == "counter_y":
+                    if self.rotate_angle == 1:
+                        if self.flip_h:
+                            value = w - self.get_settings("counter_x", int, False) - \
+                                    self.get_settings("counter_w", int, False)
+                        else:
+                            value = self.get_settings("counter_x", int, False)
+
+                    elif self.rotate_angle == 2 and not self.flip_v:
+                        value = h - self.get_settings("counter_y", int, False) - \
+                                self.get_settings("counter_h", int, False)
+
+                    elif self.rotate_angle == 3:
+                        if self.flip_h:
+                            value = self.get_settings("counter_x", int, False)
+                        else:
+                            value = w - self.get_settings("counter_x", int, False) - \
+                                    self.get_settings("counter_w", int, False)
+
+                elif option == "counter_w" and self.rotate_angle in [1, 3]:
+                    value = self.get_settings("counter_h", int, False)
+
+                elif option == "counter_h" and self.rotate_angle in [1, 3]:
+                    value = self.get_settings("counter_w", int, False)
+
+        logger.debug(f'{self._my_name}: {cast.__name__}({option}): {value} (in {(time.time() - _start_time)*1000:.2f} msec)')
+
+        return value
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):
@@ -290,6 +356,41 @@ class BaseCamera(object):
         """
 
         logger.debug(f'{self._my_name}: setting {option}: new value {value}')
+
+        if option in ["counter_x", "counter_y", "counter_w", "counter_h"]:
+
+            w, h = self._get_frame_size()
+
+            if self.rotate_angle != 0:
+                if option == "counter_x":
+                    if self.rotate_angle == 1:
+                        option = "counter_y"
+                        if not self.flip_v:
+                            value = h - value - self.get_settings("counter_h", int, False)
+                    elif self.rotate_angle == 2 and not self.flip_h:
+                        value = w - value - self.get_settings("counter_w", int, False)
+                    elif self.rotate_angle == 3:
+                        if self.flip_v:
+                            value = h - value - self.get_settings("counter_h", int, False)
+                        option = "counter_y"
+
+                elif option == "counter_y":
+                    if self.rotate_angle == 1:
+                        option = "counter_x"
+                        if self.flip_h:
+                            value = w - value - self.get_settings("counter_w", int, False)
+                    elif self.rotate_angle == 2 and not self.flip_v:
+                        value = h - value - self.get_settings("counter_h", int, False)
+                    elif self.rotate_angle == 3:
+                        option = "counter_x"
+                        if not self.flip_h:
+                            value = w - value - self.get_settings("counter_w", int, False)
+
+                elif option == "counter_w" and self.rotate_angle in [1, 3]:
+                    value = self.get_settings("counter_h", int, False)
+
+                elif option == "counter_h" and self.rotate_angle in [1, 3]:
+                    value = self.get_settings("counter_w", int, False)
 
         if option in self._settings_map.keys():
             if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:

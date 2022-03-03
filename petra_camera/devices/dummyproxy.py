@@ -112,7 +112,7 @@ class DummyProxy(BaseCamera):
         self._generate = False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast):
+    def get_settings(self, option, cast, do_rotate=True):
 
         if option in ['FPSmax', 'max_width', 'max_height']:
 
@@ -125,7 +125,7 @@ class DummyProxy(BaseCamera):
             elif option == 'max_height':
                 return self.FRAME_H
         else:
-            return super(DummyProxy, self).get_settings(option, cast)
+            return super(DummyProxy, self).get_settings(option, cast, do_rotate)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):

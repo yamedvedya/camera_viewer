@@ -42,6 +42,8 @@ class ROI(QtWidgets.QWidget):
 
         self._ui.but_color.clicked.connect(self._pick_my_color)
 
+        self.update_values()
+
     # ----------------------------------------------------------------------
     def _block_signals(self, flag):
 

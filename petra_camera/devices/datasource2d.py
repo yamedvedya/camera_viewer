@@ -144,14 +144,23 @@ class DataSource2D(QtCore.QObject):
                     self._counter_param = self.get_settings('counter_roi', int)
 
                     for ind in range(self.get_settings('num_rois', int)):
-                        self.rois.append({'x': self.get_settings('roi_{}_x'.format(ind), int),
-                                          'y': self.get_settings('roi_{}_y'.format(ind), int),
-                                          'w': self.get_settings('roi_{}_w'.format(ind), int),
-                                          'h': self.get_settings('roi_{}_h'.format(ind), int),
-                                          'bg': self.get_settings('roi_{}_bg'.format(ind), int),
-                                          'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
-                                          'mark': self.get_settings('roi_{}_mark'.format(ind), str),
-                                          'color': self.get_settings('roi_{}_color'.format(ind), str)})
+                        params = {'bg': self.get_settings('roi_{}_bg'.format(ind), int),
+                                  'visible': self.get_settings('roi_{}_visible'.format(ind), bool),
+                                  'mark': self.get_settings('roi_{}_mark'.format(ind), str),
+                                  'color': self.get_settings('roi_{}_color'.format(ind), str)}
+
+                        if ind == self._counter_roi:
+                            params.update({'x': self.get_settings('counter_x', int),
+                                           'y': self.get_settings('counter_y', int),
+                                           'w': self.get_settings('counter_w', int),
+                                           'h': self.get_settings('counter_h', int)})
+                        else:
+                            params.update({'x': self.get_settings('roi_{}_x'.format(ind), int),
+                                           'y': self.get_settings('roi_{}_y'.format(ind), int),
+                                           'w': self.get_settings('roi_{}_w'.format(ind), int),
+                                           'h': self.get_settings('roi_{}_h'.format(ind), int)})
+
+                        self.rois.append(params)
 
                         if ind == self._counter_roi:
                             for setting in ['x', 'y', 'w', 'h']:
@@ -423,6 +432,10 @@ class DataSource2D(QtCore.QObject):
         for ind, roi in enumerate(self.rois):
             for param in ['x', 'y', 'w', 'h', 'bg', 'visible', 'mark']:
                 self.save_settings('roi_{}_{}'.format(ind, param), roi[param])
+
+            if ind == self._counter_roi:
+                for setting in ['x', 'y', 'w', 'h']:
+                    self.save_settings('counter_{}'.format(setting), roi[setting])
 
     # ----------------------------------------------------------------------
     def set_roi_value(self, roi_id, setting, value):

@@ -130,7 +130,7 @@ class VimbaProxy(BaseCamera):
         self._stop_frame_thread = False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast):
+    def get_settings(self, option, cast, do_rotate=True):
 
         if option == 'max_level_limit':
 
@@ -142,10 +142,10 @@ class VimbaProxy(BaseCamera):
                 return 2 ** 8
 
         elif option == 'exposure':
-            return super(VimbaProxy, self).get_settings(option, cast) / 1000
+            return super(VimbaProxy, self).get_settings(option, cast, do_rotate) / 1000
 
         else:
-            return super(VimbaProxy, self).get_settings(option, cast)
+            return super(VimbaProxy, self).get_settings(option, cast, do_rotate)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):

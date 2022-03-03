@@ -32,6 +32,8 @@ class Marker(QtWidgets.QWidget):
         self._ui.chk_visible.clicked.connect(lambda value: self.save_value('visible', value))
         self._ui.but_color.clicked.connect(self._pick_my_color)
 
+        self.update_values()
+
     # ----------------------------------------------------------------------
     def _block_signals(self, flag):
         self._ui.sb_x.blockSignals(flag)
