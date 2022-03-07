@@ -532,8 +532,11 @@ class DataSource2D(QtCore.QObject):
             if info['visible']:
 
                 image_size = self.get_picture_clip()
+                _reduction = self.get_reduction()
+
                 _image_x_pos, _image_y_pos = image_size[0], image_size[1]
-                x, y, w, h = int(info['x'] - _image_x_pos), int(info['y'] - _image_y_pos), int(info['w']), int(info['h'])
+                x, y, = int((info['x'] - _image_x_pos) // _reduction), int((info['y'] - _image_y_pos) // _reduction)
+                w, h = int(info['w'] // _reduction), int(info['h'] // _reduction)
 
                 array = self._last_frame[x:x + w, y:y + h]
                 if array != []:
