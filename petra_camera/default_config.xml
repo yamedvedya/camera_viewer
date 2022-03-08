@@ -10,9 +10,4 @@
 
     <marker fr_color="#ff0000"/>
 
-    <camera name="Dummy"
-            proxy="DummyProxy"
-            motor_type = 'None'
-    />
-
 </camera_viewer>

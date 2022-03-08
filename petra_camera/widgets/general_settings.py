@@ -1,6 +1,9 @@
 # Created by matveyev at 22.02.2022
 
 import logging
+import os
+import shutil
+from pathlib import Path
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 
@@ -39,6 +42,7 @@ class ProgramSetup(QtWidgets.QDialog):
         # self._ui.cmd_load_profile.clicked.connect(self._load_settings)
 
         self._ui.cmd_save_folder.clicked.connect(self._new_save_folder)
+        self._ui.cmd_reset_settings.clicked.connect(self._reset_settings)
 
         self._ui.cmd_roi_frame_color.clicked.connect(lambda: self._pick_color('cmd_roi_frame_color'))
         self._ui.cmd_roi_bkg_color.clicked.connect(lambda: self._pick_color('cmd_roi_bkg_color'))
@@ -53,6 +57,15 @@ class ProgramSetup(QtWidgets.QDialog):
         self._display_settings()
 
     # ----------------------------------------------------------------------
+    def _reset_settings(self):
+
+        self._main_window.reset_settings()
+
+        QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(WIDGET_NAME), self.saveGeometry())
+
+        super(ProgramSetup, self).accept()
+
+    # ----------------------------------------------------------------------
     def _new_save_folder(self):
 
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select safe folder', self._ui.le_save_path.text())
@@ -61,6 +74,7 @@ class ProgramSetup(QtWidgets.QDialog):
 
     # ----------------------------------------------------------------------
     def _display_settings(self):
+
         self._ui.le_save_path.setText(self._settings.option("save_folder", "default"))
 
         self._ui.cmd_roi_frame_color.setStyleSheet("QPushButton {background-color: " +
@@ -115,6 +129,7 @@ class ProgramSetup(QtWidgets.QDialog):
         widget.delete_me.connect(self._delete_camera)
         widget.new_name.connect(self._new_name)
         self._ui.tb_cameras.addTab(widget, 'New camera')
+        self._ui.tb_cameras.setCurrentIndex(self._ui.tb_cameras.count() - 1)
         self._last_camera_id += 1
 
     # ----------------------------------------------------------------------

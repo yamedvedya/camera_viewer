@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_SettingsDialog(object):
     def setupUi(self, SettingsDialog):
         SettingsDialog.setObjectName("SettingsDialog")
-        SettingsDialog.resize(629, 799)
+        SettingsDialog.resize(845, 799)
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(SettingsDialog)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.groupBox = QtWidgets.QGroupBox(SettingsDialog)
@@ -150,6 +150,14 @@ class Ui_SettingsDialog(object):
         self.horizontalLayout_6.addItem(spacerItem4)
         self.verticalLayout_2.addLayout(self.horizontalLayout_6)
         self.verticalLayout_3.addWidget(self.groupBox)
+        self.horizontalLayout_7 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_7.setObjectName("horizontalLayout_7")
+        spacerItem5 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.horizontalLayout_7.addItem(spacerItem5)
+        self.cmd_reset_settings = QtWidgets.QPushButton(SettingsDialog)
+        self.cmd_reset_settings.setObjectName("cmd_reset_settings")
+        self.horizontalLayout_7.addWidget(self.cmd_reset_settings)
+        self.verticalLayout_3.addLayout(self.horizontalLayout_7)
         self.tb_cameras = QtWidgets.QTabWidget(SettingsDialog)
         self.tb_cameras.setObjectName("tb_cameras")
         self.verticalLayout_3.addWidget(self.tb_cameras)
@@ -188,4 +196,5 @@ class Ui_SettingsDialog(object):
         self.label_10.setText(_translate("SettingsDialog", "Center search:"))
         self.label_11.setText(_translate("SettingsDialog", "cross size"))
         self.label_12.setText(_translate("SettingsDialog", "circle size"))
+        self.cmd_reset_settings.setText(_translate("SettingsDialog", "Reset all settings"))
 

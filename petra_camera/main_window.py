@@ -23,6 +23,7 @@ from petra_camera.widgets.about_dialog import AboutDialog
 from petra_camera.widgets.general_settings import ProgramSetup
 from petra_camera.widgets.camera_widget import CameraWidget
 from petra_camera.utils.xmlsettings import XmlSettings
+from petra_camera.widgets.import_cameras import ImportCameras
 
 from petra_camera.roisrv.roiserver import RoiServer
 
@@ -70,7 +71,7 @@ class PETRACamera(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def _init_viewer(self):
 
-        self._device_list = self._get_cameras_list()
+        self._device_list = self._get_cameras()
         self._camera_widgets = []
         self._camera_docks = []
         self._add_cameras()
@@ -84,6 +85,13 @@ class PETRACamera(QtWidgets.QMainWindow):
                 self._roi_server.start()
             except Exception as err:
                 logger.exception(err)
+
+    # ----------------------------------------------------------------------
+    def reset_settings(self):
+        home = os.path.join(str(Path.home()), '.petra_camera')
+        shutil.copy(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.xml'),
+                    os.path.join(home, 'default.xml'))
+        self.settings = XmlSettings(os.path.join(home, 'default.xml'))
 
     # ----------------------------------------------------------------------
     def get_settings(self, options):
@@ -123,6 +131,18 @@ class PETRACamera(QtWidgets.QMainWindow):
                 cam_list.append(device.get('name'))
 
         cam_list.sort()
+
+        return cam_list
+
+    # ----------------------------------------------------------------------
+    def _get_cameras(self):
+
+        cam_list = self._get_cameras_list()
+
+        while len(cam_list) < 1:
+            dlg = ImportCameras(self.settings)
+            dlg.exec_()
+            cam_list = self._get_cameras_list()
 
         return cam_list
 

@@ -132,3 +132,6 @@ dmypy.json
 
 # Project related ignores
 /.idea
+
+# Deb packadge
+/deb_dist

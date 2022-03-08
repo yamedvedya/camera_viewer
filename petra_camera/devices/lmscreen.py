@@ -30,7 +30,7 @@ _base_settings_map = {
 
 
 # ----------------------------------------------------------------------
-class TangoTineProxy(BaseCamera):
+class LMScreen(BaseCamera):
     """Proxy to a physical TANGO device.
     """
     # SERVER_SETTINGS = {"PixelFormat": "Mono8",  # possibly more...
@@ -56,7 +56,7 @@ class TangoTineProxy(BaseCamera):
                                        "counter_w": ('roi_server', 'roi_w'),
                                        "counter_h": ('roi_server', 'roi_h')})
 
-        super(TangoTineProxy, self).__init__(settings)
+        super(LMScreen, self).__init__(settings)
 
         self._last_frame = np.zeros((1, 1))
 
@@ -159,7 +159,7 @@ class TangoTineProxy(BaseCamera):
                 return 1000/self.period
 
         elif option == 'FPS':
-            return max(1, super(TangoTineProxy, self).get_settings(option, cast, do_rotate))
+            return max(1, super(LMScreen, self).get_settings(option, cast, do_rotate))
 
         else:
-            return super(TangoTineProxy, self).get_settings(option, cast, do_rotate)
+            return super(LMScreen, self).get_settings(option, cast, do_rotate)

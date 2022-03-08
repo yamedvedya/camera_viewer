@@ -19,17 +19,17 @@ If you want to force another config add -p or --profile option with file name
 ## This is example of minimum entry to add camera:
 ```xml
 <camera name="LM05"
-        proxy="TangoTineProxy"
+        proxy="LMScreen"
         tango_server="hasep23oh:10000/hasylab/p23_lm5/output"
 />
 
 <camera name="Microscope"
-        proxy="VimbaProxy"
+        proxy="TangoVimba"
         tango_server="hasep23oh:10000/p23/tangovimba/micro"
 />
 ```
 
-- *proxy* can be 'VimbaProxy" or "TangoTineProxy", "LambdaProxy"  or "DummyProxy"
+- *proxy* can be 'VimbaProxy" or "LMScreen", "LambdaProxy"  or "DummyProxy"
 
 - *tango_server* is the image source server
 
@@ -73,7 +73,7 @@ rotate = '2'
 
 ```xml
     <camera name="LM05"
-            proxy="TangoTineProxy"
+            proxy="LMScreen"
             tango_server="hasep23oh:10000/p23/tinecamera/lm5"
             roi_server = "hasep23oh:10000/p23/lmanalysis/lm5"
             widget="CameraSettingsWidget"

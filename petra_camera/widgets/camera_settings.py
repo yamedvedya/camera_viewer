@@ -1,6 +1,8 @@
 # Created by matveyev at 22.02.2022
 
 from distutils.util import strtobool
+import PyTango
+import HasyUtils as hu
 
 from PyQt5 import QtWidgets, QtCore
 
@@ -24,11 +26,16 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
         self._ui.cmb_motor_type.currentTextChanged.connect(self._switch_motor_type)
 
+        self._ui.cmb_camera_type.addItems(['LMScreen', 'TangoVimba'])
+        self._ui.cmb_motor_type.addItems(['None', 'FSBT', 'Acromag'])
+
+        self._ui.le_tango_host.setText(PyTango.Database().get_db_host().split('.')[0])
+        self._rescan_database()
+
         self._ui.cmd_delete.clicked.connect(lambda status, x=my_id: self.delete_me.emit(x))
         self._ui.le_name.editingFinished.connect(self._new_name)
 
-        self._ui.cmb_camera_type.addItems(['Dummy', 'LMScreen', 'Vimba'])
-        self._ui.cmb_motor_type.addItems(['None', 'FSBT', 'Acromag'])
+        self._ui.chk_manual_tango_device.stateChanged.connect(self._manual_tango_device)
 
         if settings_node is not None:
             self._ui.le_name.setText(settings_node.get('name'))
@@ -39,19 +46,25 @@ class CameraSettings(QtWidgets.QWidget):
                 self._ui.chk_enabled.setChecked(True)
 
             camera_type = settings_node.get('proxy')
-            if camera_type == 'DummyProxy':
-                refresh_combo_box(self._ui.cmb_camera_type, 'Dummy')
-            elif camera_type == 'TangoTineProxy':
-                refresh_combo_box(self._ui.cmb_camera_type, 'LMScreen')
-                self._ui.fr_tango.setVisible(True)
-            elif camera_type == 'VimbaProxy':
-                refresh_combo_box(self._ui.cmb_camera_type, 'Vimba')
+            refresh_combo_box(self._ui.cmb_camera_type, camera_type)
+
+            if camera_type in ['LMScreen', 'TangoVimba']:
                 self._ui.fr_tango.setVisible(True)
             else:
                 raise RuntimeError('Unknown type')
 
             if 'tango_server' in settings_node.keys():
-                self._ui.le_tango_server.setText(settings_node.get('tango_server'))
+                server = settings_node.get('tango_server')
+                try:
+                    self._ui.le_tango_host.setText(PyTango.DeviceProxy(server).get_db_host().split('.')[0])
+                    self._rescan_database()
+                    set_manual = not refresh_combo_box(self._ui.cmb_tango_device, PyTango.DeviceProxy(server).dev_name())
+                except:
+                    set_manual = True
+
+                if set_manual:
+                    self._ui.chk_manual_tango_device.setChecked(True)
+                    self._ui.le_tango_server.setText(server)
             if 'settings_server' in settings_node.keys():
                 self._ui.le_settings_server.setText(settings_node.get('settings_server'))
             if 'roi_server' in settings_node.keys():
@@ -82,13 +95,26 @@ class CameraSettings(QtWidgets.QWidget):
             pass
 
     # ----------------------------------------------------------------------
+    def _rescan_database(self):
+        current_selection = self._ui.cmb_tango_device.currentText()
+        self._ui.cmb_tango_device.clear()
+        self._ui.cmb_tango_device.addItems(hu.getDeviceNamesByClass(self._ui.cmb_camera_type.currentText(),
+                                                                    self._ui.le_tango_host.text()))
+        refresh_combo_box(self._ui.cmb_tango_device, current_selection)
+
+    # ----------------------------------------------------------------------
+    def _manual_tango_device(self, state):
+        self._ui.le_tango_host.setEnabled(state != 2)
+        self._ui.cmb_tango_device.setEnabled(state != 2)
+        self._ui.cmd_rescan_database.setEnabled(state != 2)
+        self._ui.le_tango_server.setEnabled(state == 2)
+
+    # ----------------------------------------------------------------------
     def _switch_camera_type(self, mode):
         self._ui.fr_tango.setVisible(False)
         self._ui.fr_roi.setVisible(False)
         self._ui.fr_settings.setVisible(False)
-        if mode == 'LMScreen':
-            self._ui.fr_tango.setVisible(True)
-        elif mode == 'Vimba':
+        if mode in ['LMScreen', 'TangoVimba']:
             self._ui.fr_tango.setVisible(True)
 
     # ----------------------------------------------------------------------
@@ -104,16 +130,8 @@ class CameraSettings(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def get_data(self):
         data_to_save = [('name', self._ui.le_name.text()),
-                        ('enabled', str(self._ui.chk_enabled.isChecked()))]
-
-        if self._ui.cmb_camera_type.currentText() == 'LMScreen':
-            type = 'TangoTineProxy'
-        elif self._ui.cmb_camera_type.currentText() == 'Vimba':
-            type = 'VimbaProxy'
-        else:
-            type = 'DummyProxy'
-
-        data_to_save.append(('proxy', type))
+                        ('enabled', str(self._ui.chk_enabled.isChecked())),
+                        ('proxy', self._ui.cmb_camera_type.currentText())]
 
         if self._ui.cmb_motor_type.currentText() == 'FSBT':
             data_to_save.append(('motor_type', 'FSBT'))
@@ -128,10 +146,13 @@ class CameraSettings(QtWidgets.QWidget):
         else:
             data_to_save.append((('motor_type', 'none')),)
 
-        if type == 'TangoTineProxy':
-            data_to_save.append(('tango_server', self._ui.le_tango_server.text()))
-        elif type == 'VimbaProxy':
-            data_to_save.append(('tango_server', self._ui.le_tango_server.text()))
+        if self._ui.cmb_camera_type.currentText() in ['LMScreen', 'TangoVimba']:
+            if self._ui.chk_manual_tango_device.isChecked():
+                address = self._ui.le_tango_server.text()
+            else:
+                address = self._ui.le_tango_host.text() + ':10000/' + self._ui.cmb_tango_device.currentText()
+
+            data_to_save.append(('tango_server', address))
 
         data_to_save.append(('flip_vertical', str(self._ui.chk_flip_v.isChecked())))
         data_to_save.append(('flip_horizontal', str(self._ui.chk_flip_h.isChecked())))

@@ -24,7 +24,7 @@ logger = logging.getLogger(APP_NAME)
 
 
 # ----------------------------------------------------------------------
-class VimbaProxy(BaseCamera):
+class TangoVimba(BaseCamera):
     """Proxy to a physical TANGO device.
     """
     SERVER_SETTINGS = {'bw':    {'low': [1, 'Image8'],
@@ -60,7 +60,7 @@ class VimbaProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def __init__(self, settings):
-        super(VimbaProxy, self).__init__(settings)
+        super(TangoVimba, self).__init__(settings)
 
         self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
         if 'high_depth' in settings.keys():
@@ -142,18 +142,18 @@ class VimbaProxy(BaseCamera):
                 return 2 ** 8
 
         elif option == 'exposure':
-            return super(VimbaProxy, self).get_settings(option, cast, do_rotate) / 1000
+            return super(TangoVimba, self).get_settings(option, cast, do_rotate) / 1000
 
         else:
-            return super(VimbaProxy, self).get_settings(option, cast, do_rotate)
+            return super(TangoVimba, self).get_settings(option, cast, do_rotate)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):
 
         if option == 'exposure':
-            super(VimbaProxy, self).save_settings(option, value*1000)
+            super(TangoVimba, self).save_settings(option, value * 1000)
         else:
-            super(VimbaProxy, self).save_settings(option, value)
+            super(TangoVimba, self).save_settings(option, value)
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
@@ -274,7 +274,7 @@ class VimbaProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def close_camera(self):
-        super(VimbaProxy, self).close_camera()
+        super(TangoVimba, self).close_camera()
 
         if self._eid is not None:
             self._device_proxy.unsubscribe_event(self._eid)
