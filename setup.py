@@ -35,7 +35,7 @@ DESCRIPTION = 'Simple viewer for cameras, used at PETRA III source'
 EMAIL = 'yury.matveev@desy.de'
 AUTHOR = 'Yury Matveyev'
 REQUIRES_PYTHON = '>=3.7'
-VERSION = '0.7.1'
+VERSION = '0.8.1'
 
 # What packages are required for this module to be executed?
 REQUIRED = ['pyqtgraph', 'psutil', 'numpy', 'scipy',

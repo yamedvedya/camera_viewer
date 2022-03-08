@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>845</width>
-    <height>799</height>
+    <height>675</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -312,7 +312,21 @@
     </widget>
    </item>
    <item>
+    <widget class="QTabWidget" name="tb_cameras">
+     <property name="currentIndex">
+      <number>-1</number>
+     </property>
+    </widget>
+   </item>
+   <item>
     <layout class="QHBoxLayout" name="horizontalLayout_7">
+     <item>
+      <widget class="QPushButton" name="cmd_reset_settings">
+       <property name="text">
+        <string>Reset all settings</string>
+       </property>
+      </widget>
+     </item>
      <item>
       <spacer name="horizontalSpacer_6">
        <property name="orientation">
@@ -326,21 +340,7 @@
        </property>
       </spacer>
      </item>
-     <item>
-      <widget class="QPushButton" name="cmd_reset_settings">
-       <property name="text">
-        <string>Reset all settings</string>
-       </property>
-      </widget>
-     </item>
     </layout>
-   </item>
-   <item>
-    <widget class="QTabWidget" name="tb_cameras">
-     <property name="currentIndex">
-      <number>-1</number>
-     </property>
-    </widget>
    </item>
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">

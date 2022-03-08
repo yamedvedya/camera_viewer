@@ -59,11 +59,14 @@ class ProgramSetup(QtWidgets.QDialog):
     # ----------------------------------------------------------------------
     def _reset_settings(self):
 
-        self._main_window.reset_settings()
+        ok = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Warning, 'Attention!', 'Are you sure want to reset settings to default?',
+                                   QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.No).exec_()
+        if ok == QtWidgets.QMessageBox.Ok:
+            self._main_window.reset_settings()
 
-        QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(WIDGET_NAME), self.saveGeometry())
+            QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(WIDGET_NAME), self.saveGeometry())
 
-        super(ProgramSetup, self).accept()
+            super(ProgramSetup, self).accept()
 
     # ----------------------------------------------------------------------
     def _new_save_folder(self):

@@ -239,7 +239,16 @@ class CameraWidget(QtWidgets.QMainWindow):
         dock.setStyleSheet("""QDockWidget {font-size: 11pt; font-weight: normal}""")
         dock.setWidget(widget)
 
-        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+        if WidgetClass == FrameViewer:
+            self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+        else:
+            children = [child for child in self.findChildren(QtWidgets.QDockWidget)
+                        if not isinstance(child.widget(), FrameViewer)]
+
+            if children:
+                self.tabifyDockWidget(children[-1], dock)
+            else:
+                self.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
 
         self.tool_bar.addAction(dock.toggleViewAction())
 

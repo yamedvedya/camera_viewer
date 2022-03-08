@@ -35,6 +35,8 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.cmd_delete.clicked.connect(lambda status, x=my_id: self.delete_me.emit(x))
         self._ui.le_name.editingFinished.connect(self._new_name)
 
+        self._ui.cmd_rescan_database.clicked.connect(self._rescan_database)
+
         self._ui.chk_manual_tango_device.stateChanged.connect(self._manual_tango_device)
 
         if settings_node is not None:
