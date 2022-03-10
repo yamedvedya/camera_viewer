@@ -139,6 +139,8 @@ class SettingsWidget(BaseWidget):
 
                 self._ui.chk_dark_image.setChecked(self._camera_device.subtract_dark_image)
 
+            self._block_signals(False)
+
     # ----------------------------------------------------------------------
     def display_tango_settings(self):
 

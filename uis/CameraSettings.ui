@@ -25,11 +25,14 @@
      </item>
      <item>
       <widget class="QComboBox" name="cmb_camera_type">
+       <property name="toolTip">
+        <string extracomment="Select camera type">Select camera type</string>
+       </property>
        <property name="statusTip">
-        <string>Select camera type</string>
+        <string/>
        </property>
        <property name="whatsThis">
-        <string>Select camera type</string>
+        <string/>
        </property>
       </widget>
      </item>
@@ -42,11 +45,14 @@
      </item>
      <item>
       <widget class="QLineEdit" name="le_name">
-       <property name="statusTip">
+       <property name="toolTip">
         <string>Under this name camera will be displayed in viewer</string>
        </property>
+       <property name="statusTip">
+        <string/>
+       </property>
        <property name="whatsThis">
-        <string>Under this name camera will be displayed in viewer</string>
+        <string/>
        </property>
       </widget>
      </item>
@@ -104,11 +110,14 @@
         <property name="enabled">
          <bool>false</bool>
         </property>
-        <property name="statusTip">
+        <property name="toolTip">
          <string>Camera tango device, e.g. pXX/lmscreen/LM_XX</string>
         </property>
+        <property name="statusTip">
+         <string/>
+        </property>
         <property name="whatsThis">
-         <string>Camera tango device, e.g. pXX/lmscreen/LM_XX</string>
+         <string/>
         </property>
        </widget>
       </item>
@@ -116,7 +125,11 @@
        <widget class="QComboBox" name="cmb_tango_device"/>
       </item>
       <item row="0" column="2">
-       <widget class="QLineEdit" name="le_tango_host"/>
+       <widget class="QLineEdit" name="le_tango_host">
+        <property name="toolTip">
+         <string>Type tango database host, e.g. hasep23oh</string>
+        </property>
+       </widget>
       </item>
       <item row="0" column="0">
        <widget class="QLabel" name="label_13">
