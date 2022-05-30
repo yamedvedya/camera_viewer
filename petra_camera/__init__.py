@@ -12,6 +12,7 @@ except ImportError:
 from pathlib import Path
 from PyQt5 import QtWidgets
 from optparse import OptionParser
+from logging.handlers import RotatingFileHandler
 
 from petra_camera.main_window import PETRACamera, APP_NAME
 from .version import __version__
@@ -57,26 +58,31 @@ def excepthook(exc_type, exc_value, traceback_obj):
 
 # --------------------------------------------------------------------
 def setup_logger(args):
-    log_level = "DEBUG"
-    format = (
-        "%(asctime)s %(filename)s:%(lineno)d "
-        "%(levelname)-8s %(message)s")
-
     if not os.path.exists(f"{str(Path.home())}/.petra_camera"):
         os.mkdir(f"{str(Path.home())}/.petra_camera")
 
     filename = f"{str(Path.home())}/.petra_camera/camera.log"
     print(f"Logs to file: {filename}")
-    logging.basicConfig(level=log_level, format=format, filename=filename)
-    logging.info("Log level set to %s", log_level)
+
+    log_level = logging.DEBUG
+
+    log_formatter = logging.Formatter("%(asctime)s %(filename)s:%(lineno)d %(levelname)-8s %(message)s")
+
+    my_handler = RotatingFileHandler(filename, mode='a', maxBytes=5 * 1024 * 1024,
+                                     backupCount=2, encoding=None, delay=0)
+    my_handler.setFormatter(log_formatter)
+    my_handler.setLevel(log_level)
+
+    app_log = logging.getLogger(APP_NAME)
+    app_log.setLevel(log_level)
+
+    app_log.addHandler(my_handler)
 
     if args.log:
         console = logging.StreamHandler()
-        console.setLevel(logging.DEBUG)
-        # set a format which is simpler for console use
-        formatter = logging.Formatter("%(asctime)s %(module)s %(lineno)-6d %(levelname)-6s %(message)s")
-        console.setFormatter(formatter)
-        logging.getLogger(APP_NAME).addHandler(console)
+        console.setLevel(log_level)
+        console.setFormatter(log_formatter)
+        app_log.addHandler(console)
 
 
 # --------------------------------------------------------------------

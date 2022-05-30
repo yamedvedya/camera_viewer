@@ -55,6 +55,8 @@ class LMScreen(BaseCamera):
                                        "counter_y": ('roi_server', 'roi_y'),
                                        "counter_w": ('roi_server', 'roi_w'),
                                        "counter_h": ('roi_server', 'roi_h')})
+            self.counter_source = '_roi_server'
+            self.counter_name = 'value'
 
         super(LMScreen, self).__init__(settings)
 

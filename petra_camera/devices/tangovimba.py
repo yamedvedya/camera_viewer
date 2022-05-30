@@ -22,6 +22,17 @@ from petra_camera.main_window import APP_NAME
 
 logger = logging.getLogger(APP_NAME)
 
+_base_settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
+                      "gain": ["device_proxy", "Gain"],
+                      'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
+                      'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
+                      'view_x': ("device_proxy", "OffsetX"),
+                      'view_y': ("device_proxy", "OffsetY"),
+                      'view_h': ("device_proxy", "Height"),
+                      'view_w': ("device_proxy", "Width"),
+                      'max_width': ("device_proxy", "WidthMax"),
+                      'max_height': ("device_proxy", "HeightMax")
+                      }
 
 # ----------------------------------------------------------------------
 class TangoVimba(BaseCamera):
@@ -44,22 +55,19 @@ class TangoVimba(BaseCamera):
 
     START_ATTEMPTS = 2
 
-    _settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
-                     "gain": ["device_proxy", "Gain"],
-                     'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
-                     'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
-                     'view_x': ("device_proxy", "OffsetX"),
-                     'view_y': ("device_proxy", "OffsetY"),
-                     'view_h': ("device_proxy", "Height"),
-                     'view_w': ("device_proxy", "Width"),
-                     'max_width': ("device_proxy", "WidthMax"),
-                     'max_height': ("device_proxy", "HeightMax")
-                     }
-
     visible_layouts = ('FPS', 'exposure')
 
     # ----------------------------------------------------------------------
     def __init__(self, settings):
+        self._settings_map = dict(_base_settings_map)
+        if 'roi_server' in settings.keys():
+            self._settings_map.update({"counter_x": ('roi_server', 'roi_x'),
+                                       "counter_y": ('roi_server', 'roi_y'),
+                                       "counter_w": ('roi_server', 'roi_w'),
+                                       "counter_h": ('roi_server', 'roi_h')})
+            self.counter_source = '_roi_server'
+            self.counter_name = 'value_parameter'
+
         super(TangoVimba, self).__init__(settings)
 
         self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])

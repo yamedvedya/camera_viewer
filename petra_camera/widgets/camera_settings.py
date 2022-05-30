@@ -21,6 +21,12 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui = Ui_CameraSettings()
         self._ui.setupUi(self)
 
+        self._ui.fr_tango.setVisible(False)
+        self._ui.fr_vimba_picture_setings.setVisible(False)
+        self._ui.le_roi_server.setVisible(False)
+        self._ui.cmb_roi_device.setVisible(False)
+        self._ui.chk_manual_roi_device.setVisible(False)
+
         self.my_id = my_id
 
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
@@ -38,6 +44,9 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.cmd_rescan_database.clicked.connect(self._rescan_database)
 
         self._ui.chk_manual_tango_device.stateChanged.connect(self._manual_tango_device)
+        self._ui.chk_manual_roi_device.stateChanged.connect(self._manual_roi_device)
+
+        self._ui.chk_roi_server.stateChanged.connect(self._enable_roi_device)
 
         if settings_node is not None:
             self._ui.le_name.setText(settings_node.get('name'))
@@ -52,8 +61,9 @@ class CameraSettings(QtWidgets.QWidget):
 
             if camera_type in ['LMScreen', 'TangoVimba']:
                 self._ui.fr_tango.setVisible(True)
-            else:
-                raise RuntimeError('Unknown type')
+
+            if camera_type == 'TangoVimba':
+                self._ui.fr_vimba_picture_setings.setVisible(True)
 
             if 'tango_server' in settings_node.keys():
                 server = settings_node.get('tango_server')
@@ -67,10 +77,14 @@ class CameraSettings(QtWidgets.QWidget):
                 if set_manual:
                     self._ui.chk_manual_tango_device.setChecked(True)
                     self._ui.le_tango_server.setText(server)
-            if 'settings_server' in settings_node.keys():
-                self._ui.le_settings_server.setText(settings_node.get('settings_server'))
+
             if 'roi_server' in settings_node.keys():
-                self._ui.le_roi_server.setText(settings_node.get('roi_server'))
+                server = settings_node.get('roi_server')
+                self._ui.chk_roi_server.setChecked(True)
+
+                if not refresh_combo_box(self._ui.cmb_roi_device, PyTango.DeviceProxy(server).dev_name()):
+                    self._ui.chk_manual_roi_device.setChecked(True)
+                    self._ui.le_roi_server.setText(server)
 
             motor_type = settings_node.get('motor_type')
             if motor_type == 'FSBT':
@@ -79,11 +93,13 @@ class CameraSettings(QtWidgets.QWidget):
                 self._ui.le_fsbt_host.setText(settings_node.get('motor_host'))
                 self._ui.le_fsbt_port.setText(settings_node.get('motor_port'))
                 self._ui.fr_fsbt.setVisible(True)
+
             elif motor_type == 'Acromag':
                 refresh_combo_box(self._ui.cmb_motor_type, 'Acromag')
                 self._ui.le_acromag_server.setText(settings_node.get('valve_tango_server'))
                 self._ui.le_acromag_valve.setText(settings_node.get('valve_channel'))
                 self._ui.fr_acromag.setVisible(True)
+
             else:
                 refresh_combo_box(self._ui.cmb_motor_type, 'None')
 
@@ -93,16 +109,27 @@ class CameraSettings(QtWidgets.QWidget):
                 self._ui.chk_flip_h.setChecked(strtobool(settings_node.get('flip_horizontal')))
             if 'rotate' in settings_node.keys():
                 self._ui.sp_rotate.setValue(int(settings_node.get('rotate')))
+            if 'high_depth' in settings_node.keys():
+                self._ui.chk_high_depth.setChecked(strtobool(settings_node.get('high_depth')))
+            if 'color' in settings_node.keys():
+                self._ui.chk_color.setChecked(strtobool(settings_node.get('color')))
 
             pass
 
     # ----------------------------------------------------------------------
     def _rescan_database(self):
-        current_selection = self._ui.cmb_tango_device.currentText()
-        self._ui.cmb_tango_device.clear()
-        self._ui.cmb_tango_device.addItems(hu.getDeviceNamesByClass(self._ui.cmb_camera_type.currentText(),
-                                                                    self._ui.le_tango_host.text()))
-        refresh_combo_box(self._ui.cmb_tango_device, current_selection)
+        for dev_type, cmb_box in ((self._ui.cmb_camera_type.currentText(),  self._ui.cmb_tango_device),
+                                  ('FrameAnalysis',                         self._ui.cmb_roi_device)):
+            current_selection = cmb_box.currentText()
+            cmb_box.clear()
+            cmb_box.addItems(hu.getDeviceNamesByClass(dev_type, self._ui.le_tango_host.text()))
+            refresh_combo_box(cmb_box, current_selection)
+
+    # ----------------------------------------------------------------------
+    def _enable_roi_device(self, state):
+        self._ui.le_roi_server.setVisible(state == 2)
+        self._ui.cmb_roi_device.setVisible(state == 2)
+        self._ui.chk_manual_roi_device.setVisible(state == 2)
 
     # ----------------------------------------------------------------------
     def _manual_tango_device(self, state):
@@ -112,12 +139,21 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.le_tango_server.setEnabled(state == 2)
 
     # ----------------------------------------------------------------------
+    def _manual_roi_device(self, state):
+        self._ui.cmb_roi_device.setEnabled(state != 2)
+        self._ui.le_roi_server.setEnabled(state == 2)
+
+    # ----------------------------------------------------------------------
     def _switch_camera_type(self, mode):
         self._ui.fr_tango.setVisible(False)
-        self._ui.fr_roi.setVisible(False)
-        self._ui.fr_settings.setVisible(False)
+        self._ui.fr_vimba_picture_setings.setVisible(False)
+        self._ui.chk_roi_server.setChecked(False)
+
         if mode in ['LMScreen', 'TangoVimba']:
             self._ui.fr_tango.setVisible(True)
+
+        if mode == 'TangoVimba':
+            self._ui.fr_vimba_picture_setings.setVisible(True)
 
     # ----------------------------------------------------------------------
     def _switch_motor_type(self, mode):
@@ -156,9 +192,20 @@ class CameraSettings(QtWidgets.QWidget):
 
             data_to_save.append(('tango_server', address))
 
+        if self._ui.chk_roi_server.isChecked():
+            if self._ui.chk_manual_roi_device.isChecked():
+                address = self._ui.le_roi_server.text()
+            else:
+                address = self._ui.le_tango_host.text() + ':10000/' + self._ui.cmb_roi_device.currentText()
+
+            data_to_save.append(('roi_server', address))
+
         data_to_save.append(('flip_vertical', str(self._ui.chk_flip_v.isChecked())))
         data_to_save.append(('flip_horizontal', str(self._ui.chk_flip_h.isChecked())))
         data_to_save.append(('rotate', str(self._ui.sp_rotate.value())))
+        if self._ui.cmb_camera_type.currentText() == 'TangoVimba':
+            data_to_save.append(('high_depth', str(self._ui.chk_high_depth.isChecked())))
+            data_to_save.append(('color', str(self._ui.chk_color.isChecked())))
 
         return data_to_save
 
