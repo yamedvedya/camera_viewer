@@ -6,7 +6,10 @@
 """
 
 import PyTango
-import HasyUtils as hu
+try:
+    from HasyUtils import getDeviceNamesByClass
+except:
+    from petra_camera.utils.tango_utils import getDeviceNamesByClass
 
 from PyQt5 import QtWidgets
 
@@ -32,7 +35,7 @@ class ImportCameras(QtWidgets.QDialog):
             self._ui.verticalLayout.insertWidget(counter, QtWidgets.QLabel(camera_type + ":", self))
             counter += 1
             self._boxes[camera_type] = []
-            for device in hu.getDeviceNamesByClass(camera_type, host):
+            for device in getDeviceNamesByClass(camera_type, host):
                 check_box = QtWidgets.QCheckBox(device, self)
                 check_box.setChecked(True)
                 self._ui.verticalLayout.insertWidget(counter, check_box)

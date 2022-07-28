@@ -2,7 +2,10 @@
 
 from distutils.util import strtobool
 import PyTango
-import HasyUtils as hu
+try:
+    from HasyUtils import getDeviceNamesByClass
+except:
+    from petra_camera.utils.tango_utils import getDeviceNamesByClass
 
 from PyQt5 import QtWidgets, QtCore
 
@@ -122,7 +125,7 @@ class CameraSettings(QtWidgets.QWidget):
                                   ('FrameAnalysis',                         self._ui.cmb_roi_device)):
             current_selection = cmb_box.currentText()
             cmb_box.clear()
-            cmb_box.addItems(hu.getDeviceNamesByClass(dev_type, self._ui.le_tango_host.text()))
+            cmb_box.addItems(getDeviceNamesByClass(dev_type, self._ui.le_tango_host.text()))
             refresh_combo_box(cmb_box, current_selection)
 
     # ----------------------------------------------------------------------
