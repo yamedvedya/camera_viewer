@@ -25,7 +25,8 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.setupUi(self)
 
         self._ui.fr_tango.setVisible(False)
-        self._ui.fr_vimba_picture_setings.setVisible(False)
+        self._ui.chk_color.setVisible(False)
+        self._ui.chk_high_depth.setVisible(False)
         self._ui.le_roi_server.setVisible(False)
         self._ui.cmb_roi_device.setVisible(False)
         self._ui.chk_manual_roi_device.setVisible(False)
@@ -35,7 +36,7 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
         self._ui.cmb_motor_type.currentTextChanged.connect(self._switch_motor_type)
 
-        self._ui.cmb_camera_type.addItems(['LMScreen', 'TangoVimba'])
+        self._ui.cmb_camera_type.addItems(['LMScreen', 'TangoVimba', 'AXISCamera'])
         self._ui.cmb_motor_type.addItems(['None', 'FSBT', 'Acromag'])
 
         self._ui.le_tango_host.setText(PyTango.Database().get_db_host().split('.')[0])
@@ -62,11 +63,15 @@ class CameraSettings(QtWidgets.QWidget):
             camera_type = settings_node.get('proxy')
             refresh_combo_box(self._ui.cmb_camera_type, camera_type)
 
-            if camera_type in ['LMScreen', 'TangoVimba']:
+            if camera_type in ['LMScreen', 'TangoVimba', 'AXISCamera']:
                 self._ui.fr_tango.setVisible(True)
 
             if camera_type == 'TangoVimba':
-                self._ui.fr_vimba_picture_setings.setVisible(True)
+                self._ui.chk_color.setVisible(True)
+                self._ui.chk_high_depth.setVisible(True)
+
+            if camera_type == 'AXISCamera':
+                self._ui.chk_color.setVisible(True)
 
             if 'tango_server' in settings_node.keys():
                 server = settings_node.get('tango_server')
@@ -149,14 +154,19 @@ class CameraSettings(QtWidgets.QWidget):
     # ----------------------------------------------------------------------
     def _switch_camera_type(self, mode):
         self._ui.fr_tango.setVisible(False)
-        self._ui.fr_vimba_picture_setings.setVisible(False)
+        self._ui.chk_color.setVisible(False)
+        self._ui.chk_high_depth.setVisible(False)
         self._ui.chk_roi_server.setChecked(False)
 
-        if mode in ['LMScreen', 'TangoVimba']:
+        if mode in ['LMScreen', 'TangoVimba', 'AXISCamera']:
             self._ui.fr_tango.setVisible(True)
 
         if mode == 'TangoVimba':
-            self._ui.fr_vimba_picture_setings.setVisible(True)
+            self._ui.chk_color.setVisible(True)
+            self._ui.chk_high_depth.setVisible(True)
+
+        if mode == 'AXISCamera':
+            self._ui.chk_color.setVisible(True)
 
     # ----------------------------------------------------------------------
     def _switch_motor_type(self, mode):
@@ -187,7 +197,7 @@ class CameraSettings(QtWidgets.QWidget):
         else:
             data_to_save.append((('motor_type', 'none')),)
 
-        if self._ui.cmb_camera_type.currentText() in ['LMScreen', 'TangoVimba']:
+        if self._ui.cmb_camera_type.currentText() in ['LMScreen', 'TangoVimba', 'AXISCamera']:
             if self._ui.chk_manual_tango_device.isChecked():
                 address = self._ui.le_tango_server.text()
             else:
@@ -208,6 +218,9 @@ class CameraSettings(QtWidgets.QWidget):
         data_to_save.append(('rotate', str(self._ui.sp_rotate.value())))
         if self._ui.cmb_camera_type.currentText() == 'TangoVimba':
             data_to_save.append(('high_depth', str(self._ui.chk_high_depth.isChecked())))
+            data_to_save.append(('color', str(self._ui.chk_color.isChecked())))
+
+        if self._ui.cmb_camera_type.currentText() == 'AXISCamera':
             data_to_save.append(('color', str(self._ui.chk_color.isChecked())))
 
         return data_to_save

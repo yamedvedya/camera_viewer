@@ -42,6 +42,9 @@ class BaseCamera(object):
         self._new_frame_flag = False
         self._eid = None  # Tango even ID
 
+        self.error_msg = ''
+        self.error_flag = False
+
         self._my_name = settings.get("name")
 
         # picture rotate and flip properties
@@ -116,6 +119,15 @@ class BaseCamera(object):
 
     # ----------------------------------------------------------------------
     def start_acquisition(self):
+
+        self.error_msg = ''
+        self.error_flag = False
+
+        return self._start_acquisition()
+
+    # ----------------------------------------------------------------------
+    def _start_acquisition(self):
+
         raise RuntimeError('Not implemented')
 
     # ----------------------------------------------------------------------
@@ -223,7 +235,7 @@ class BaseCamera(object):
     # ----------------------------------------------------------------------
     # ------------------------ Camera settings load/save -------------------
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast, do_rotate=True):
+    def get_settings(self, option, cast, do_rotate=True, do_log=True):
         """
          reads the requested setting according the settings map
 
@@ -341,7 +353,8 @@ class BaseCamera(object):
                 elif option == "counter_h" and self.rotate_angle in [1, 3]:
                     value = self.get_settings("counter_w", int, False)
 
-        logger.debug(f'{self._my_name}: {cast.__name__}({option}): {value} (in {(time.time() - _start_time)*1000:.2f} msec)')
+        if do_log:
+            logger.debug(f'{self._my_name}: {cast.__name__}({option}): {value} (in {(time.time() - _start_time)*1000:.2f} msec)')
 
         return value
 

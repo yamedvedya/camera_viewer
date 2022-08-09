@@ -673,6 +673,14 @@ class DataSource2D(QtCore.QObject):
             return self._device_proxy.is_running()
 
     # ----------------------------------------------------------------------
+    def get_camera_type(self):
+        """
+
+        :return: bool
+        """
+        return self._device_proxy.__class__.__name__
+
+    # ----------------------------------------------------------------------
     def has_motor(self):
         """
 

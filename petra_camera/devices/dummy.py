@@ -44,9 +44,6 @@ class DummyProxy(BaseCamera):
         self._baseData = 100 * np.exp(-((np.sqrt(x * x + y * y * 4) - mean) ** 4 / (2.0 * sigma ** 2)))
         self._data = self._baseData
 
-        self.error_flag = False
-        self.error_msg = ''
-
         self._fps = self.get_settings('FPS', int)
         if self._fps == 0:
             self._fps = 25
@@ -100,7 +97,7 @@ class DummyProxy(BaseCamera):
         self._generator_thread_working = False
 
     # ----------------------------------------------------------------------
-    def start_acquisition(self):
+    def _start_acquisition(self):
 
         logger.debug(f"{self._my_name} starting thread")
 
@@ -112,7 +109,7 @@ class DummyProxy(BaseCamera):
         self._generate = False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast, do_rotate=True):
+    def get_settings(self, option, cast, do_rotate=True, do_log=True):
 
         if option in ['FPSmax', 'max_width', 'max_height']:
 
@@ -125,7 +122,7 @@ class DummyProxy(BaseCamera):
             elif option == 'max_height':
                 return self.FRAME_H
         else:
-            return super(DummyProxy, self).get_settings(option, cast, do_rotate)
+            return super(DummyProxy, self).get_settings(option, cast, do_rotate, do_log)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):

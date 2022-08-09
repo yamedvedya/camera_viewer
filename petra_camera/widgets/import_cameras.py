@@ -15,7 +15,7 @@ from PyQt5 import QtWidgets
 
 from petra_camera.gui.ImportCameras_ui import Ui_ImportCameras
 
-TYPES_TO_SEARCH = ['LMScreen', 'TangoVimba']
+TYPES_TO_SEARCH = ['LMScreen', 'TangoVimba', 'AXISCamera']
 
 
 # ----------------------------------------------------------------------

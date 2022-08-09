@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_SettingsWidget(object):
     def setupUi(self, SettingsWidget):
         SettingsWidget.setObjectName("SettingsWidget")
-        SettingsWidget.resize(417, 697)
+        SettingsWidget.resize(457, 952)
         SettingsWidget.setMinimumSize(QtCore.QSize(0, 0))
         SettingsWidget.setMaximumSize(QtCore.QSize(457, 16777215))
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(SettingsWidget)
@@ -306,8 +306,6 @@ class Ui_SettingsWidget(object):
         self.verticalLayout_2.addWidget(self.gb_ext_settings)
         spacerItem8 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_2.addItem(spacerItem8)
-        spacerItem9 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.verticalLayout_2.addItem(spacerItem9)
 
         self.retranslateUi(SettingsWidget)
         QtCore.QMetaObject.connectSlotsByName(SettingsWidget)

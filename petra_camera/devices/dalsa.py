@@ -57,13 +57,10 @@ class DalsaProxy(BaseCamera):
 
         self._last_frame = np.zeros((1, 1))
 
-        self.error_flag = False
-        self.error_msg = ''
-
         self._running = False
 
     # ----------------------------------------------------------------------
-    def start_acquisition(self):
+    def _start_acquisition(self):
 
         if self._source == 'Event':
 
@@ -155,20 +152,20 @@ class DalsaProxy(BaseCamera):
             self.start_acquisition()
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast, do_rotate=True):
+    def get_settings(self, option, cast, do_rotate=True, do_log=True):
 
         if option in ['Path', 'Source', 'possible_sources', 'possible_folders']:
 
             logger.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
 
             if option == 'Path':
-                path = super(DalsaProxy, self).get_settings(option, cast, do_rotate)
+                path = super(DalsaProxy, self).get_settings(option, cast, do_rotate, do_log)
                 if path != '':
                     self._set_new_path(path)
                 return self.path
 
             elif option == 'Source':
-                source = super(DalsaProxy, self).get_settings(option, cast, do_rotate)
+                source = super(DalsaProxy, self).get_settings(option, cast, do_rotate, do_log)
                 if source != '':
                     self._change_source(source)
                 return self._source
@@ -181,7 +178,7 @@ class DalsaProxy(BaseCamera):
                 return self._possible_folders
 
         else:
-            return super(DalsaProxy, self).get_settings(option, cast, do_rotate)
+            return super(DalsaProxy, self).get_settings(option, cast, do_rotate, do_log)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):

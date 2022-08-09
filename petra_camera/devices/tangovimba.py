@@ -126,8 +126,6 @@ class TangoVimba(BaseCamera):
         self._image_source = \
             self.SERVER_SETTINGS['color' if self._color else 'bw']['high' if self._high_depth else 'low'][1]
 
-        self.error_msg = ''
-        self.error_flag = False
         self._last_frame = np.zeros((1, 1))
         self._last_time = time.time()
 
@@ -138,7 +136,7 @@ class TangoVimba(BaseCamera):
         self._stop_frame_thread = False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast, do_rotate=True):
+    def get_settings(self, option, cast, do_rotate=True, do_log=True):
 
         if option == 'max_level_limit':
 
@@ -150,10 +148,10 @@ class TangoVimba(BaseCamera):
                 return 2 ** 8
 
         elif option == 'exposure':
-            return super(TangoVimba, self).get_settings(option, cast, do_rotate) / 1000
+            return super(TangoVimba, self).get_settings(option, cast, do_rotate, do_log) / 1000
 
         else:
-            return super(TangoVimba, self).get_settings(option, cast, do_rotate)
+            return super(TangoVimba, self).get_settings(option, cast, do_rotate, do_log)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):
@@ -164,7 +162,7 @@ class TangoVimba(BaseCamera):
             super(TangoVimba, self).save_settings(option, value)
 
     # ----------------------------------------------------------------------
-    def start_acquisition(self):
+    def _start_acquisition(self):
         """
         """
 

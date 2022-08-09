@@ -24,11 +24,13 @@ from petra_camera.widgets.frame_viewer import FrameViewer
 from petra_camera.widgets.settings_widget import SettingsWidget
 from petra_camera.widgets.marker_roi import MarkersROIsWidget
 from petra_camera.widgets.peak_search_widget import PeakSearchWidget
+from petra_camera.widgets.position_control import PositionControl
 
 from petra_camera.devices.datasource2d import DataSource2D
 from petra_camera.gui.CameraWidget_ui import Ui_CameraWindow
 
 logger = logging.getLogger(APP_NAME)
+
 
 # ----------------------------------------------------------------------
 class CameraWidget(QtWidgets.QMainWindow):
@@ -89,6 +91,9 @@ class CameraWidget(QtWidgets.QMainWindow):
         logger.info(f"Closing {self.camera_name}...")
 
         self._settings_widget.close()
+        if self._position_control_widget is not None:
+            self._position_control_widget.close()
+
         self._frame_viewer.close(self._parent.auto_screen_action.isChecked())
 
         self.camera_device.close_camera()
@@ -98,6 +103,9 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._markerroi_widget.save_ui_settings(self.camera_name)
         if self._peak_search_widget is not None:
             self._peak_search_widget.save_ui_settings(self.camera_name)
+
+        if self._position_control_widget is not None:
+            self._position_control_widget.save_ui_settings(self.camera_name)
 
         self._save_ui_settings()
 
@@ -185,12 +193,21 @@ class CameraWidget(QtWidgets.QMainWindow):
         else:
             self._peak_search_widget, self._peak_search_dock = None, None
 
+        if self.camera_device.get_camera_type() == 'AXISCamera':
+            self._position_control_widget, self._position_control_dock = \
+                self._add_dock(PositionControl, "Position Control", self)
+        else:
+            self._position_control_widget, self._position_control_dock = None, None
+
             # after all widgets are loaded we restore the user layout
         self._frame_viewer.load_ui_settings(self.camera_name)
         self._settings_widget.load_ui_settings(self.camera_name)
         self._markerroi_widget.load_ui_settings(self.camera_name)
         if self._peak_search_widget is not None:
             self._peak_search_widget.load_ui_settings(self.camera_name)
+
+        if self._position_control_widget is not None:
+            self._position_control_widget.load_ui_settings(self.camera_name)
 
         # link between picture and histogram
         self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())

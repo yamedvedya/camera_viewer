@@ -62,16 +62,13 @@ class LMScreen(BaseCamera):
 
         self._last_frame = np.zeros((1, 1))
 
-        self.error_flag = False
-        self.error_msg = ''
-
         self.period = 1/self.get_settings('FPS', int)
 
         self._camera_read_thread = None
         self._camera_read_thread_running = False
 
     # ----------------------------------------------------------------------
-    def start_acquisition(self):
+    def _start_acquisition(self):
         """
         start acquisition tread
         :return: bool
@@ -133,7 +130,7 @@ class LMScreen(BaseCamera):
                 self._camera_read_thread_running = False
 
     # ----------------------------------------------------------------------
-    def get_settings(self, option, cast, do_rotate=True):
+    def get_settings(self, option, cast, do_rotate=True, do_log=True):
         """
         here we catch some settings before read them from general settings
         :param option:
@@ -161,7 +158,7 @@ class LMScreen(BaseCamera):
                 return 1000/self.period
 
         elif option == 'FPS':
-            return max(1, super(LMScreen, self).get_settings(option, cast, do_rotate))
+            return max(1, super(LMScreen, self).get_settings(option, cast, do_rotate, do_log))
 
         else:
-            return super(LMScreen, self).get_settings(option, cast, do_rotate)
+            return super(LMScreen, self).get_settings(option, cast, do_rotate, do_log)
