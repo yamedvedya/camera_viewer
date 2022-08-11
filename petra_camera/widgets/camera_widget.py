@@ -35,7 +35,8 @@ logger = logging.getLogger(APP_NAME)
 # ----------------------------------------------------------------------
 class CameraWidget(QtWidgets.QMainWindow):
 
-    REFRESH_PERIOD = 5000 # how often we update settings with Tango
+    REFRESH_TANGO_SETTINGS_PERIOD = 5000 # how often we update settings with Tango
+    REFRESH_START_STOP_PERIOD = 500 # how often we update settings with Tango
 
     # ----------------------------------------------------------------------
     def __init__(self, parent, settings, my_name):
@@ -58,7 +59,11 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         self._refresh_view_timer = QtCore.QTimer(self)
         self._refresh_view_timer.timeout.connect(self._refresh_view)
-        self._refresh_view_timer.start(self.REFRESH_PERIOD)
+        self._refresh_view_timer.start(self.REFRESH_TANGO_SETTINGS_PERIOD)
+
+        self._refresh_run_stop_timer = QtCore.QTimer(self)
+        self._refresh_run_stop_timer.timeout.connect(self._refresh_run_stop)
+        self._refresh_run_stop_timer.start(self.REFRESH_START_STOP_PERIOD)
 
     # ----------------------------------------------------------------------
     def block_hist_signals(self, flag):
@@ -112,12 +117,7 @@ class CameraWidget(QtWidgets.QMainWindow):
         logger.info(f"{self.camera_name} closed.")
 
     # ----------------------------------------------------------------------
-    def _refresh_view(self):
-        """
-
-        :return: None
-        """
-
+    def _refresh_run_stop(self):
         try:
             state = self.camera_device.is_running()
             if state is None:
@@ -131,6 +131,13 @@ class CameraWidget(QtWidgets.QMainWindow):
                 self._action_start_stop.setEnabled(True)
         except Exception as err:
             logger.exception(f"Exception: camera state: {err}")
+
+    # ----------------------------------------------------------------------
+    def _refresh_view(self):
+        """
+
+        :return: None
+        """
 
         if self._settings_widget.isVisible():
             self._settings_widget.refresh_view()

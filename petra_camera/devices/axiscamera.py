@@ -67,11 +67,9 @@ class AXISCamera(BaseCamera):
         self._last_frame = np.zeros((1, 1))
         self._last_time = time.time()
 
-        self._mode = 'event'
         self._eid = None
-        self._frame_thread = None
-        self._frame_thread_running = False
-        self._stop_frame_thread = False
+
+        self._main_runner = False
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast, do_rotate=True, do_log=True):
@@ -105,36 +103,29 @@ class AXISCamera(BaseCamera):
         """
         """
 
-        if self._device_proxy.state() == PyTango.DevState.ON:
+        if self._device_proxy.state() in [PyTango.DevState.ON, PyTango.DevState.RUNNING]:
 
-            logger.debug(f'{self._my_name}: starting acquisition: event mode')
+            logger.debug(f'{self._my_name}: starting acquisition')
 
             self._mode = 'event'
             self._eid = self._device_proxy.subscribe_event(self._image_source,
                                                            PyTango.EventType.CHANGE_EVENT,
                                                            self._readout_frame)
 
-            attemp = 0
-            while attemp < self.START_ATTEMPTS:
-                try:
-                    self._device_proxy.command_inout("StartAcquisition")
-                    break
-                except:
-                    attemp += 1
+            if self._device_proxy.state() == PyTango.DevState.ON:
+                self._main_runner = True
+                attemp = 0
+                while attemp < self.START_ATTEMPTS:
+                    try:
+                        self._device_proxy.command_inout("StartAcquisition")
+                        break
+                    except:
+                        attemp += 1
+            else:
+                self._main_runner = False
 
-            time.sleep(self.START_DELAY)  # ? TODO
+            time.sleep(self.START_DELAY)
 
-            return True
-
-        elif self._device_proxy.state() == PyTango.DevState.RUNNING:
-
-            logger.debug(f'{self._my_name}: starting acquisition: thread mode')
-
-            self._stop_frame_thread = False
-            self._mode = 'attribute'
-            self._frame_thread = Thread(target=self._read_frame, name='AxisCamera')
-            self._frame_thread_running = True
-            self._frame_thread.start()
             return True
 
         else:
@@ -145,46 +136,17 @@ class AXISCamera(BaseCamera):
     def stop_acquisition(self):
         """
         """
-        if self._mode == 'event':
-            if self._eid is not None:
-                self._device_proxy.unsubscribe_event(self._eid)
-                self._eid = None
-            if self._device_proxy.state() == PyTango.DevState.RUNNING:
-                self._device_proxy.command_inout("StopAcquisition")
-        else:
-            if self._frame_thread_running:
-                self._stop_frame_thread = True
-                while self._frame_thread_running:
-                    time.sleep(0.1)
+        if self._eid is not None:
+            self._device_proxy.unsubscribe_event(self._eid)
+            self._eid = None
+        if self._main_runner:
+            self._device_proxy.command_inout("StopAcquisition")
 
-            time.sleep(self.STOP_DELAY)  # ? TODO
+        time.sleep(self.STOP_DELAY)  # ? TODO
 
     # ----------------------------------------------------------------------
     def is_running(self):
-        if self._mode == 'event':
-            return self._device_proxy.state() == PyTango.DevState.RUNNING
-        else:
-            if self._device_proxy.state() != PyTango.DevState.RUNNING:
-                return False
-            else:
-                return self._frame_thread_running
-
-    # ----------------------------------------------------------------------
-    def _read_frame(self):
-        sleep_time = self.get_settings('FPS', int)
-        while not self._stop_frame_thread:
-            if self._device_proxy.state() != PyTango.DevState.RUNNING:
-                self._frame_thread_running = False
-                raise RuntimeError('Camera was stopped!')
-            try:
-                self._last_frame = self._process_frame(getattr(self._device_proxy, self._image_source))
-                self._new_frame_flag = True
-            except Exception as err:
-                logger.error('AXISCamera error: {}'.format(err))
-                self.error_flag = True
-                self.error_msg = str(err)
-            time.sleep(1/sleep_time)
-        self._frame_thread_running = False
+        return self._device_proxy.state() == PyTango.DevState.RUNNING and self._eid is not None
 
     # ----------------------------------------------------------------------
     def _readout_frame(self, event):
@@ -224,9 +186,3 @@ class AXISCamera(BaseCamera):
 
         if self._eid is not None:
             self._device_proxy.unsubscribe_event(self._eid)
-
-        if self._frame_thread_running:
-            self._stop_frame_thread = True
-            while self._frame_thread_running:
-                time.sleep(0.1)
-
