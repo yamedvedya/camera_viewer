@@ -172,7 +172,7 @@ class TangoVimba(BaseCamera):
 
             self._mode = 'event'
             self._eid = self._device_proxy.subscribe_event(self._image_source,
-                                                           PyTango.EventType.DATA_READY_EVENT,
+                                                           PyTango.EventType.CHANGE_EVENT,
                                                            self._readout_frame, [], True)
 
             attemp = 0
@@ -257,13 +257,9 @@ class TangoVimba(BaseCamera):
                 self._new_frame_flag = True
 
             except Exception as err:
-                logger.error('Vimba error: {}'.format(err))
                 self.error_flag = True
                 self.error_msg = str(err)
-        else:
-            logger.error('Vimba error: {}'.format(self.error_msg))
-            self.error_flag = True
-            self.error_msg = event.errors
+                logger.error('Vimba error: {}'.format(err))
 
     # ----------------------------------------------------------------------
     def _process_frame(self, data):
