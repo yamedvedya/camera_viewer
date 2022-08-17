@@ -48,7 +48,6 @@ class PETRACamera(QtWidgets.QMainWindow):
         self._ui.setupUi(self)
 
         self._init_menu()
-        self._load_ui_settings()
 
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
@@ -62,6 +61,8 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.setWindowTitle("Camera Viewer ({}@{})".format(getpass.getuser(), socket.gethostname()))
 
         self._init_status_bar()
+        self._load_ui_settings()
+
         self._status_timer = QtCore.QTimer(self)
         self._status_timer.timeout.connect(self._refresh_status_bar)
         self._status_timer.start(self.STATUS_TICK)
@@ -139,7 +140,7 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         cam_list = self._get_cameras_list()
 
-        while len(cam_list) < 1:
+        if len(cam_list) < 1:
             dlg = ImportCameras(self.settings)
             dlg.exec_()
             cam_list = self._get_cameras_list()

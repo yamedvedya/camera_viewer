@@ -173,7 +173,7 @@ class BaseCamera(object):
 
         :return: bool
         """
-        return True
+        return False
 
     # ----------------------------------------------------------------------
     # ------------------------- Picture clip/resolution  -------------------

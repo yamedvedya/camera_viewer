@@ -36,7 +36,7 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
         self._ui.cmb_motor_type.currentTextChanged.connect(self._switch_motor_type)
 
-        self._ui.cmb_camera_type.addItems(['LMScreen', 'TangoVimba', 'AXISCamera'])
+        self._ui.cmb_camera_type.addItems(['PetraStatus', 'LMScreen', 'TangoVimba', 'AXISCamera'])
         self._ui.cmb_motor_type.addItems(['None', 'FSBT', 'Acromag'])
 
         self._ui.le_tango_host.setText(PyTango.Database().get_db_host().split('.')[0])

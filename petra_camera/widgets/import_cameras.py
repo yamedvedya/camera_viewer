@@ -26,10 +26,15 @@ class ImportCameras(QtWidgets.QDialog):
         self._ui = Ui_ImportCameras()
         self._ui.setupUi(self)
 
-        self._boxes = {}
         self._settings = settings
 
-        counter = 0
+        self._ui.verticalLayout.insertWidget(0, QtWidgets.QLabel("Petra status:", self))
+        check_box = QtWidgets.QCheckBox('Status screen', self)
+        check_box.setChecked(True)
+        self._ui.verticalLayout.insertWidget(1, check_box)
+        self._boxes = {'PetraStatus': check_box}
+
+        counter = 2
         host = PyTango.Database().get_db_host().split('.')[0]
         for camera_type in TYPES_TO_SEARCH:
             self._ui.verticalLayout.insertWidget(counter, QtWidgets.QLabel(camera_type + ":", self))
