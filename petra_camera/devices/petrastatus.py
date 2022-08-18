@@ -12,6 +12,7 @@ import io
 from PIL import Image
 import numpy as np
 import logging
+import PyTango
 
 from threading import Thread
 
@@ -20,18 +21,19 @@ from petra_camera.main_window import APP_NAME
 
 logger = logging.getLogger(APP_NAME)
 
+TANGO_SERVER = 'haszvmar:10000/pxx/petrastatusscreen/all'
 
 # ----------------------------------------------------------------------
 class PetraStatus(BaseCamera):
     """
     """
-    FRAME_W = 800
-    FRAME_H = 600
-
     _settings_map = {'max_width': ('self', 'FRAME_W'),
                      'max_height': ('self', 'FRAME_H')}
 
     visible_layouts = ('FPS')
+
+    FRAME_W = 1122
+    FRAME_H = 898
 
     # ----------------------------------------------------------------------
     def __init__(self, settings):
@@ -40,6 +42,15 @@ class PetraStatus(BaseCamera):
         self._fps = self.get_settings('FPS', int)
         if self._fps == 0:
             self._fps = 1
+
+        if 'status_source' in settings.keys():
+            self._mode = settings.get("status_source")
+        else:
+            self._mode = 'tango'
+
+        if self._mode != 'tango':
+            self.FRAME_W = 800
+            self.FRAME_H = 600
 
         self._picture_thread = Thread(target=self._readout_frame)
         self._generator_thread_working = False
@@ -62,13 +73,26 @@ class PetraStatus(BaseCamera):
             time.sleep(1 / self._fps)
 
             if self._run_acquisition.is_set():
-                ans = requests.get(f'https://winweb.desy.de/mca/accstatus/infoscreen/petra_status_800.png?{random()}')
-                if ans.status_code == 200:
-                    picture_stream = io.BytesIO(ans.content)
-                    picture = Image.open(picture_stream)
-                    self._last_frame = np.rot90(np.asarray(picture, dtype=np.int32), 1)[::-1, :]
+                if self._mode == 'tango':
+                    data = PyTango.DeviceProxy(TANGO_SERVER).statusscreen[self._picture_size[0]:self._picture_size[2],
+                                                                          self._picture_size[1]:self._picture_size[3]]
+                    c_data = np.zeros(data.shape + (3,), dtype=np.ubyte)
+                    c_data[..., 0] = data & 255
+                    c_data[..., 1] = (data >> 8) & 255
+                    c_data[..., 2] = (data >> 16) & 255
+                    self._last_frame = c_data
                     self._new_frame_flag = True
                     logger.debug(f"{self._my_name} new frame")
+                else:
+                    ans = requests.get(f'https://winweb.desy.de/mca/accstatus/infoscreen/petra_status_800.png?{random()}')
+                    if ans.status_code == 200:
+                        picture_stream = io.BytesIO(ans.content)
+                        picture = Image.open(picture_stream)
+                        frame = np.rot90(np.asarray(picture, dtype=np.int32), 1)[::-1, :]
+                        self._last_frame = frame[self._picture_size[0]: self._picture_size[2],
+                                                 self._picture_size[1]: self._picture_size[3]]
+                        self._new_frame_flag = True
+                        logger.debug(f"{self._my_name} new frame")
 
         self._generator_thread_working = False
 

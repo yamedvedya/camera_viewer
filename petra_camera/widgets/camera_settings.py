@@ -24,13 +24,6 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui = Ui_CameraSettings()
         self._ui.setupUi(self)
 
-        self._ui.fr_tango.setVisible(False)
-        self._ui.chk_color.setVisible(False)
-        self._ui.chk_high_depth.setVisible(False)
-        self._ui.le_roi_server.setVisible(False)
-        self._ui.cmb_roi_device.setVisible(False)
-        self._ui.chk_manual_roi_device.setVisible(False)
-
         self.my_id = my_id
 
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
@@ -62,16 +55,7 @@ class CameraSettings(QtWidgets.QWidget):
 
             camera_type = settings_node.get('proxy')
             refresh_combo_box(self._ui.cmb_camera_type, camera_type)
-
-            if camera_type in ['LMScreen', 'TangoVimba', 'AXISCamera']:
-                self._ui.fr_tango.setVisible(True)
-
-            if camera_type == 'TangoVimba':
-                self._ui.chk_color.setVisible(True)
-                self._ui.chk_high_depth.setVisible(True)
-
-            if camera_type == 'AXISCamera':
-                self._ui.chk_color.setVisible(True)
+            self._switch_camera_type(camera_type)
 
             if 'tango_server' in settings_node.keys():
                 server = settings_node.get('tango_server')
@@ -93,6 +77,12 @@ class CameraSettings(QtWidgets.QWidget):
                 if not refresh_combo_box(self._ui.cmb_roi_device, PyTango.DeviceProxy(server).dev_name()):
                     self._ui.chk_manual_roi_device.setChecked(True)
                     self._ui.le_roi_server.setText(server)
+
+            if 'status_source' in settings_node.keys():
+                if settings_node.get('status_source') == 'tango':
+                    self._ui.but_status_source_tango.setChecked(True)
+                else:
+                    self._ui.but_status_source_infoscreen.setChecked(True)
 
             motor_type = settings_node.get('motor_type')
             if motor_type == 'FSBT':
@@ -125,6 +115,14 @@ class CameraSettings(QtWidgets.QWidget):
             pass
 
     # ----------------------------------------------------------------------
+    def _switch_camera_type(self, mode):
+        self._ui.fr_tango.setVisible(mode in ('LMScreen', 'TangoVimba', 'AXISCamera'))
+        self._ui.chk_color.setVisible(mode in ('TangoVimba', 'AXISCamera'))
+        self._ui.chk_high_depth.setVisible(mode in ('TangoVimba',))
+        self._ui.chk_roi_server.setChecked(False)
+        self._ui.gb_status_source.setVisible(mode in ('PetraStatus',))
+
+    # ----------------------------------------------------------------------
     def _rescan_database(self):
         for dev_type, cmb_box in ((self._ui.cmb_camera_type.currentText(),  self._ui.cmb_tango_device),
                                   ('FrameAnalysis',                         self._ui.cmb_roi_device)):
@@ -152,23 +150,6 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.le_roi_server.setEnabled(state == 2)
 
     # ----------------------------------------------------------------------
-    def _switch_camera_type(self, mode):
-        self._ui.fr_tango.setVisible(False)
-        self._ui.chk_color.setVisible(False)
-        self._ui.chk_high_depth.setVisible(False)
-        self._ui.chk_roi_server.setChecked(False)
-
-        if mode in ['LMScreen', 'TangoVimba', 'AXISCamera']:
-            self._ui.fr_tango.setVisible(True)
-
-        if mode == 'TangoVimba':
-            self._ui.chk_color.setVisible(True)
-            self._ui.chk_high_depth.setVisible(True)
-
-        if mode == 'AXISCamera':
-            self._ui.chk_color.setVisible(True)
-
-    # ----------------------------------------------------------------------
     def _switch_motor_type(self, mode):
         self._ui.fr_acromag.setVisible(False)
         self._ui.fr_fsbt.setVisible(False)
@@ -180,9 +161,11 @@ class CameraSettings(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def get_data(self):
+        camera_type = self._ui.cmb_camera_type.currentText()
+
         data_to_save = [('name', self._ui.le_name.text()),
                         ('enabled', str(self._ui.chk_enabled.isChecked())),
-                        ('proxy', self._ui.cmb_camera_type.currentText())]
+                        ('proxy', camera_type)]
 
         if self._ui.cmb_motor_type.currentText() == 'FSBT':
             data_to_save.append(('motor_type', 'FSBT'))
@@ -197,13 +180,19 @@ class CameraSettings(QtWidgets.QWidget):
         else:
             data_to_save.append((('motor_type', 'none')),)
 
-        if self._ui.cmb_camera_type.currentText() in ['LMScreen', 'TangoVimba', 'AXISCamera']:
+        if camera_type in ['LMScreen', 'TangoVimba', 'AXISCamera']:
             if self._ui.chk_manual_tango_device.isChecked():
                 address = self._ui.le_tango_server.text()
             else:
                 address = self._ui.le_tango_host.text() + ':10000/' + self._ui.cmb_tango_device.currentText()
 
             data_to_save.append(('tango_server', address))
+
+        if camera_type == 'PetraStatus':
+            if self._ui.but_status_source_tango.isChecked():
+                data_to_save.append(('status_source', 'tango'))
+            else:
+                data_to_save.append(('status_source', 'infoscreen'))
 
         if self._ui.chk_roi_server.isChecked():
             if self._ui.chk_manual_roi_device.isChecked():
@@ -216,11 +205,12 @@ class CameraSettings(QtWidgets.QWidget):
         data_to_save.append(('flip_vertical', str(self._ui.chk_flip_v.isChecked())))
         data_to_save.append(('flip_horizontal', str(self._ui.chk_flip_h.isChecked())))
         data_to_save.append(('rotate', str(self._ui.sp_rotate.value())))
-        if self._ui.cmb_camera_type.currentText() == 'TangoVimba':
+
+        if camera_type == 'TangoVimba':
             data_to_save.append(('high_depth', str(self._ui.chk_high_depth.isChecked())))
             data_to_save.append(('color', str(self._ui.chk_color.isChecked())))
 
-        if self._ui.cmb_camera_type.currentText() == 'AXISCamera':
+        if camera_type == 'AXISCamera':
             data_to_save.append(('color', str(self._ui.chk_color.isChecked())))
 
         return data_to_save
