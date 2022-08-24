@@ -20,8 +20,6 @@ from petra_camera.widgets.base_widget import BaseWidget
 from petra_camera.main_window import APP_NAME
 from petra_camera.gui.PositionControl_ui import Ui_PositionControl
 
-WIDGET_NAME = 'PositionControl'
-
 logger = logging.getLogger(APP_NAME)
 
 REFRESH_PERIOD = 1
@@ -31,6 +29,8 @@ REFRESH_PERIOD = 1
 class PositionControl(BaseWidget):
     """
     """
+    WIDGET_NAME = 'PositionControl'
+
     # ----------------------------------------------------------------------
     def __init__(self, parent):
         """

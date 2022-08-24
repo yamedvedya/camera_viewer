@@ -8,12 +8,11 @@
 """Auxiliary functions used in many different contexts.
 """
 
-import datetime
-import logging
 import math
 import os
-
 import numpy as np
+
+from pathlib import Path
 
 
 # ----------------------------------------------------------------------
@@ -62,3 +61,13 @@ def FWHM(data):
         return right_idx - left_idx  # return the difference (full width)
     except:
         return 0
+
+
+# ----------------------------------------------------------------------
+def get_save_path(settings):
+    path = None
+    if settings.has_node("save_folder"):
+        path = settings.option("save_folder", 'path')
+    if path is None:
+        path = os.path.join(str(Path.home()), 'Pictures')
+    return path

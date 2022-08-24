@@ -6,11 +6,11 @@ from petra_camera.widgets.base_widget import BaseWidget
 
 from petra_camera.gui.PeakSearch_ui import Ui_PeakSearch
 
-WIDGET_NAME = 'PeakSearch'
-
 
 # ----------------------------------------------------------------------
 class PeakSearchWidget(BaseWidget):
+
+    WIDGET_NAME = 'PeakSearch'
 
     refresh_image = QtCore.pyqtSignal()
 

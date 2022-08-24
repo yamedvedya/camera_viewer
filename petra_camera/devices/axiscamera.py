@@ -14,7 +14,6 @@ try:
 except ImportError:
     pass
 
-from threading import Thread
 from distutils.util import strtobool
 
 from petra_camera.devices.base_camera import BaseCamera

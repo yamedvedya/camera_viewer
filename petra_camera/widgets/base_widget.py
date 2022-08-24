@@ -6,14 +6,14 @@ from PyQt5 import QtCore, QtWidgets
 
 from petra_camera.main_window import APP_NAME
 
-WIDGET_NAME = None
-SAVE_STATE_UIS = []
-
 logger = logging.getLogger(APP_NAME)
 
 
 # ----------------------------------------------------------------------
 class BaseWidget(QtWidgets.QWidget):
+
+    WIDGET_NAME = None
+    SAVE_STATE_UIS = []
 
     # ----------------------------------------------------------------------
     def __init__(self, camera_widget):
@@ -29,23 +29,23 @@ class BaseWidget(QtWidgets.QWidget):
         """
         """
         settings = QtCore.QSettings(APP_NAME)
-        for uis in SAVE_STATE_UIS:
-            settings.setValue(f"{WIDGET_NAME}_{camera_name}/f{uis}", getattr(self._ui, uis).saveState())
+        for uis in self.SAVE_STATE_UIS:
+            settings.setValue(f"{self.WIDGET_NAME}_{camera_name}/f{uis}", getattr(self._ui, uis).saveState())
 
-        settings.setValue(f"{WIDGET_NAME}_{camera_name}/geometry", self.saveGeometry())
+        settings.setValue(f"{self.WIDGET_NAME}_{camera_name}/geometry", self.saveGeometry())
 
     # ----------------------------------------------------------------------
     def load_ui_settings(self, camera_name):
         """
         """
         settings = QtCore.QSettings(APP_NAME)
-        for uis in SAVE_STATE_UIS:
+        for uis in self.SAVE_STATE_UIS:
             try:
-                getattr(self._ui, uis).restoreState(settings.value(f"{WIDGET_NAME}_{camera_name}/f{uis}"))
+                getattr(self._ui, uis).restoreState(settings.value(f"{self.WIDGET_NAME}_{camera_name}/f{uis}"))
             except:
                 pass
 
         try:
-            self.restoreGeometry(settings.value(f"{WIDGET_NAME}_{camera_name}/geometry"))
+            self.restoreGeometry(settings.value(f"{self.WIDGET_NAME}_{camera_name}/geometry"))
         except:
             pass

@@ -17,14 +17,12 @@ from datetime import datetime
 
 from PyQt5 import QtCore, QtWidgets, QtGui, QtPrintSupport
 
+from petra_camera.utils.functions import get_save_path
 from petra_camera.widgets.base_widget import BaseWidget
 from petra_camera.gui.FrameViewer_ui import Ui_FrameViewer
 from petra_camera.utils.gui_elements import ImageMarker, PeakMarker, LineSegmentItem
 from petra_camera.main_window import APP_NAME
 
-
-WIDGET_NAME = 'FrameViewer'
-SAVE_STATE_UIS = ['splitter_y1', 'splitter_y2', 'splitter_x']
 
 logger = logging.getLogger(APP_NAME)
 
@@ -35,6 +33,9 @@ class FrameViewer(BaseWidget):
     """
     new_fps = QtCore.pyqtSignal(float)       # signal, that reports actual FPS to status bar
     cursor_moved = QtCore.pyqtSignal(float, float)  # sends cursor coordinates to status bar
+
+    WIDGET_NAME = 'FrameViewer'
+    SAVE_STATE_UIS = ['splitter_y1', 'splitter_y2', 'splitter_x']
 
     DEFAULT_IMAGE_EXT = "png"
     FILE_STAMP = "%Y%m%d_%H%M%S"
@@ -54,6 +55,7 @@ class FrameViewer(BaseWidget):
         # ----------------------------------------------------------------------
 
         self._last_frame = None # stores last read frame
+        self._last_msg = ''
 
         self._acq_started = time.time()
         self._fps_counter = 0
@@ -88,8 +90,7 @@ class FrameViewer(BaseWidget):
         #                Settings
         # ----------------------------------------------------------------------
 
-        self._save_data_folder = self._settings.option("save_folder", "default")
-        self._save_image_folder = self._settings.option("save_folder", "default")
+        self._save_data_folder = get_save_path(self._settings)
 
         # ----------------------------------------------------------------------
         #                Center search functionality
@@ -288,6 +289,7 @@ class FrameViewer(BaseWidget):
 
         try:
             self._last_frame = self._camera_device.get_frame()
+            self._last_msg = self._camera_device.get_msg()
 
             picture_size = self._camera_device.get_picture_clip()
             reduction = self._camera_device.get_reduction()
@@ -308,6 +310,7 @@ class FrameViewer(BaseWidget):
 
             if self._set_new_image or self._camera_device.set_new_image:
                 self._ui.image_view.setImage(self._last_frame, **set_kwargs)
+                self._ui.image_view.imageItem.setToolTip(self._last_msg)
                 self._set_new_image = False
                 self._camera_device.set_new_image = False
                 try:
@@ -731,9 +734,27 @@ class FrameViewer(BaseWidget):
 
         defaultName = "image_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
                                            self.DEFAULT_IMAGE_EXT)
-        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, title, self._save_image_folder + defaultName,
+        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, title, self._save_data_folder + defaultName,
                                                              filesFilter)
 
-        self._save_image_folder = QtCore.QFileInfo(fileTuple).path() + '/'
+        self._save_data_folder = QtCore.QFileInfo(fileTuple).path() + '/'
 
         return str(fileTuple)
+
+    # ----------------------------------------------------------------------
+    def save_ui_settings(self, camera_name):
+        """
+        """
+        self._ui.wiProfileY.save_ui_settings(camera_name)
+        self._ui.wiProfileX.save_ui_settings(camera_name)
+
+        super(FrameViewer, self).save_ui_settings(camera_name)
+
+    # ----------------------------------------------------------------------
+    def load_ui_settings(self, camera_name):
+        """
+        """
+        super(FrameViewer, self).load_ui_settings(camera_name)
+
+        self._ui.wiProfileY.load_ui_settings(camera_name)
+        self._ui.wiProfileX.load_ui_settings(camera_name)

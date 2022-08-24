@@ -23,6 +23,7 @@ logger = logging.getLogger(APP_NAME)
 
 TANGO_SERVER = 'haszvmar:10000/pxx/petrastatusscreen/all'
 
+
 # ----------------------------------------------------------------------
 class PetraStatus(BaseCamera):
     """
@@ -81,7 +82,9 @@ class PetraStatus(BaseCamera):
                     c_data[..., 1] = (data >> 8) & 255
                     c_data[..., 2] = (data >> 16) & 255
                     self._last_frame = c_data
+                    self._last_camera_msg = PyTango.DeviceProxy(TANGO_SERVER).laststatusmessage
                     self._new_frame_flag = True
+                    self._new_msg_flag = True
                     logger.debug(f"{self._my_name} new frame")
                 else:
                     ans = requests.get(f'https://winweb.desy.de/mca/accstatus/infoscreen/petra_status_800.png?{random()}')

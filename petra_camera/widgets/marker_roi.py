@@ -12,13 +12,13 @@ from petra_camera.main_window import APP_NAME
 
 from petra_camera.gui.MarkersROIs_ui import Ui_MarkersROIs
 
-WIDGET_NAME = 'MarkersROIs'
-
 logger = logging.getLogger(APP_NAME)
 
 
 # ----------------------------------------------------------------------
 class MarkersROIsWidget(BaseWidget):
+
+    WIDGET_NAME = 'MarkersROIs'
 
     add_remove_roi = QtCore.pyqtSignal()
     repaint_roi = QtCore.pyqtSignal()

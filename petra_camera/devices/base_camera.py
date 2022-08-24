@@ -40,7 +40,12 @@ class BaseCamera(object):
         self._frame_size = None
 
         self._new_frame_flag = False
+        self._last_frame = None
+
         self._eid = None  # Tango even ID
+
+        self._new_msg_flag = False
+        self._last_camera_msg = ''
 
         self.error_msg = ''
         self.error_flag = False
@@ -147,6 +152,14 @@ class BaseCamera(object):
 
         self._new_frame_flag = False
         return self.rotate()
+
+    # ----------------------------------------------------------------------
+    def maybe_read_msg(self):
+        if not self._new_msg_flag:
+            return ''
+
+        self._new_msg_flag = False
+        return self._last_camera_msg
 
     # ----------------------------------------------------------------------
     def rotate(self):

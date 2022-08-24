@@ -14,20 +14,17 @@ import subprocess
 import logging
 import time
 
-import pyqtgraph as pg
-from packaging import version
-
 from PyQt5 import QtCore, QtWidgets
 from distutils.util import strtobool
 
+from petra_camera.utils.functions import get_save_path
 from petra_camera.utils.errors import report_error
 from petra_camera.widgets.base_widget import BaseWidget
 from petra_camera.main_window import APP_NAME
 from petra_camera.gui.SettingsWidget_ui import Ui_SettingsWidget
+from petra_camera.external.histogramWidget import HistogramHLUTWidget
 
 from petra_camera.utils.functions import refresh_combo_box
-
-WIDGET_NAME = 'SettingsWidget'
 
 logger = logging.getLogger(APP_NAME)
 
@@ -36,6 +33,9 @@ logger = logging.getLogger(APP_NAME)
 class SettingsWidget(BaseWidget):
     """
     """
+
+    WIDGET_NAME = 'SettingsWidget'
+
     PARAMS_EDITOR = "atkpanel"
 
     # ----------------------------------------------------------------------
@@ -48,11 +48,7 @@ class SettingsWidget(BaseWidget):
         self._ui.setupUi(self)
         self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
 
-        # picture histogram
-        if version.parse(pg.__version__) >= version.parse('0.12.0'):
-            self.hist = pg.HistogramLUTWidget(self, orientation='horizontal')
-        else:
-            self.hist = pg.HistogramLUTWidget(self)
+        self.hist = HistogramHLUTWidget(self)
 
         self.hist.setBackground('w')
         self._ui.vl_levels.addWidget(self.hist, 1)
@@ -292,7 +288,7 @@ class SettingsWidget(BaseWidget):
     # ----------------------------------------------------------------------
     def _save_dark_image(self):
         fileName, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save dark image",
-                                                            self._settings.option("save_folder", "default"),
+                                                            get_save_path(self._settings),
                                                             "Numpy files (*.npy)")
         if fileName:
             self._camera_device.save_dark_image(fileName)
@@ -300,7 +296,7 @@ class SettingsWidget(BaseWidget):
     # ----------------------------------------------------------------------
     def _load_dark_image(self):
         file_name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load dark image",
-                                                             self._settings.option("save_folder", "default"),
+                                                             get_save_path(self._settings),
                                                              "Numpy files (*.npy)")
         if file_name:
             self._camera_device.load_dark_image(file_name)
@@ -426,7 +422,7 @@ class SettingsWidget(BaseWidget):
 
         state = False
         try:
-            state = strtobool(settings.value(f"{WIDGET_NAME}_{camera_name}/AdditionalSettings"))
+            state = strtobool(settings.value(f"{self.WIDGET_NAME}_{camera_name}/AdditionalSettings"))
         except:
             pass
 
@@ -444,7 +440,7 @@ class SettingsWidget(BaseWidget):
         super(SettingsWidget, self).save_ui_settings(camera_name)
 
         settings = QtCore.QSettings(APP_NAME)
-        settings.setValue(f"{WIDGET_NAME}_{camera_name}/AdditionalSettings", self._ui.chk_additional_settings.isChecked())
+        settings.setValue(f"{self.WIDGET_NAME}_{camera_name}/AdditionalSettings", self._ui.chk_additional_settings.isChecked())
 
     # ----------------------------------------------------------------------
     def close(self):

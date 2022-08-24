@@ -8,12 +8,14 @@
 import numpy as np
 import pyqtgraph as pg
 
-from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5 import QtCore, QtGui
 
+from petra_camera.widgets.base_widget import BaseWidget
 from petra_camera.gui.ProjectionWidget_ui import Ui_ProjectionWidget
 
+
 # ----------------------------------------------------------------------
-class ProjectionWidget(QtWidgets.QWidget):
+class ProjectionWidget(BaseWidget):
     """
     """
     PLOT_COLOR = QtGui.QColor(80, 90, 210)
@@ -24,7 +26,7 @@ class ProjectionWidget(QtWidgets.QWidget):
     def __init__(self, parent):
         """
         """
-        super(ProjectionWidget, self).__init__(parent)         # ???? TODO
+        super(BaseWidget, self).__init__(parent)         # ???? TODO
 
             # temp? TODO
         self.parent = parent    

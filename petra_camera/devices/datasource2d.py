@@ -63,6 +63,7 @@ class DataSource2D(QtCore.QObject):
 
         self._frame_mutex = QtCore.QMutex()  # sync access to frame
         self._last_frame = np.zeros((1, 1))  # keeps last read frame
+        self._last_camera_msg = ''
 
         self.got_first_frame = False
 
@@ -276,11 +277,17 @@ class DataSource2D(QtCore.QObject):
 
                 if frame is not None:
                     self.got_first_frame = True
+                    self._frame_mutex.lock()
                     self._last_frame = frame
+                    self._frame_mutex.unlock()
                     self.new_frame.emit()
 
                     self.calculate_roi_statistics()
                     self.find_peaks()
+
+                msg = self._device_proxy.maybe_read_msg()
+                if msg:
+                    self._last_camera_msg = msg
 
                 if self._device_proxy.error_flag:
                     self.got_error.emit(str(self._device_proxy.error_msg))
@@ -323,6 +330,7 @@ class DataSource2D(QtCore.QObject):
         returns last frame after applying dark image and level mode
         :return: 2d np.array
         """
+        self._frame_mutex.lock()
         if self.subtract_dark_image and self._dark_image is not None:
             try:
                 invalid_idx = self._last_frame < self._dark_image
@@ -340,10 +348,15 @@ class DataSource2D(QtCore.QObject):
         elif self.level_mode == 'log':
             frame = np.log(np.maximum(1, frame))
 
+        self._frame_mutex.unlock()
         if np.max(frame) == 0:
             return np.ones_like(frame)
         else:
             return frame
+
+    # ----------------------------------------------------------------------
+    def get_msg(self):
+        return self._last_camera_msg
 
     # ----------------------------------------------------------------------
     # ------------------- Levels functionality ----------------------------

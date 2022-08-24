@@ -66,6 +66,7 @@ class XmlSettings(object):
                 root = root.find(node)
             else:
                 root = ET.SubElement(root, node)
+                root.tail = '\n\n\t'
 
         return root
 

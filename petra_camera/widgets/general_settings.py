@@ -1,22 +1,20 @@
 # Created by matveyev at 22.02.2022
 
 import logging
-import os
-import shutil
-from pathlib import Path
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 
+from petra_camera.utils.functions import get_save_path
 from petra_camera.main_window import APP_NAME
 from petra_camera.widgets.camera_settings import CameraSettings
 from petra_camera.gui.SettingsDialog_ui import Ui_SettingsDialog
-
-WIDGET_NAME = 'ProgramSetup'
 
 logger = logging.getLogger(APP_NAME)
 
 
 class ProgramSetup(QtWidgets.QDialog):
+
+    WIDGET_NAME = 'ProgramSetup'
 
     # ----------------------------------------------------------------------
     def __init__(self, main_window):
@@ -37,9 +35,6 @@ class ProgramSetup(QtWidgets.QDialog):
         self.btn_add_camera.clicked.connect(self._add_camera)
         self._ui.tb_cameras.setCornerWidget(self.btn_add_camera, QtCore.Qt.TopRightCorner)
         self._ui.tb_cameras.cornerWidget().setMinimumSize(self.btn_add_camera.sizeHint())
-
-        # self._ui.cmd_sav_profile.clicked.connect(self._save_settings)
-        # self._ui.cmd_load_profile.clicked.connect(self._load_settings)
 
         self._ui.cmd_save_folder.clicked.connect(self._new_save_folder)
         self._ui.cmd_reset_settings.clicked.connect(self._reset_settings)
@@ -64,7 +59,7 @@ class ProgramSetup(QtWidgets.QDialog):
         if ok == QtWidgets.QMessageBox.Ok:
             self._main_window.reset_settings()
 
-            QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(WIDGET_NAME), self.saveGeometry())
+            QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(self.WIDGET_NAME), self.saveGeometry())
 
             super(ProgramSetup, self).accept()
 
@@ -78,7 +73,7 @@ class ProgramSetup(QtWidgets.QDialog):
     # ----------------------------------------------------------------------
     def _display_settings(self):
 
-        self._ui.le_save_path.setText(self._settings.option("save_folder", "default"))
+        self._ui.le_save_path.setText(get_save_path(self._settings))
 
         self._ui.cmd_roi_frame_color.setStyleSheet("QPushButton {background-color: " +
                                                    f"{self._settings.option('roi', 'fr_color')}" + ";}")
@@ -176,7 +171,7 @@ class ProgramSetup(QtWidgets.QDialog):
     def _apply_settings(self):
         general_options = []
 
-        general_options.append(("save_folder", (("default", self._ui.le_save_path.text()),)))
+        general_options.append(("save_folder", (("path", self._ui.le_save_path.text()),)))
 
         font = self._ui.cmd_roi_label_font.font()
         general_options.append(('roi', (('font', font.family() + ',' + str(font.pointSize())),
@@ -210,13 +205,13 @@ class ProgramSetup(QtWidgets.QDialog):
 
         self._apply_settings()
 
-        QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(WIDGET_NAME), self.saveGeometry())
+        QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(self.WIDGET_NAME), self.saveGeometry())
 
         super(ProgramSetup, self).accept()
 
     # ----------------------------------------------------------------------
     def reject(self):
 
-        QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(WIDGET_NAME), self.saveGeometry())
+        QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(self.WIDGET_NAME), self.saveGeometry())
 
         super(ProgramSetup, self).reject()
