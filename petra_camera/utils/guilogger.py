@@ -10,6 +10,7 @@
 
 import logging
 
+
 # ----------------------------------------------------------------------
 class GuiLogger(logging.Handler):
 

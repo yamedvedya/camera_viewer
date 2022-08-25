@@ -16,6 +16,7 @@ import time
 
 from PyQt5 import QtCore, QtWidgets
 from distutils.util import strtobool
+from contextlib import contextmanager
 
 from petra_camera.utils.functions import get_save_path
 from petra_camera.utils.errors import report_error
@@ -49,17 +50,13 @@ class SettingsWidget(BaseWidget):
         self._ui.gb_screen_motor.setVisible(self._camera_device.has_motor())
 
         self.hist = HistogramHLUTWidget(self)
+        self._hist_mutex = QtCore.QMutex()
 
         self.hist.setBackground('w')
         self._ui.vl_levels.addWidget(self.hist, 1)
 
-        self.hist.scene().sigMouseClicked.connect(self._hist_mouse_clicked)
-        self.hist.item.sigLevelChangeFinished.connect(self.new_levels)
-        self.hist.item.sigLookupTableChanged.connect(self.new_levels)
-        self.hist.items()[-1].setMenuEnabled(False) # TODO better way
-
         # to prevent double code run
-        self._my_mutex = QtCore.QMutex()
+        self._settings_mutex = QtCore.QMutex()
 
         self._start_settings_read = threading.Event()
         self._stop_settings_reader = threading.Event()
@@ -71,7 +68,13 @@ class SettingsWidget(BaseWidget):
 
         self._load_camera_settings()
 
+        self.hist.scene().sigMouseClicked.connect(self._hist_mouse_clicked)
+        self.hist.item.sigLevelChangeFinished.connect(self.new_levels)
+        self.hist.item.sigLookupTableChanged.connect(self.new_levels)
+        self.hist.items()[-1].setMenuEnabled(False) # TODO better way
+
         # setup all signals
+
         self._ui.tbAllParams.clicked.connect(self._edit_all_params)
 
         for ui in ['exposure', 'gain', 'FPS', 'reduce']:
@@ -102,13 +105,24 @@ class SettingsWidget(BaseWidget):
         self._ui.dsb_sigmas.valueChanged.connect(lambda value: self._camera_device.save_settings('background_sigmas', value))
 
     # ----------------------------------------------------------------------
+    @contextmanager
+    def block_hist_signals(self):
+        self.hist.item.sigLevelChangeFinished.disconnect()
+        self.hist.item.sigLookupTableChanged.disconnect()
+
+        yield
+
+        self.hist.item.sigLevelChangeFinished.connect(self.new_levels)
+        self.hist.item.sigLookupTableChanged.connect(self.new_levels)
+
+    # ----------------------------------------------------------------------
     def refresh_view(self, force_read=False):
         """
         called periodically from camera window and syncs settings with Tango, etc...
         :return:
         """
 
-        with QtCore.QMutexLocker(self._my_mutex):
+        with QtCore.QMutexLocker(self._settings_mutex):
             self._block_signals(True)
 
             self._ui.chk_auto_levels.setChecked(self._camera_device.levels['auto_levels'])
@@ -140,7 +154,7 @@ class SettingsWidget(BaseWidget):
     # ----------------------------------------------------------------------
     def display_tango_settings(self):
 
-        with QtCore.QMutexLocker(self._my_mutex):
+        with QtCore.QMutexLocker(self._settings_mutex):
             self.blockSignals(True)
 
             if not self._ui.sb_exposure.hasFocus():
@@ -206,21 +220,8 @@ class SettingsWidget(BaseWidget):
         :param frame_view: picture form Frame viewer
         :return:
         """
-        self.hist.item.setImageItem(frame_view)
-
-    # ----------------------------------------------------------------------
-    def block_hist_signals(self, flag):
-        """
-
-        :param flag: bool
-        :return: None
-        """
-        if flag:
-            self.hist.item.sigLevelChangeFinished.disconnect()
-            self.hist.item.sigLookupTableChanged.disconnect()
-        else:
-            self.hist.item.sigLevelChangeFinished.connect(self.new_levels)
-            self.hist.item.sigLookupTableChanged.connect(self.new_levels)
+        with self.block_hist_signals():
+            self.hist.item.setImageItem(frame_view)
 
     # ----------------------------------------------------------------------
     def _switch_auto_levels(self, state):
@@ -243,14 +244,14 @@ class SettingsWidget(BaseWidget):
             self._ui.chk_auto_levels.setChecked(True)
 
     # ----------------------------------------------------------------------
-    def new_levels(self, lut_item):
+    def new_levels(self, lut_item, auto_levels=False):
         """
         slot for sigLookupTableChanged signal
         :param lut_item:
         :return:
         """
         lut = lut_item.saveState()
-        lut['auto_levels'] = self._ui.chk_auto_levels.isChecked()
+        lut['auto_levels'] = auto_levels
 
         self._camera_device.level_setting_change(lut)
 
@@ -271,7 +272,7 @@ class SettingsWidget(BaseWidget):
             lev[0] = float(value)
 
         self.hist.item.setLevels(lev[0], lev[1])
-        self.new_levels(self.hist.item)
+        self.new_levels(self.hist.item, self._ui.chk_auto_levels.isChecked())
 
     # ----------------------------------------------------------------------
     def _new_level_mode(self, button):
@@ -357,6 +358,10 @@ class SettingsWidget(BaseWidget):
         self._ui.sb_exposure.blockSignals(flag)
         self._ui.sb_gain.blockSignals(flag)
 
+        self._ui.chk_auto_levels.blockSignals(flag)
+        self._ui.sb_min_level.blockSignals(flag)
+        self._ui.sb_max_level.blockSignals(flag)
+
         self._ui.cmb_path.blockSignals(flag)
 
         self._ui.rb_lin_level.blockSignals(flag)
@@ -373,7 +378,7 @@ class SettingsWidget(BaseWidget):
             for layout in ['exposure', 'folder', 'FPS', 'source', 'background']:
                 getattr(self._ui, 'frame_{}'.format(layout)).setVisible(layout in self._camera_device.visible_layouts())
 
-            with QtCore.QMutexLocker(self._my_mutex):
+            with QtCore.QMutexLocker(self._settings_mutex):
 
                 self._ui.cmb_path.clear()
                 possible_folders = self._camera_device.get_settings('possible_folders', str)
@@ -393,9 +398,8 @@ class SettingsWidget(BaseWidget):
                 else:
                     self._ui.cmb_source.setEnabled(False)
 
-                self.block_hist_signals(True)
+                auto_levels = self._camera_device.levels['auto_levels']
                 self.hist.item.restoreState(self._camera_device.levels)
-                self.block_hist_signals(False)
 
             self.refresh_view(True)
 

@@ -48,6 +48,8 @@ class CameraWidget(QtWidgets.QMainWindow):
         self.camera_name = my_name
         self._parent = parent
 
+        self.hist_lock = QtCore.QMutex()
+
         self.camera_device = DataSource2D(self)
         state, msg = self.camera_device.new_device_proxy(self.camera_name, self._parent.auto_screen_action.isChecked())
         if not state:
@@ -64,15 +66,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._refresh_run_stop_timer = QtCore.QTimer(self)
         self._refresh_run_stop_timer.timeout.connect(self._refresh_run_stop)
         self._refresh_run_stop_timer.start(self.REFRESH_START_STOP_PERIOD)
-
-    # ----------------------------------------------------------------------
-    def block_hist_signals(self, flag):
-        """
-            during the picture update in Frame viewer we need to disconnect histogram signals in Setting
-        :param flag: bool
-        :return:
-        """
-        self._settings_widget.block_hist_signals(flag)
 
     # ----------------------------------------------------------------------
     def _start_stop_live_mode(self):
@@ -252,6 +245,10 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._saveImgAction.triggered.connect(self._frame_viewer.save_to_image)
         self._saveAsciiAction.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="csv"))
         self._saveNumpyAction.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="npy"))
+
+    # ----------------------------------------------------------------------
+    def block_hist_signals(self):
+        return self._settings_widget.block_hist_signals()
 
     # ----------------------------------------------------------------------
     def _add_dock(self, WidgetClass, label, *args, **kwargs):

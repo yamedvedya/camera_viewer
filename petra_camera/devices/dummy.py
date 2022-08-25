@@ -18,7 +18,7 @@ logger = logging.getLogger(APP_NAME)
 
 
 # ----------------------------------------------------------------------
-class DummyProxy(BaseCamera):
+class Dummy(BaseCamera):
     """
     """
     FRAME_W = 500
@@ -33,7 +33,7 @@ class DummyProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def __init__(self, settings):
-        super(DummyProxy, self).__init__(settings)
+        super(Dummy, self).__init__(settings)
 
         x, y = np.meshgrid(np.linspace(-4, 4, self.FRAME_H),
                            np.linspace(-4, 4, self.FRAME_W))
@@ -122,7 +122,7 @@ class DummyProxy(BaseCamera):
             elif option == 'max_height':
                 return self.FRAME_H
         else:
-            return super(DummyProxy, self).get_settings(option, cast, do_rotate, do_log)
+            return super(Dummy, self).get_settings(option, cast, do_rotate, do_log)
 
     # ----------------------------------------------------------------------
     def save_settings(self, option, value):
@@ -132,4 +132,4 @@ class DummyProxy(BaseCamera):
             logger.debug(f'{self._my_name}: setting {option}: new value {value}')
             self._fps = value
 
-        super(DummyProxy, self).save_settings(option, value)
+        super(Dummy, self).save_settings(option, value)

@@ -306,22 +306,21 @@ class FrameViewer(BaseWidget):
                 update_kwargs = {'levels': (self._camera_device.levels['levels'][0], self._camera_device.levels['levels'][1])}
 
             # we have to disconnect histogram
-            self._parent.block_hist_signals(True)
+            with QtCore.QMutexLocker(self._parent.hist_lock):
+                with self._parent.block_hist_signals():
 
-            if self._set_new_image or self._camera_device.set_new_image:
-                self._ui.image_view.setImage(self._last_frame, **set_kwargs)
-                self._ui.image_view.imageItem.setToolTip(self._last_msg)
-                self._set_new_image = False
-                self._camera_device.set_new_image = False
-                try:
-                    self._ui.image_view.autoRange()
-                except:
-                    pass
-            else:
-                self._ui.image_view.imageItem.updateImage(self._last_frame, **update_kwargs)
-                self._camera_device.image_need_repaint = False
-
-            self._parent.block_hist_signals(False)
+                    if self._set_new_image or self._camera_device.set_new_image:
+                        self._ui.image_view.setImage(self._last_frame, **set_kwargs)
+                        self._ui.image_view.imageItem.setToolTip(self._last_msg)
+                        self._set_new_image = False
+                        self._camera_device.set_new_image = False
+                        try:
+                            self._ui.image_view.autoRange()
+                        except:
+                            pass
+                    else:
+                        self._ui.image_view.imageItem.updateImage(self._last_frame, **update_kwargs)
+                        self._camera_device.image_need_repaint = False
 
             if self._camera_device.levels['auto_levels']:
                 self._camera_device.levels['levels'] = self._hist.getLevels()

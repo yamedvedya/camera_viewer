@@ -74,28 +74,31 @@ class PetraStatus(BaseCamera):
             time.sleep(1 / self._fps)
 
             if self._run_acquisition.is_set():
-                if self._mode == 'tango':
-                    data = PyTango.DeviceProxy(TANGO_SERVER).statusscreen[self._picture_size[0]:self._picture_size[2],
-                                                                          self._picture_size[1]:self._picture_size[3]]
-                    c_data = np.zeros(data.shape + (3,), dtype=np.ubyte)
-                    c_data[..., 0] = data & 255
-                    c_data[..., 1] = (data >> 8) & 255
-                    c_data[..., 2] = (data >> 16) & 255
-                    self._last_frame = c_data
-                    self._last_camera_msg = PyTango.DeviceProxy(TANGO_SERVER).laststatusmessage
-                    self._new_frame_flag = True
-                    self._new_msg_flag = True
-                    logger.debug(f"{self._my_name} new frame")
-                else:
-                    ans = requests.get(f'https://winweb.desy.de/mca/accstatus/infoscreen/petra_status_800.png?{random()}')
-                    if ans.status_code == 200:
-                        picture_stream = io.BytesIO(ans.content)
-                        picture = Image.open(picture_stream)
-                        frame = np.rot90(np.asarray(picture, dtype=np.int32), 1)[::-1, :]
-                        self._last_frame = frame[self._picture_size[0]: self._picture_size[2],
-                                                 self._picture_size[1]: self._picture_size[3]]
+                try:
+                    if self._mode == 'tango':
+                        data = PyTango.DeviceProxy(TANGO_SERVER).statusscreen[self._picture_size[0]:self._picture_size[2],
+                                                                              self._picture_size[1]:self._picture_size[3]]
+                        c_data = np.zeros(data.shape + (3,), dtype=np.ubyte)
+                        c_data[..., 0] = data & 255
+                        c_data[..., 1] = (data >> 8) & 255
+                        c_data[..., 2] = (data >> 16) & 255
+                        self._last_frame = c_data
+                        self._last_camera_msg = PyTango.DeviceProxy(TANGO_SERVER).laststatusmessage
                         self._new_frame_flag = True
+                        self._new_msg_flag = True
                         logger.debug(f"{self._my_name} new frame")
+                    else:
+                        ans = requests.get(f'https://winweb.desy.de/mca/accstatus/infoscreen/petra_status_800.png?{random()}')
+                        if ans.status_code == 200:
+                            picture_stream = io.BytesIO(ans.content)
+                            picture = Image.open(picture_stream)
+                            frame = np.rot90(np.asarray(picture, dtype=np.int32), 1)[::-1, :]
+                            self._last_frame = frame[self._picture_size[0]: self._picture_size[2],
+                                                     self._picture_size[1]: self._picture_size[3]]
+                            self._new_frame_flag = True
+                            logger.debug(f"{self._my_name} new frame")
+                except Exception as err:
+                    logger.error(f"{self._my_name}: cannot get new frame: {repr(err)}")
 
         self._generator_thread_working = False
 
