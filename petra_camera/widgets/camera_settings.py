@@ -9,6 +9,8 @@ except:
 
 from PyQt5 import QtWidgets, QtCore
 
+from petra_camera.devices.petrastatus import DEFAULT_TANGO_SERVER
+
 from petra_camera.utils.functions import refresh_combo_box
 from petra_camera.gui.CameraSettings_ui import Ui_CameraSettings
 
@@ -25,6 +27,8 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.setupUi(self)
 
         self.my_id = my_id
+
+        self._ui.cmd_default_status_source.clicked.connect(lambda: self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER))
 
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
         self._ui.cmb_motor_type.currentTextChanged.connect(self._switch_motor_type)
@@ -81,6 +85,10 @@ class CameraSettings(QtWidgets.QWidget):
             if 'status_source' in settings_node.keys():
                 if settings_node.get('status_source') == 'tango':
                     self._ui.but_status_source_tango.setChecked(True)
+                    if 'server' in settings_node.keys():
+                        self._ui.le_status_server.setText(settings_node.get('server'))
+                    else:
+                        self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER)
                 else:
                     self._ui.but_status_source_infoscreen.setChecked(True)
 
@@ -191,6 +199,7 @@ class CameraSettings(QtWidgets.QWidget):
         if camera_type == 'PetraStatus':
             if self._ui.but_status_source_tango.isChecked():
                 data_to_save.append(('status_source', 'tango'))
+                data_to_save.append(('server', self._ui.le_status_server.text()))
             else:
                 data_to_save.append(('status_source', 'infoscreen'))
 

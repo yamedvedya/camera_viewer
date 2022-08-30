@@ -376,16 +376,6 @@
       <string>Status screen source</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_3">
-      <item row="0" column="1">
-       <widget class="QRadioButton" name="but_status_source_infoscreen">
-        <property name="text">
-         <string>800x600 infoscreen (refresh ~90 sec) </string>
-        </property>
-        <attribute name="buttonGroup">
-         <string notr="true">bg_status_source</string>
-        </attribute>
-       </widget>
-      </item>
       <item row="0" column="0">
        <widget class="QRadioButton" name="but_status_source_tango">
         <property name="text">
@@ -397,6 +387,26 @@
         <attribute name="buttonGroup">
          <string notr="true">bg_status_source</string>
         </attribute>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QRadioButton" name="but_status_source_infoscreen">
+        <property name="text">
+         <string>800x600 infoscreen (refresh ~90 sec) </string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">bg_status_source</string>
+        </attribute>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="le_status_server"/>
+      </item>
+      <item row="0" column="2">
+       <widget class="QPushButton" name="cmd_default_status_source">
+        <property name="text">
+         <string>Set to default</string>
+        </property>
        </widget>
       </item>
      </layout>
