@@ -21,7 +21,7 @@ from petra_camera.main_window import APP_NAME
 
 logger = logging.getLogger(APP_NAME)
 
-DEFAULT_TANGO_SERVER = 'hasep23swt01:10000/pxx/petrastatusscreen/all'
+DEFAULT_TANGO_SERVER = 'haso102m:10000/pxx/petrastatusscreen/all'
 
 
 # ----------------------------------------------------------------------
