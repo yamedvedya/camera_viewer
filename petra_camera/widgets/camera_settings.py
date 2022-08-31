@@ -15,18 +15,22 @@ from petra_camera.utils.functions import refresh_combo_box
 from petra_camera.gui.CameraSettings_ui import Ui_CameraSettings
 
 
+# ----------------------------------------------------------------------
 class CameraSettings(QtWidgets.QWidget):
 
     delete_me = QtCore.pyqtSignal(int)
     new_name = QtCore.pyqtSignal(int, str)
 
+    # ----------------------------------------------------------------------
     def __init__(self, parent, my_id, settings_node=None):
 
         super(CameraSettings, self).__init__()
         self._ui = Ui_CameraSettings()
         self._ui.setupUi(self)
 
+        self.parent = parent
         self.my_id = my_id
+        self.my_name = 'New camera'
 
         self._ui.cmd_default_status_source.clicked.connect(lambda: self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER))
 
@@ -50,7 +54,7 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.chk_roi_server.stateChanged.connect(self._enable_roi_device)
 
         if settings_node is not None:
-            self._ui.le_name.setText(settings_node.get('name'))
+            self.my_name = settings_node.get('name')
 
             if 'enabled' in settings_node.keys():
                 self._ui.chk_enabled.setChecked(strtobool(settings_node.get('enabled')))
@@ -120,7 +124,7 @@ class CameraSettings(QtWidgets.QWidget):
             if 'color' in settings_node.keys():
                 self._ui.chk_color.setChecked(strtobool(settings_node.get('color')))
 
-            pass
+        self._ui.le_name.setText(self.my_name)
 
     # ----------------------------------------------------------------------
     def _switch_camera_type(self, mode):
@@ -226,4 +230,12 @@ class CameraSettings(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def _new_name(self):
-        self.new_name.emit(self.my_id, self._ui.le_name.text())
+        self._ui.le_name.blockSignals(True)
+
+        new_name = self.parent.name_accepted(self.my_id, self._ui.le_name.text())
+        if new_name is not None:
+            self.my_name = new_name
+
+        self._ui.le_name.setText(self.my_name)
+        self._ui.le_name.blockSignals(False)
+        self.new_name.emit(self.my_id, self.my_name)

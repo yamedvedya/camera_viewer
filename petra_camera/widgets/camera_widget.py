@@ -39,12 +39,12 @@ class CameraWidget(QtWidgets.QMainWindow):
     REFRESH_START_STOP_PERIOD = 500 # how often we update settings with Tango
 
     # ----------------------------------------------------------------------
-    def __init__(self, parent, settings, my_name):
+    def __init__(self, parent, my_name):
         """
         """
         super(CameraWidget, self).__init__(parent)
 
-        self.settings = settings
+        self.settings = parent.settings
         self.camera_name = my_name
         self._parent = parent
 

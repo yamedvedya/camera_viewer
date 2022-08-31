@@ -131,6 +131,20 @@ class ProgramSetup(QtWidgets.QDialog):
         self._last_camera_id += 1
 
     # ----------------------------------------------------------------------
+    def name_accepted(self, camera_id, new_name):
+        existing_names = []
+        for ind in range(self._ui.tb_cameras.count()):
+            if self._ui.tb_cameras.widget(ind).my_id != camera_id:
+                existing_names.append(self._ui.tb_cameras.widget(ind).my_name)
+
+        while new_name in existing_names:
+            new_name, accepted = QtWidgets.QInputDialog.getText(self, 'Enter an unique name!', 'Name: ')
+            if not accepted:
+                return None
+
+        return new_name
+
+    # ----------------------------------------------------------------------
     def _delete_camera(self, id_to_delete):
         tab_to_delete = None
         for ind in range(self._ui.tb_cameras.count()):
@@ -141,10 +155,10 @@ class ProgramSetup(QtWidgets.QDialog):
             self._ui.tb_cameras.removeTab(tab_to_delete)
 
     # ----------------------------------------------------------------------
-    def _new_name(self, id, new_name):
+    def _new_name(self, camera_id, new_name):
         tab_to_rename = None
         for ind in range(self._ui.tb_cameras.count()):
-            if self._ui.tb_cameras.widget(ind).my_id == id:
+            if self._ui.tb_cameras.widget(ind).my_id == camera_id:
                 tab_to_rename = ind
 
         if tab_to_rename is not None:

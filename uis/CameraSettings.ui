@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>842</width>
-    <height>612</height>
+    <height>617</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -53,6 +53,9 @@
        </property>
        <property name="whatsThis">
         <string/>
+       </property>
+       <property name="text">
+        <string>New camera</string>
        </property>
       </widget>
      </item>

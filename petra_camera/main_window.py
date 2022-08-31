@@ -4,6 +4,8 @@
 
 """
 """
+import time
+
 APP_NAME = "2DCameraViewer"
 
 import getpass
@@ -24,7 +26,7 @@ from petra_camera.widgets.general_settings import ProgramSetup
 from petra_camera.widgets.camera_widget import CameraWidget
 from petra_camera.utils.xmlsettings import XmlSettings
 from petra_camera.widgets.import_cameras import ImportCameras
-
+from petra_camera.widgets.batch_progress import BatchProgress
 from petra_camera.roisrv.roiserver import RoiServer
 
 from petra_camera.gui.MainWindow_ui import Ui_MainWindow
@@ -39,6 +41,9 @@ class PETRACamera(QtWidgets.QMainWindow):
     LOG_PREVIEW = "gvim"
     STATUS_TICK = 2000              # [ms]
 
+    camera_done = QtCore.pyqtSignal(str)
+    camera_closed = QtCore.pyqtSignal(str)
+
     # ----------------------------------------------------------------------
     def __init__(self, options):
         """
@@ -49,6 +54,12 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self._init_menu()
 
+        self.loader_progress = BatchProgress()
+        self.loader_progress.stop_batch.connect(self.interrupt_batch)
+
+        self.loader = None
+        self.close_requested = False
+
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
         pg.setConfigOption("leftButtonPan", False)
@@ -56,7 +67,34 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.options = options
         self.settings = self.get_settings(options)
 
-        self._init_viewer()
+        self.setCentralWidget(None)
+
+        self.setDockOptions(QtWidgets.QMainWindow.AnimatedDocks |
+                            QtWidgets.QMainWindow.AllowNestedDocks |
+                            QtWidgets.QMainWindow.AllowTabbedDocks)
+
+        self.setTabPosition(QtCore.Qt.LeftDockWidgetArea, QtWidgets.QTabWidget.North)
+
+        self.camera_widgets = {}
+        self.camera_docks = {}
+
+        self.camera_list = self.get_cameras()
+
+        logger.debug(f"Start loader for cameras: {self.camera_list}")
+
+        # first we reset progress bar
+        self.loader_progress.clear()
+        self.loader_progress.set_mode('Open cameras')
+        self.loader_progress.show()
+
+        self.loader = CameraLoader(self, 'open')
+        self.camera_done.connect(self.loader.camera_done)
+        self.loader.add_camera.connect(self.add_camera)
+        self.loader.done.connect(self.loader_done)
+        self.loader.start()
+
+        self._roi_server = None
+        self.start_server()
 
         self.setWindowTitle("Camera Viewer ({}@{})".format(getpass.getuser(), socket.gethostname()))
 
@@ -70,25 +108,174 @@ class PETRACamera(QtWidgets.QMainWindow):
         logger.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
-    def _init_viewer(self):
+    def interrupt_batch(self):
+        self.loader.interrupt_batch()
 
-        self._device_list = self._get_cameras()
-        self._camera_widgets = []
-        self._camera_docks = []
-        self._add_cameras()
+    # ----------------------------------------------------------------------
+    def loader_done(self):
+        self.loader_progress.hide()
 
-        self._roi_server = []
+        if self.close_requested:
+            logger.info("Closed properly")
+            QtWidgets.qApp.quit()
+
+        self.camera_list = self.get_cameras()
+
+    # ----------------------------------------------------------------------
+    def add_camera(self, camera_name, progress):
+        """
+        """
+
+        self.loader_progress.set_progress(f'Open camera {camera_name}', progress)
+
+        try:
+            widget = CameraWidget(self, camera_name)
+
+            dock = QtWidgets.QDockWidget(camera_name)
+            dock.setObjectName(f'{"".join(camera_name.split())}Dock')
+            dock.setWidget(widget)
+
+            children = [child for child in self.findChildren(QtWidgets.QDockWidget)
+                        if isinstance(child.widget(), CameraWidget)]
+            if children:
+                self.tabifyDockWidget(children[-1], dock)
+            else:
+                self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+
+            self.menu_cameras.addAction(dock.toggleViewAction())
+
+            widget.load_ui_settings()
+            dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
+
+            self.camera_widgets[camera_name] = widget
+            self.camera_docks[camera_name] = dock
+
+        except Exception as err:
+            open_mgs = QtWidgets.QMessageBox()
+            open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
+            open_mgs.setWindowTitle(f"Error")
+            open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
+            open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
+            open_mgs.exec_()
+
+        self.camera_done.emit(camera_name)
+
+    # ----------------------------------------------------------------------
+    def start_server(self):
+
         if self.settings.has_node('roi_server') and self.settings.option("roi_server", "enable").lower() == "true":
             try:
                 self._roi_server = RoiServer(self.settings.option("roi_server", "host"),
                                              self.settings.option("roi_server", "port"),
-                                             self._device_list)
+                                             self.camera_list)
                 self._roi_server.start()
             except Exception as err:
                 logger.exception(err)
 
     # ----------------------------------------------------------------------
+    def _show_about(self):
+        """
+        """
+        AboutDialog(self).exec_()
+
+    # ----------------------------------------------------------------------
+    def show_settings(self):
+
+        if ProgramSetup(self).exec_():
+            logger.info("Reloading all cameras...")
+
+            self.loader_progress.clear()
+            self.loader_progress.set_mode('Reloading cameras')
+            self.loader_progress.show()
+
+            self.loader = CameraLoader(self, 'reload')
+            self.camera_done.connect(self.loader.camera_done)
+            self.loader.add_camera.connect(self.add_camera)
+            self.loader.close_camera.connect(self.close_camera)
+            self.loader.reload_camera.connect(self.reload_camera)
+            self.loader.done.connect(self.loader_done)
+            self.loader.start()
+
+    # ----------------------------------------------------------------------
+    def reload_camera(self, camera_name, progress):
+
+        self.loader_progress.set_progress(f'Reloading camera {camera_name}', progress)
+
+        try:
+            self.camera_widgets[camera_name].clean_close()
+            widget = CameraWidget(self, camera_name)
+            self.camera_docks[camera_name].setWidget(widget)
+            widget.load_ui_settings()
+            self.camera_widgets[camera_name] = widget
+
+        except Exception as err:
+            open_mgs = QtWidgets.QMessageBox()
+            open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
+            open_mgs.setWindowTitle(f"Error")
+            open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
+            open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
+            open_mgs.exec_()
+
+        self.camera_done.emit(camera_name)
+
+    # ----------------------------------------------------------------------
+    def close_camera(self, camera_name, progress):
+
+        self.loader_progress.set_progress(f'Closing camera {camera_name}', progress)
+
+        self.camera_widgets[camera_name].clean_close()
+        self.removeDockWidget(self.camera_docks[camera_name])
+        del self.camera_widgets[camera_name]
+        del self.camera_docks[camera_name]
+
+        self.camera_done.emit(camera_name)
+
+    # ----------------------------------------------------------------------
+    def clean_close(self):
+        """
+        """
+        logger.info("Closing the app...")
+
+        if self._roi_server is not None:
+            logger.info("Stopping ROI server...")
+            self._roi_server.stop()
+
+        if hasattr(self, '_status_timer'):
+            self._status_timer.stop()
+
+        self._save_ui_settings()
+
+        QtWidgets.qApp.clipboard().clear()
+
+        self.loader_progress.clear()
+        self.loader_progress.set_mode('Closing cameras')
+        self.loader_progress.show()
+
+        self.close_requested = True
+
+        self.loader = CameraLoader(self, 'close')
+        self.camera_done.connect(self.loader.camera_done)
+        self.loader.close_camera.connect(self.close_camera)
+        self.loader.done.connect(self.loader_done)
+        self.loader.start()
+
+    # ----------------------------------------------------------------------
+    def closeEvent(self, event):
+        """
+        """
+        event.ignore()
+        self.clean_close()
+
+    # ----------------------------------------------------------------------
+    def _quit_program(self):
+        """
+        """
+        self.clean_close()
+            # pass
+
+    # ----------------------------------------------------------------------
     def reset_settings(self):
+
         home = os.path.join(str(Path.home()), '.petra_camera')
         shutil.copy(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.xml'),
                     os.path.join(home, 'default.xml'))
@@ -136,7 +323,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         return cam_list
 
     # ----------------------------------------------------------------------
-    def _get_cameras(self):
+    def get_cameras(self):
 
         cam_list = self._get_cameras_list()
 
@@ -146,123 +333,6 @@ class PETRACamera(QtWidgets.QMainWindow):
             cam_list = self._get_cameras_list()
 
         return cam_list
-
-    # ----------------------------------------------------------------------
-    def _add_cameras(self):
-        """
-        Here we making cameras widgets and docking them
-        :return:
-        """
-        self.setCentralWidget(None)
-
-        self.setDockOptions(QtWidgets.QMainWindow.AnimatedDocks |
-                            QtWidgets.QMainWindow.AllowNestedDocks |
-                            QtWidgets.QMainWindow.AllowTabbedDocks)
-
-        self.setTabPosition(QtCore.Qt.LeftDockWidgetArea, QtWidgets.QTabWidget.North)
-
-        for camera in self._device_list:
-            try:
-                widget, dock = self.add_dock(CameraWidget, f"{camera}", self, self.settings, camera)
-                widget.load_ui_settings()
-                dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
-                self._camera_widgets.append(widget)
-                self._camera_docks.append(dock)
-
-            except Exception as err:
-                open_mgs = QtWidgets.QMessageBox()
-                open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
-                open_mgs.setWindowTitle(f"Error")
-                open_mgs.setText(f"Cannot add {camera}:\n{err}")
-                open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
-                open_mgs.exec_()
-
-    # ----------------------------------------------------------------------
-    def add_dock(self, WidgetClass, label, *args, **kwargs):
-        """
-        """
-        widget = WidgetClass(*args, **kwargs)
-
-        dock = QtWidgets.QDockWidget(label)
-        dock.setObjectName("{0}Dock".format("".join(label.split())))
-        dock.setWidget(widget)
-
-        children = [child for child in self.findChildren(QtWidgets.QDockWidget)
-                    if isinstance(child.widget(), CameraWidget)]
-        if children:
-            self.tabifyDockWidget(children[-1], dock)
-        else:
-            self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
-
-        self.menu_cameras.addAction(dock.toggleViewAction())
-
-        return widget, dock
-
-    # ----------------------------------------------------------------------
-    def _show_about(self):
-        """
-        """
-        AboutDialog(self).exec_()
-
-    # ----------------------------------------------------------------------
-    def _show_settings(self):
-
-        if ProgramSetup(self).exec_():
-            logger.info("Closing all cameras...")
-
-            self.stop_cameras()
-
-            for widget, dock in zip(self._camera_widgets, self._camera_docks):
-                self.removeDockWidget(dock)
-                del widget
-                del dock
-
-            self._init_viewer()
-
-    # ----------------------------------------------------------------------
-    def closeEvent(self, event):
-        """
-        """
-        if self.clean_close():
-            event.accept()
-        else:
-            event.ignore()
-
-    # ----------------------------------------------------------------------
-    def stop_cameras(self):
-
-        for widget in self._camera_widgets:
-            widget.clean_close()
-
-        if hasattr(self, '_roi_server') and self._roi_server:
-            logger.info("Stopping ROI server...")
-            self._roi_server.stop()
-
-    # ----------------------------------------------------------------------
-    def clean_close(self):
-        """
-        """
-        logger.info("Closing the app...")
-
-        self.stop_cameras()
-
-        if hasattr(self, '_status_timer'):
-            self._status_timer.stop()
-
-        self._save_ui_settings()
-
-        QtWidgets.qApp.clipboard().clear()
-        logger.info("Closed properly")
-
-        return True
-
-    # ----------------------------------------------------------------------
-    def _quit_program(self):
-        """
-        """
-        if self.clean_close():
-            QtWidgets.qApp.quit()
-            # pass
 
     # ----------------------------------------------------------------------
     def _save_ui_settings(self):
@@ -319,7 +389,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.menuBar().addMenu(self.menu_cameras)
 
         settings = QtWidgets.QAction('Program settings', self)
-        settings.triggered.connect(self._show_settings)
+        settings.triggered.connect(self.show_settings)
         self.menuBar().addAction(settings)
 
         self.auto_screen_action = QtWidgets.QAction('', self)
@@ -369,3 +439,85 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self._lb_resources_status.setText("| {:.2f}MB | CPU {} % |".format(mem,
                                                                            cpu))
+
+
+# ----------------------------------------------------------------------
+class CameraLoader(QtCore.QThread):
+    """
+    separate QThread, that loads cameras
+    """
+
+    add_camera = QtCore.pyqtSignal(str, float)
+    close_camera = QtCore.pyqtSignal(str, float)
+    reload_camera = QtCore.pyqtSignal(str, float)
+    done = QtCore.pyqtSignal()
+
+    #----------------------------------------------------------------------
+    def __init__(self, main_window, mode):
+        super(CameraLoader, self).__init__()
+
+        self.main_window = main_window
+        self.mode = mode
+        if mode == 'reload':
+            self.new_camera_list = main_window.get_cameras()
+
+        self.done_cameras = []
+        self._stop_batch = False
+
+    # ----------------------------------------------------------------------
+    def wait_till_camera_done(self, camera_name):
+        while camera_name not in self.done_cameras:
+            if self._stop_batch:
+                break
+            self.msleep(100)
+
+    # ----------------------------------------------------------------------
+    def interrupt_load(self):
+        self._stop_batch = True
+
+    # ----------------------------------------------------------------------
+    def run(self):
+
+        if self.mode in ['open', 'close']:
+            total_cameras = float(len(self.main_window.camera_list))
+            if self.mode == 'open':
+                signal = self.add_camera
+            else:
+                signal = self.close_camera
+
+            for ind, camera_name in enumerate(self.main_window.camera_list):
+                signal.emit(camera_name, ind/total_cameras)
+                self.wait_till_camera_done(camera_name)
+                if self._stop_batch:
+                    break
+
+        else:
+            total_cameras = float(max(len(self.main_window.camera_list), len(self.new_camera_list)))
+            counter = 0
+
+            for camera_name in self.main_window.camera_list:
+                if camera_name in self.new_camera_list:
+                    self.reload_camera.emit(camera_name, counter/total_cameras)
+                else:
+                    self.close_camera.emit(camera_name, counter/total_cameras)
+
+                self.wait_till_camera_done(camera_name)
+                if self._stop_batch:
+                    break
+
+                counter += 1
+
+            if not self._stop_batch:
+                for camera_name in self.new_camera_list:
+                    if camera_name not in self.main_window.camera_list:
+                        self.add_camera.emit(camera_name, counter/total_cameras)
+                        self.wait_till_camera_done(camera_name)
+                        if self._stop_batch:
+                            break
+                        counter += 1
+
+        self.done.emit()
+
+    # ----------------------------------------------------------------------
+    def camera_done(self, camera_name):
+        self.done_cameras.append(camera_name)
