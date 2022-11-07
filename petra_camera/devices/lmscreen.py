@@ -10,20 +10,16 @@ import numpy as np
 import time
 import logging
 from threading import Thread
-try:
-    import PyTango
-except ImportError:
-    pass
+import PyTango
 
 from petra_camera.devices.base_camera import BaseCamera
-from petra_camera.main_window import APP_NAME
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 _base_settings_map = {
     "exposure": ("device_proxy", "ExposureTime"),
     "gain": ("device_proxy", "Gain"),
-    'max_level_limit': (None,),
     "background": ("device_proxy", "SubtractBackground"),
     "background_sigmas": ("device_proxy", "BackgroundSigmas"),
 }

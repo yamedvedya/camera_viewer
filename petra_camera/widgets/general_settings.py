@@ -5,10 +5,10 @@ import logging
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 from petra_camera.utils.functions import get_save_path
-from petra_camera.main_window import APP_NAME
 from petra_camera.widgets.camera_settings import CameraSettings
 from petra_camera.gui.SettingsDialog_ui import Ui_SettingsDialog
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 

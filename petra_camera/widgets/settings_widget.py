@@ -6,10 +6,7 @@
 """
 import threading
 
-try:
-    import PyTango
-except ImportError:
-    pass
+import PyTango
 import subprocess
 import logging
 import time
@@ -21,12 +18,12 @@ from contextlib import contextmanager
 from petra_camera.utils.functions import get_save_path
 from petra_camera.utils.errors import report_error
 from petra_camera.widgets.base_widget import BaseWidget
-from petra_camera.main_window import APP_NAME
 from petra_camera.gui.SettingsWidget_ui import Ui_SettingsWidget
 from petra_camera.external.histogramWidget import HistogramHLUTWidget
 
 from petra_camera.utils.functions import refresh_combo_box
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 
@@ -398,7 +395,9 @@ class SettingsWidget(BaseWidget):
                 else:
                     self._ui.cmb_source.setEnabled(False)
 
-                auto_levels = self._camera_device.levels['auto_levels']
+                self._ui.sb_max_level.setMaximum(self._camera_device.get_settings('max_level_limit', int))
+                self._ui.sb_min_level.setMaximum(self._camera_device.get_settings('max_level_limit', int))
+
                 self.hist.item.restoreState(self._camera_device.levels)
 
             self.refresh_view(True)

@@ -8,10 +8,10 @@ from petra_camera.utils.functions import refresh_combo_box
 from petra_camera.widgets.base_widget import BaseWidget
 from petra_camera.widgets.marker import Marker
 from petra_camera.widgets.roi_widget import ROI
-from petra_camera.main_window import APP_NAME
 
 from petra_camera.gui.MarkersROIs_ui import Ui_MarkersROIs
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 

@@ -14,8 +14,7 @@ except:
 from PyQt5 import QtWidgets
 
 from petra_camera.gui.ImportCameras_ui import Ui_ImportCameras
-
-TYPES_TO_SEARCH = ['LMScreen', 'TangoVimba', 'AXISCamera']
+from petra_camera.constants import CAMERAS_SETTINGS
 
 
 # ----------------------------------------------------------------------
@@ -28,24 +27,21 @@ class ImportCameras(QtWidgets.QDialog):
 
         self._settings = settings
 
-        self._ui.verticalLayout.insertWidget(0, QtWidgets.QLabel("Petra status:", self))
-        check_box = QtWidgets.QCheckBox('Status screen', self)
-        check_box.setChecked(True)
-        self._ui.verticalLayout.insertWidget(1, check_box)
-        self._boxes = {'PetraStatus': check_box}
-
-        counter = 2
         host = PyTango.Database().get_db_host().split('.')[0]
-        for camera_type in TYPES_TO_SEARCH:
-            self._ui.verticalLayout.insertWidget(counter, QtWidgets.QLabel(camera_type + ":", self))
-            counter += 1
-            self._boxes[camera_type] = []
-            for device in getDeviceNamesByClass(camera_type, host):
-                check_box = QtWidgets.QCheckBox(device, self)
+        for camera_name, camera_properties in CAMERAS_SETTINGS.items():
+            self._ui.verticalLayout.addWidget(QtWidgets.QLabel(camera_name + ":", self))
+            self._boxes[camera_name] = []
+            if camera_properties['tango_server'] is not None:
+                for device in getDeviceNamesByClass(camera_properties['tango_server'], host):
+                    check_box = QtWidgets.QCheckBox(device, self)
+                    check_box.setChecked(True)
+                    self._ui.verticalLayout.addWidget(check_box)
+                    self._boxes[camera_name].append(check_box)
+            else:
+                check_box = QtWidgets.QCheckBox(camera_name, self)
                 check_box.setChecked(True)
-                self._ui.verticalLayout.insertWidget(counter, check_box)
-                counter += 1
-                self._boxes[camera_type].append(check_box)
+                self._ui.verticalLayout.addWidget(check_box)
+                self._boxes[camera_name].append(check_box)
 
     # ----------------------------------------------------------------------
     def accept(self) -> None:

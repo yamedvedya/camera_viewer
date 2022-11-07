@@ -19,7 +19,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 
 from petra_camera.utils.errors import report_error
 
-from petra_camera.main_window import APP_NAME
+from petra_camera.constants import APP_NAME
 from petra_camera.widgets.frame_viewer import FrameViewer
 from petra_camera.widgets.settings_widget import SettingsWidget
 from petra_camera.widgets.marker_roi import MarkersROIsWidget

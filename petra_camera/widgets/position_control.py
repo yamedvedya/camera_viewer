@@ -6,10 +6,6 @@
 """
 import threading
 
-try:
-    import PyTango
-except ImportError:
-    pass
 from contextlib import contextmanager
 import logging
 
@@ -17,9 +13,9 @@ import logging
 from PyQt5 import QtCore
 
 from petra_camera.widgets.base_widget import BaseWidget
-from petra_camera.main_window import APP_NAME
 from petra_camera.gui.PositionControl_ui import Ui_PositionControl
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 REFRESH_PERIOD = 1

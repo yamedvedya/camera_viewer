@@ -12,8 +12,8 @@ import logging
 from threading import Thread
 
 from petra_camera.devices.base_camera import BaseCamera
-from petra_camera.main_window import APP_NAME
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 

@@ -15,21 +15,19 @@ import os.path as ospath
 
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
-from petra_camera.main_window import APP_NAME
 
 from PIL import Image
 
 from petra_camera.devices.base_camera import BaseCamera
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 
 # ----------------------------------------------------------------------
 class LambdaProxy(BaseCamera):
 
-    _settings_map = {
-                     'max_level_limit': (None, ),
-                     'max_width': ('self', 'MAX_W'),
+    _settings_map = {'max_width': ('self', 'MAX_W'),
                      'max_height': ('self', 'MAX_H')}
 
     visible_layouts = ('folder', 'source')

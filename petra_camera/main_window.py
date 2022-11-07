@@ -4,9 +4,6 @@
 
 """
 """
-import time
-
-APP_NAME = "2DCameraViewer"
 
 import getpass
 import shutil
@@ -31,6 +28,7 @@ from petra_camera.roisrv.roiserver import RoiServer
 
 from petra_camera.gui.MainWindow_ui import Ui_MainWindow
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 

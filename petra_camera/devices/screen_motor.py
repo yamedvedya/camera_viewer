@@ -15,10 +15,9 @@ import threading
 from io import StringIO
 from queue import Queue, Empty
 
-from petra_camera.main_window import APP_NAME
-
 REFRESH_PERIOD = 1
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 

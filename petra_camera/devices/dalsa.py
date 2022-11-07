@@ -19,16 +19,14 @@ import os.path as ospath
 from PIL import Image
 
 from petra_camera.devices.base_camera import BaseCamera
-from petra_camera.main_window import APP_NAME
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 # ----------------------------------------------------------------------
 class DalsaProxy(BaseCamera):
 
-    _settings_map = {
-                     'max_level_limit': (None, )
-                     }
+    _settings_map = {}
 
     visible_layouts = ('folder', 'source')
 

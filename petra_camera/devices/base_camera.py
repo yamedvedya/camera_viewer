@@ -16,8 +16,7 @@ from distutils.util import strtobool
 
 from petra_camera.devices.screen_motor import MotorExecutor
 
-from petra_camera.main_window import APP_NAME
-
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 
@@ -257,6 +256,11 @@ class BaseCamera(object):
         :return: None, of False (if cast == bool), '' (is cast == str) if there is no such settings,
                  or cast(requested setting)
         """
+
+        if option == 'max_level_limit':
+
+            logger.debug(f'{self._my_name}: setting {cast.__name__}({option}) requested')
+            return 256
 
         _start_time = time.time()
 

@@ -8,18 +8,14 @@
 import time
 import numpy as np
 import logging
-
-try:
-    import PyTango
-except ImportError:
-    pass
+import PyTango
 
 from threading import Thread
 from distutils.util import strtobool
 
 from petra_camera.devices.base_camera import BaseCamera
-from petra_camera.main_window import APP_NAME
 
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 _base_settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),

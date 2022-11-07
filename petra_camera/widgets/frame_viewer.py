@@ -21,9 +21,8 @@ from petra_camera.utils.functions import get_save_path
 from petra_camera.widgets.base_widget import BaseWidget
 from petra_camera.gui.FrameViewer_ui import Ui_FrameViewer
 from petra_camera.utils.gui_elements import ImageMarker, PeakMarker, LineSegmentItem
-from petra_camera.main_window import APP_NAME
 
-
+from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 
