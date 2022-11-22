@@ -6,10 +6,7 @@
 """
 
 import PyTango
-try:
-    from HasyUtils import getDeviceNamesByClass
-except:
-    from petra_camera.utils.tango_utils import getDeviceNamesByClass
+from petra_camera.utils.tango_utils import TangoDBsInfo
 
 from PyQt5 import QtWidgets
 
@@ -27,12 +24,15 @@ class ImportCameras(QtWidgets.QDialog):
 
         self._settings = settings
 
+        self._boxes = {}
+
+        tango_db = TangoDBsInfo()
         host = PyTango.Database().get_db_host().split('.')[0]
         for camera_name, camera_properties in CAMERAS_SETTINGS.items():
             self._ui.verticalLayout.addWidget(QtWidgets.QLabel(camera_name + ":", self))
             self._boxes[camera_name] = []
             if camera_properties['tango_server'] is not None:
-                for device in getDeviceNamesByClass(camera_properties['tango_server'], host):
+                for device in tango_db.getDeviceNamesByClass(camera_properties['tango_server'], host):
                     check_box = QtWidgets.QCheckBox(device, self)
                     check_box.setChecked(True)
                     self._ui.verticalLayout.addWidget(check_box)
@@ -57,7 +57,7 @@ class ImportCameras(QtWidgets.QDialog):
                                              ('proxy', camera_type),
                                              ('tango_server', host + box.text())))
 
-        self._settings.set_options([], cameras_settings)
+        self._settings.save_new_options([], cameras_settings)
         
         super(ImportCameras, self).accept()
 

@@ -6,7 +6,9 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 
 from petra_camera.utils.functions import get_save_path
 from petra_camera.widgets.camera_settings import CameraSettings
+from petra_camera.widgets.batch_progress import BatchProgress
 from petra_camera.gui.SettingsDialog_ui import Ui_SettingsDialog
+from petra_camera.utils.tango_utils import TangoDBsInfo
 
 from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
@@ -15,6 +17,8 @@ logger = logging.getLogger(APP_NAME)
 class ProgramSetup(QtWidgets.QDialog):
 
     WIDGET_NAME = 'ProgramSetup'
+
+    camera_done = QtCore.pyqtSignal(int)
 
     # ----------------------------------------------------------------------
     def __init__(self, main_window):
@@ -29,6 +33,12 @@ class ProgramSetup(QtWidgets.QDialog):
         self._last_camera_id = 0
 
         self._settings = main_window.settings
+
+        self.tango_dbs_info = TangoDBsInfo()
+
+        self.cameras_to_reload = []
+        self.cameras_to_close = []
+        self.cameras_to_add = []
 
         self.btn_add_camera = QtWidgets.QToolButton(self)
         self.btn_add_camera.setText('Add camera') #.setIcon(QtGui.QIcon(":/icons/plus_small.png"))
@@ -114,12 +124,42 @@ class ProgramSetup(QtWidgets.QDialog):
         self._ui.dsb_cross_size.setValue(float(self._settings.option("center_search", "cross")))
         self._ui.dsb_circle_size.setValue(float(self._settings.option("center_search", "circle")))
 
-        for ind, device in enumerate(self._settings.get_nodes('camera')):
-            widget = CameraSettings(self, ind, device)
-            widget.delete_me.connect(self._delete_camera)
-            widget.new_name.connect(self._new_name)
-            self._ui.tb_cameras.addTab(widget, device.get('name'))
-            self._last_camera_id += 1
+        self.cameras_settings = self._settings.get_nodes('camera')
+
+        self.loader_progress = BatchProgress()
+        self.loader_progress.stop_batch.connect(self.interrupt_batch)
+        self.loader_progress.show()
+
+        self.loader = CameraLoader(self)
+        self.camera_done.connect(self.loader.camera_done)
+        self.loader.show_camera.connect(self.show_camera)
+        self.loader.done.connect(self.loader_done)
+        self.loader.start()
+
+        # for ind, device in enumerate():
+
+    # ----------------------------------------------------------------------
+    def interrupt_batch(self):
+        self.loader.interrupt_batch()
+
+    # ----------------------------------------------------------------------
+    def loader_done(self):
+        self.loader_progress.hide()
+
+    # ----------------------------------------------------------------------
+    def show_camera(self, ind, progress):
+
+        camera_settings = self.cameras_settings[ind]
+        camera_name = camera_settings.get('name')
+        self.loader_progress.set_progress(f'Load settings for camera {camera_name}', progress)
+
+        widget = CameraSettings(self, ind, camera_settings)
+        widget.delete_me.connect(self._delete_camera)
+        widget.new_name.connect(self._new_name)
+        self._ui.tb_cameras.addTab(widget, camera_name)
+        self._last_camera_id += 1
+
+        self.camera_done.emit(ind)
 
     # ----------------------------------------------------------------------
     def _add_camera(self):
@@ -210,9 +250,15 @@ class ProgramSetup(QtWidgets.QDialog):
 
         cameras_settings = []
         for ind in range(self._ui.tb_cameras.count()):
-            cameras_settings.append(self._ui.tb_cameras.widget(ind).get_data())
+            settings, name_changed, need_to_reload = self._ui.tb_cameras.widget(ind).get_data()
+            cameras_settings.append(settings)
+            if name_changed:
+                self.cameras_to_close.append(self._ui.tb_cameras.widget(ind).get_original_name())
+                self.cameras_to_add.append(self._ui.tb_cameras.widget(ind).get_name())
+            elif need_to_reload:
+                self.cameras_to_reload.append(self._ui.tb_cameras.widget(ind).get_name())
 
-        self._settings.set_options(general_options, cameras_settings)
+        self._settings.save_new_options(general_options, cameras_settings)
 
     # ----------------------------------------------------------------------
     def accept(self):
@@ -229,3 +275,48 @@ class ProgramSetup(QtWidgets.QDialog):
         QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(self.WIDGET_NAME), self.saveGeometry())
 
         super(ProgramSetup, self).reject()
+
+# ----------------------------------------------------------------------
+class CameraLoader(QtCore.QThread):
+    """
+    separate QThread, that loads cameras
+    """
+
+    show_camera = QtCore.pyqtSignal(int, float)
+    done = QtCore.pyqtSignal()
+
+    #----------------------------------------------------------------------
+    def __init__(self, main_window):
+        super(CameraLoader, self).__init__()
+
+        self.main_window = main_window
+
+        self.done_cameras = []
+        self._stop_batch = False
+
+    # ----------------------------------------------------------------------
+    def wait_till_camera_done(self, camera_name):
+        while camera_name not in self.done_cameras:
+            if self._stop_batch:
+                break
+            self.msleep(100)
+
+    # ----------------------------------------------------------------------
+    def interrupt_load(self):
+        self._stop_batch = True
+
+    # ----------------------------------------------------------------------
+    def run(self):
+
+        total_cameras = len(self.main_window.cameras_settings)
+        for ind in range(len(self.main_window.cameras_settings)):
+            self.show_camera.emit(ind, ind/total_cameras)
+            self.wait_till_camera_done(ind)
+            if self._stop_batch:
+                break
+
+        self.done.emit()
+
+    # ----------------------------------------------------------------------
+    def camera_done(self, camera_name):
+        self.done_cameras.append(camera_name)

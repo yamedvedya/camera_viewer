@@ -36,7 +36,7 @@ logger = logging.getLogger(APP_NAME)
 class CameraWidget(QtWidgets.QMainWindow):
 
     REFRESH_TANGO_SETTINGS_PERIOD = 5000 # how often we update settings with Tango
-    REFRESH_START_STOP_PERIOD = 500 # how often we update settings with Tango
+    REFRESH_ICONS_PERIOD = 500 # how often we update settings with Tango
 
     # ----------------------------------------------------------------------
     def __init__(self, parent, my_name):
@@ -64,8 +64,11 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._refresh_view_timer.start(self.REFRESH_TANGO_SETTINGS_PERIOD)
 
         self._refresh_run_stop_timer = QtCore.QTimer(self)
-        self._refresh_run_stop_timer.timeout.connect(self._refresh_run_stop)
-        self._refresh_run_stop_timer.start(self.REFRESH_START_STOP_PERIOD)
+        self._refresh_run_stop_timer.timeout.connect(self._refresh_icons)
+        self._refresh_run_stop_timer.start(self.REFRESH_ICONS_PERIOD)
+
+        self._refresh_view()
+        self._refresh_icons()
 
     # ----------------------------------------------------------------------
     def _start_stop_live_mode(self):
@@ -110,7 +113,7 @@ class CameraWidget(QtWidgets.QMainWindow):
         logger.info(f"{self.camera_name} closed.")
 
     # ----------------------------------------------------------------------
-    def _refresh_run_stop(self):
+    def _refresh_icons(self):
         try:
             state = self.camera_device.is_running()
             if state is None:
@@ -124,6 +127,22 @@ class CameraWidget(QtWidgets.QMainWindow):
                 self._action_start_stop.setEnabled(True)
         except Exception as err:
             logger.exception(f"Exception: camera state: {err}")
+
+        try:
+            position = self.camera_device.motor_position()
+
+            self._move_motor_action.setVisible(position is not None)
+            if position is None:
+                self._move_motor_label.setText('')
+            else:
+                self._move_motor_action.setIcon(QtGui.QIcon(":/ico/screen_out.png")
+                                                if position else QtGui.QIcon(":/ico/screen_in.png"))
+
+                self._move_motor_label.setText('Move screen OUT' if position else 'Move screen IN')
+                self._move_motor_action.setText('Move screen OUT' if position else 'Move screen IN')
+                self._move_motor_action.setToolTip('Move screen OUT' if position else 'Move screen IN')
+        except Exception as err:
+            logger.exception(f"Exception: motor state: {err}")
 
     # ----------------------------------------------------------------------
     def _refresh_view(self):
@@ -242,9 +261,11 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._action_print_image.triggered.connect(self._frame_viewer.print_image)
         self._action_copy_image.triggered.connect(self._frame_viewer.to_clipboard)
 
-        self._saveImgAction.triggered.connect(self._frame_viewer.save_to_image)
-        self._saveAsciiAction.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="csv"))
-        self._saveNumpyAction.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="npy"))
+        self._save_img_action.triggered.connect(self._frame_viewer.save_to_image)
+        self._save_ascii_action.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="csv"))
+        self._save_numpy_action.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="npy"))
+
+        self._move_motor_action.triggered.connect(lambda: self.camera_device.move_motor())
 
     # ----------------------------------------------------------------------
     def block_hist_signals(self):
@@ -283,11 +304,11 @@ class CameraWidget(QtWidgets.QMainWindow):
         """
         saveMenu = QtWidgets.QMenu(parent)
 
-        self._saveImgAction = saveMenu.addAction("Image")
+        self._save_img_action = saveMenu.addAction("Image")
 
-        self._saveAsciiAction = saveMenu.addAction("ASCII")
+        self._save_ascii_action = saveMenu.addAction("ASCII")
 
-        self._saveNumpyAction = saveMenu.addAction("Numpy")
+        self._save_numpy_action = saveMenu.addAction("Numpy")
 
         return saveMenu
 
@@ -326,6 +347,14 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._action_copy_image.setIcon(QtGui.QIcon(":/ico/copy.png"))
         self._action_copy_image.setText("Copy to Clipboard")
         self.tool_bar.addAction(self._action_copy_image)
+
+        self.tool_bar.addSeparator()
+        self._move_motor_label = QtWidgets.QLabel('Move screen IN:')
+        self.tool_bar.addWidget(self._move_motor_label)
+        self._move_motor_action = QtWidgets.QAction(self)
+        self._move_motor_action.setIcon(QtGui.QIcon(":/ico/screen_in.png"))
+        self._move_motor_action.setText("Move screen IN")
+        self.tool_bar.addAction(self._move_motor_action)
 
         self.tool_bar.addSeparator()
         self.tool_bar.addWidget(QtWidgets.QLabel('Widgets:'))

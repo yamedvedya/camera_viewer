@@ -8,6 +8,9 @@
 """Parse settings given in xml files
 """
 
+import os
+import shutil
+from datetime import datetime
 import xml.etree.cElementTree as ET
 
 
@@ -19,7 +22,9 @@ class XmlSettings(object):
         self.file_name = file_name
 
     # ----------------------------------------------------------------------
-    def set_options(self, general_settings, cameras_settings):
+    def save_new_options(self, general_settings, cameras_settings):
+
+        self._archive_settings()
 
         et_tree = ET.parse(self.file_name)
         root = et_tree.getroot()
@@ -93,3 +98,16 @@ class XmlSettings(object):
             return True
         except:
             return False
+
+    # ----------------------------------------------------------------------
+    def _archive_settings(self):
+        file_name = os.path.basename(self.file_name)
+        folder = os.path.join(os.path.dirname(self.file_name), 'archive')
+
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+
+        fname, fext = os.path.splitext(file_name)
+
+        now = datetime.now()
+        shutil.copyfile(self.file_name, os.path.join(folder, f'{fname}_{now.strftime("%d_%m_%Y_%H_%M_%S")}{fext}'))

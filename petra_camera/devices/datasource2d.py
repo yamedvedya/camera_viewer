@@ -261,7 +261,7 @@ class DataSource2D(QtCore.QObject):
             self._state = 'abort'
             self._worker.join()
 
-        self._worker = threading.Thread(target=self.run)
+        self._worker = threading.Thread(target=self.run, name=f'{self.device_id}_DataSource')
 
     # ----------------------------------------------------------------------
     def run(self):

@@ -21,6 +21,7 @@ from distutils.util import strtobool
 from petra_camera.widgets.about_dialog import AboutDialog
 from petra_camera.widgets.general_settings import ProgramSetup
 from petra_camera.widgets.camera_widget import CameraWidget
+from petra_camera.widgets.empty_camera_widget import EmptyCameraWidget
 from petra_camera.utils.xmlsettings import XmlSettings
 from petra_camera.widgets.import_cameras import ImportCameras
 from petra_camera.widgets.batch_progress import BatchProgress
@@ -37,7 +38,7 @@ class PETRACamera(QtWidgets.QMainWindow):
     """
     """
     LOG_PREVIEW = "gvim"
-    STATUS_TICK = 2000              # [ms]
+    STATUS_TICK = 3000              # [ms]
 
     camera_done = QtCore.pyqtSignal(str)
     camera_closed = QtCore.pyqtSignal(str)
@@ -56,6 +57,10 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.loader_progress.stop_batch.connect(self.interrupt_batch)
 
         self.loader = None
+        self.cameras_to_reload = []
+        self.cameras_to_delete = []
+        self.cameras_to_add = []
+
         self.close_requested = False
 
         pg.setConfigOption("background", "w")
@@ -82,7 +87,7 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         # first we reset progress bar
         self.loader_progress.clear()
-        self.loader_progress.set_mode('Open cameras')
+        self.loader_progress.set_titel('Open cameras')
         self.loader_progress.show()
 
         self.loader = CameraLoader(self, 'open')
@@ -126,29 +131,30 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.loader_progress.set_progress(f'Open camera {camera_name}', progress)
 
+        dock = QtWidgets.QDockWidget(camera_name)
+        dock.setObjectName(f'{"".join(camera_name.split())}Dock')
+
+        children = [child for child in self.findChildren(QtWidgets.QDockWidget)
+                    if isinstance(child.widget(), CameraWidget)]
+        if children:
+            self.tabifyDockWidget(children[-1], dock)
+        else:
+            self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+
+        self.menu_cameras.addAction(dock.toggleViewAction())
+        dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
+        self.camera_docks[camera_name] = dock
+
         try:
             widget = CameraWidget(self, camera_name)
-
-            dock = QtWidgets.QDockWidget(camera_name)
-            dock.setObjectName(f'{"".join(camera_name.split())}Dock')
-            dock.setWidget(widget)
-
-            children = [child for child in self.findChildren(QtWidgets.QDockWidget)
-                        if isinstance(child.widget(), CameraWidget)]
-            if children:
-                self.tabifyDockWidget(children[-1], dock)
-            else:
-                self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
-
-            self.menu_cameras.addAction(dock.toggleViewAction())
-
             widget.load_ui_settings()
-            dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
-
-            self.camera_widgets[camera_name] = widget
-            self.camera_docks[camera_name] = dock
 
         except Exception as err:
+
+            widget = EmptyCameraWidget(self, camera_name, f'{err}')
+            widget.reinit_camera.connect(self._reinit_camera)
+            widget.load_ui_settings()
+
             open_mgs = QtWidgets.QMessageBox()
             open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
             open_mgs.setWindowTitle(f"Error")
@@ -156,7 +162,32 @@ class PETRACamera(QtWidgets.QMainWindow):
             open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
             open_mgs.exec_()
 
+        self.camera_widgets[camera_name] = widget
+        dock.setWidget(widget)
+
         self.camera_done.emit(camera_name)
+
+    # ----------------------------------------------------------------------
+    def _reinit_camera(self, camera_name):
+        if camera_name in self.camera_widgets:
+            del self.camera_widgets[camera_name]
+        if camera_name in self.camera_docks:
+            del self.camera_docks[camera_name]
+
+        try:
+            widget = CameraWidget(self, camera_name)
+            widget.load_ui_settings()
+            self.camera_widgets[camera_name] = widget
+            self.camera_docks[camera_name].setWidget(widget)
+
+        except Exception as err:
+
+            open_mgs = QtWidgets.QMessageBox()
+            open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
+            open_mgs.setWindowTitle(f"Error")
+            open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
+            open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
+            open_mgs.exec_()
 
     # ----------------------------------------------------------------------
     def start_server(self):
@@ -179,34 +210,50 @@ class PETRACamera(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def show_settings(self):
 
-        if ProgramSetup(self).exec_():
-            logger.info("Reloading all cameras...")
+        existing_cameras = self.camera_list
+        self.cameras_to_reload = []
+        self.cameras_to_delete = []
+        self.cameras_to_add = []
 
-            self.loader_progress.clear()
-            self.loader_progress.set_mode('Reloading cameras')
-            self.loader_progress.show()
+        dlg = ProgramSetup(self)
+        if dlg.exec_():
+            logger.info("Applying new settings...")
+            self.camera_list = self._get_cameras_list()
 
-            self.loader = CameraLoader(self, 'reload')
-            self.camera_done.connect(self.loader.camera_done)
-            self.loader.add_camera.connect(self.add_camera)
-            self.loader.close_camera.connect(self.close_camera)
-            self.loader.reload_camera.connect(self.reload_camera)
-            self.loader.done.connect(self.loader_done)
-            self.loader.start()
+            self.cameras_to_reload = dlg.cameras_to_reload
+            self.cameras_to_add = dlg.cameras_to_add
+            self.cameras_to_delete = list(set(existing_cameras)-set(self.camera_list))
+            if self.cameras_to_reload or self.cameras_to_delete:
+                self.loader_progress.clear()
+                self.loader_progress.set_titel('Applying new settings')
+                self.loader_progress.show()
+
+                self.loader = CameraLoader(self, 'reload')
+                self.camera_done.connect(self.loader.camera_done)
+                self.loader.add_camera.connect(self.add_camera)
+                self.loader.close_camera.connect(self.close_camera)
+                self.loader.reload_camera.connect(self.reload_camera)
+                self.loader.done.connect(self.loader_done)
+
+                self.loader.start()
 
     # ----------------------------------------------------------------------
     def reload_camera(self, camera_name, progress):
 
         self.loader_progress.set_progress(f'Reloading camera {camera_name}', progress)
 
+        self.camera_widgets[camera_name].clean_close()
+
         try:
-            self.camera_widgets[camera_name].clean_close()
             widget = CameraWidget(self, camera_name)
-            self.camera_docks[camera_name].setWidget(widget)
             widget.load_ui_settings()
-            self.camera_widgets[camera_name] = widget
 
         except Exception as err:
+
+            widget = EmptyCameraWidget(self, camera_name, f'{err}')
+            widget.reinit_camera.connect(self._reinit_camera)
+            widget.load_ui_settings()
+
             open_mgs = QtWidgets.QMessageBox()
             open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
             open_mgs.setWindowTitle(f"Error")
@@ -214,6 +261,8 @@ class PETRACamera(QtWidgets.QMainWindow):
             open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
             open_mgs.exec_()
 
+        self.camera_docks[camera_name].setWidget(widget)
+        self.camera_widgets[camera_name] = widget
         self.camera_done.emit(camera_name)
 
     # ----------------------------------------------------------------------
@@ -221,10 +270,15 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.loader_progress.set_progress(f'Closing camera {camera_name}', progress)
 
-        self.camera_widgets[camera_name].clean_close()
-        self.removeDockWidget(self.camera_docks[camera_name])
-        del self.camera_widgets[camera_name]
-        del self.camera_docks[camera_name]
+        try:
+            self.camera_widgets[camera_name].clean_close()
+            self.removeDockWidget(self.camera_docks[camera_name])
+            if camera_name in self.camera_widgets:
+                del self.camera_widgets[camera_name]
+            if camera_name in self.camera_docks:
+                del self.camera_docks[camera_name]
+        except Exception as err:
+            logger.error(f'Error while closing camera {camera_name} :{repr(err)}')
 
         self.camera_done.emit(camera_name)
 
@@ -246,7 +300,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         QtWidgets.qApp.clipboard().clear()
 
         self.loader_progress.clear()
-        self.loader_progress.set_mode('Closing cameras')
+        self.loader_progress.set_titel('Closing cameras')
         self.loader_progress.show()
 
         self.close_requested = True
@@ -422,7 +476,6 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self._lb_resources_status = QtWidgets.QLabel("| {:.2f}MB | CPU {} % |".format(mem, cpu))
 
-
         self.statusBar().addPermanentWidget(lbProcessID)
         self.statusBar().addPermanentWidget(lbCurrentDir)
         self.statusBar().addPermanentWidget(self._lb_resources_status)
@@ -456,8 +509,6 @@ class CameraLoader(QtCore.QThread):
 
         self.main_window = main_window
         self.mode = mode
-        if mode == 'reload':
-            self.new_camera_list = main_window.get_cameras()
 
         self.done_cameras = []
         self._stop_batch = False
@@ -490,29 +541,32 @@ class CameraLoader(QtCore.QThread):
                     break
 
         else:
-            total_cameras = float(max(len(self.main_window.camera_list), len(self.new_camera_list)))
+            total_cameras = len(self.main_window.cameras_to_reload) +\
+                            len(self.main_window.cameras_to_delete) +\
+                            len(self.main_window.cameras_to_add)
             counter = 0
 
-            for camera_name in self.main_window.camera_list:
-                if camera_name in self.new_camera_list:
-                    self.reload_camera.emit(camera_name, counter/total_cameras)
-                else:
-                    self.close_camera.emit(camera_name, counter/total_cameras)
-
+            for camera_name in self.main_window.cameras_to_delete:
+                self.close_camera.emit(camera_name, counter / total_cameras)
                 self.wait_till_camera_done(camera_name)
                 if self._stop_batch:
                     break
 
-                counter += 1
+            if not self._stop_batch:
+                for camera_name in self.main_window.cameras_to_reload:
+                    self.reload_camera.emit(camera_name, counter / total_cameras)
+                    self.wait_till_camera_done(camera_name)
+                    if self._stop_batch:
+                        break
+                    counter += 1
 
             if not self._stop_batch:
-                for camera_name in self.new_camera_list:
-                    if camera_name not in self.main_window.camera_list:
-                        self.add_camera.emit(camera_name, counter/total_cameras)
-                        self.wait_till_camera_done(camera_name)
-                        if self._stop_batch:
-                            break
-                        counter += 1
+                for camera_name in self.main_window.cameras_to_add:
+                    self.add_camera.emit(camera_name, counter / total_cameras)
+                    self.wait_till_camera_done(camera_name)
+                    if self._stop_batch:
+                        break
+                    counter += 1
 
         self.done.emit()
 

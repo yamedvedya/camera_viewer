@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_CameraSettings(object):
     def setupUi(self, CameraSettings):
         CameraSettings.setObjectName("CameraSettings")
-        CameraSettings.resize(842, 612)
+        CameraSettings.resize(842, 617)
         self.verticalLayout_5 = QtWidgets.QVBoxLayout(CameraSettings)
         self.verticalLayout_5.setObjectName("verticalLayout_5")
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -233,6 +233,7 @@ class Ui_CameraSettings(object):
         self.cmb_camera_type.setToolTip(_translate("CameraSettings", "Select camera type"))
         self.label_12.setText(_translate("CameraSettings", "Displayed name:"))
         self.le_name.setToolTip(_translate("CameraSettings", "Under this name camera will be displayed in viewer"))
+        self.le_name.setText(_translate("CameraSettings", "New camera"))
         self.chk_enabled.setText(_translate("CameraSettings", "Enabled"))
         self.cmd_delete.setText(_translate("CameraSettings", "Delete"))
         self.chk_manual_tango_device.setText(_translate("CameraSettings", "Specify manually:"))

@@ -20,7 +20,7 @@ class BatchProgress(QtWidgets.QWidget):
         self._ui.but_box.clicked.connect(self._button_clicked)
 
     # --------------------------------------------------------------------
-    def set_mode(self, mode):
+    def set_titel(self, mode):
         self.setWindowTitle(mode)
 
     # --------------------------------------------------------------------

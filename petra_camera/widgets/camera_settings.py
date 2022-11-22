@@ -2,10 +2,6 @@
 
 from distutils.util import strtobool
 import PyTango
-try:
-    from HasyUtils import getDeviceNamesByClass
-except:
-    from petra_camera.utils.tango_utils import getDeviceNamesByClass
 
 from PyQt5 import QtWidgets, QtCore
 
@@ -33,6 +29,8 @@ class CameraSettings(QtWidgets.QWidget):
         self.my_id = my_id
         self.my_name = 'New camera'
 
+        self.tango_dbs_info = parent.tango_dbs_info
+
         self._ui.cmd_default_status_source.clicked.connect(lambda: self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER))
 
         self._ui.cmb_camera_type.addItems(list(CAMERAS_SETTINGS.keys()))
@@ -55,7 +53,9 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.cmb_camera_type.currentTextChanged.connect(self._switch_camera_type)
         self._ui.cmb_motor_type.currentTextChanged.connect(self._switch_motor_type)
 
+        self._original_settings = settings_node
         if settings_node is not None:
+
             self.my_name = settings_node.get('name')
 
             if 'enabled' in settings_node.keys():
@@ -129,6 +129,7 @@ class CameraSettings(QtWidgets.QWidget):
         else:
             self._switch_camera_type(self._ui.cmb_camera_type.currentText())
 
+        self._original_name = self.my_name
         self._switch_motor_type(self._ui.cmb_motor_type.currentText())
         self._ui.le_name.setText(self.my_name)
 
@@ -151,7 +152,7 @@ class CameraSettings(QtWidgets.QWidget):
             cmb_box.clear()
             if dev_type != 'FrameAnalysis':
                 dev_type = CAMERAS_SETTINGS[dev_type]['tango_server']
-            cmb_box.addItems(getDeviceNamesByClass(dev_type, self._ui.le_tango_host.text()))
+            cmb_box.addItems(self.tango_dbs_info.getDeviceNamesByClass(dev_type, self._ui.le_tango_host.text()))
             refresh_combo_box(cmb_box, current_selection)
 
     # ----------------------------------------------------------------------
@@ -179,6 +180,7 @@ class CameraSettings(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def get_data(self):
+
         camera_type = self._ui.cmb_camera_type.currentText()
         camera_properties = CAMERAS_SETTINGS[camera_type]
 
@@ -198,7 +200,7 @@ class CameraSettings(QtWidgets.QWidget):
             data_to_save.append(('valve_channel', self._ui.le_acromag_valve.text()))
 
         else:
-            data_to_save.append((('motor_type', 'none')),)
+            data_to_save.append(('motor_type', 'none'))
 
         if camera_properties['tango_server'] is not None:
             if self._ui.chk_manual_tango_device.isChecked():
@@ -232,7 +234,16 @@ class CameraSettings(QtWidgets.QWidget):
         if camera_properties['high_depth']:
             data_to_save.append(('high_depth', str(self._ui.chk_high_depth.isChecked())))
 
-        return data_to_save
+        no_changed = True
+        if set(self._original_settings.keys()) != set([key for key, value in data_to_save]):
+            no_changed = False
+        else:
+            for key, value in data_to_save:
+                if self._original_settings.get(key) != value:
+                    no_changed = False
+                    break
+
+        return data_to_save, self.my_name != self._original_name, not no_changed
 
     # ----------------------------------------------------------------------
     def _new_name(self):
@@ -245,3 +256,11 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.le_name.setText(self.my_name)
         self._ui.le_name.blockSignals(False)
         self.new_name.emit(self.my_id, self.my_name)
+
+    # ----------------------------------------------------------------------
+    def get_name(self):
+        return self.my_name
+
+    # ----------------------------------------------------------------------
+    def get_original_name(self):
+        return self._original_name

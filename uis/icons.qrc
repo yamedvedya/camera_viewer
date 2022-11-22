@@ -1,6 +1,8 @@
 <RCC>
   <qresource prefix="ico">
     <file>Desy_logo.jpg</file>
+    <file>screen_out.png</file>
+    <file>screen_in.png</file>
     <file>crosshair-transparent-black.png</file>
     <file>page.png</file>
     <file>play_16px.png</file>

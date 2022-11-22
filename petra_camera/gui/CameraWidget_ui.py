@@ -18,7 +18,7 @@ class Ui_CameraWindow(object):
         self.horizontalLayout.setObjectName("horizontalLayout")
         CameraWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(CameraWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 845, 21))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 845, 23))
         self.menubar.setObjectName("menubar")
         CameraWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(CameraWindow)
