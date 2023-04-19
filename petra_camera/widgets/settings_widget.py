@@ -102,7 +102,9 @@ class SettingsWidget(BaseWidget):
         self._ui.chk_background.clicked.connect(lambda state: self._camera_device.save_settings('background', state))
         self._ui.dsb_sigmas.valueChanged.connect(lambda value: self._camera_device.save_settings('background_sigmas', value))
 
-    # ----------------------------------------------------------------------
+        self._ignore_init_level_change = True
+
+        # ----------------------------------------------------------------------
     @contextmanager
     def block_hist_signals(self):
         self.hist.item.sigLevelChangeFinished.disconnect()
@@ -248,6 +250,10 @@ class SettingsWidget(BaseWidget):
         :param lut_item:
         :return:
         """
+        if self._ignore_init_level_change:
+            self._ignore_init_level_change = False
+            return
+
         lut = lut_item.saveState()
         lut['auto_levels'] = auto_levels
 

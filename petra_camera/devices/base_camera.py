@@ -322,53 +322,48 @@ class BaseCamera(object):
 
         if do_rotate and option in ["counter_x", "counter_y", "counter_w", "counter_h"]:
 
-            value = self.get_settings(option, cast, False)
+            def roi(param):
+                return self.get_settings(f"counter_{param}", int, False)
+
             w, h = self._get_frame_size()
 
-            if self.rotate_angle != 0:
-                if option == "counter_x":
-                    if self.rotate_angle == 1:
-                        if self.flip_v:
-                            value = self.get_settings("counter_y", int, False)
-                        else:
-                            value = h - self.get_settings("counter_y", int, False) - \
-                                    self.get_settings("counter_h", int, False)
+            if option == "counter_x":
+                if (self.rotate_angle == 0 and self.flip_h) or (self.rotate_angle == 2 and not self.flip_h):
+                    value = w - roi('x') - roi('w')
 
-                    elif self.rotate_angle == 2 and not self.flip_h:
-                            value = w - self.get_settings("counter_x", int, False) - \
-                                    self.get_settings("counter_w", int, False)
+                elif self.rotate_angle == 1:
+                    if self.flip_v:
+                        value = roi('y')
+                    else:
+                        value = h - roi('y') - roi('h')
 
-                    elif self.rotate_angle == 3:
-                        if self.flip_v:
-                            value = h - self.get_settings("counter_y", int, False) - \
-                                    self.get_settings("counter_h", int, False)
-                        else:
-                            value = self.get_settings("counter_y", int, False)
+                elif self.rotate_angle == 3:
+                    if self.flip_v:
+                        value = h - roi('y') - roi('h')
+                    else:
+                        value = roi('y')
 
-                elif option == "counter_y":
-                    if self.rotate_angle == 1:
-                        if self.flip_h:
-                            value = w - self.get_settings("counter_x", int, False) - \
-                                    self.get_settings("counter_w", int, False)
-                        else:
-                            value = self.get_settings("counter_x", int, False)
+            elif option == "counter_y":
+                if (self.rotate_angle == 0 and self.flip_v) or (self.rotate_angle == 2 and not self.flip_v):
+                    value = h - roi('y') - roi('h')
 
-                    elif self.rotate_angle == 2 and not self.flip_v:
-                        value = h - self.get_settings("counter_y", int, False) - \
-                                self.get_settings("counter_h", int, False)
+                elif self.rotate_angle == 1:
+                    if self.flip_h:
+                        value = w - roi('x') - roi('w')
+                    else:
+                        value = roi('x')
 
-                    elif self.rotate_angle == 3:
-                        if self.flip_h:
-                            value = self.get_settings("counter_x", int, False)
-                        else:
-                            value = w - self.get_settings("counter_x", int, False) - \
-                                    self.get_settings("counter_w", int, False)
+                elif self.rotate_angle == 3:
+                    if self.flip_h:
+                        value = roi('x')
+                    else:
+                        value = w - roi('x') - roi('w')
 
-                elif option == "counter_w" and self.rotate_angle in [1, 3]:
-                    value = self.get_settings("counter_h", int, False)
+            elif option == "counter_w" and self.rotate_angle in [1, 3]:
+                value = roi('h')
 
-                elif option == "counter_h" and self.rotate_angle in [1, 3]:
-                    value = self.get_settings("counter_w", int, False)
+            elif option == "counter_h" and self.rotate_angle in [1, 3]:
+                value = roi('w')
 
         if do_log:
             logger.debug(f'{self._my_name}: {cast.__name__}({option}): {value} (in {(time.time() - _start_time)*1000:.2f} msec)')
@@ -389,38 +384,34 @@ class BaseCamera(object):
 
         if option in ["counter_x", "counter_y", "counter_w", "counter_h"]:
 
+            def roi(param):
+                return self.get_settings(f"counter_{param}", int, False)
+
             w, h = self._get_frame_size()
 
-            if self.rotate_angle != 0:
-                if option == "counter_x":
-                    if self.rotate_angle == 1:
-                        option = "counter_y"
-                        if not self.flip_v:
-                            value = h - value - self.get_settings("counter_h", int, False)
-                    elif self.rotate_angle == 2 and not self.flip_h:
-                        value = w - value - self.get_settings("counter_w", int, False)
-                    elif self.rotate_angle == 3:
-                        if self.flip_v:
-                            value = h - value - self.get_settings("counter_h", int, False)
-                        option = "counter_y"
+            if option == "counter_x":
+                if (self.rotate_angle == 0 and self.flip_h) or (self.rotate_angle == 2 and not self.flip_h):
+                    value = w - value - roi('w')
 
-                elif option == "counter_y":
-                    if self.rotate_angle == 1:
-                        option = "counter_x"
-                        if self.flip_h:
-                            value = w - value - self.get_settings("counter_w", int, False)
-                    elif self.rotate_angle == 2 and not self.flip_v:
-                        value = h - value - self.get_settings("counter_h", int, False)
-                    elif self.rotate_angle == 3:
-                        option = "counter_x"
-                        if not self.flip_h:
-                            value = w - value - self.get_settings("counter_w", int, False)
+                elif self.rotate_angle in [1, 3]:
+                    option = "counter_y"
+                    if (self.rotate_angle == 1 and not self.flip_v) or (self.rotate_angle == 3 and self.flip_v):
+                        value = h - value - roi('h')
 
-                elif option == "counter_w" and self.rotate_angle in [1, 3]:
-                    value = self.get_settings("counter_h", int, False)
+            elif option == "counter_y":
+                if (self.rotate_angle == 0 and self.flip_v) or (self.rotate_angle == 2 and not self.flip_v):
+                    value = h - value - roi('h')
 
-                elif option == "counter_h" and self.rotate_angle in [1, 3]:
-                    value = self.get_settings("counter_w", int, False)
+                elif self.rotate_angle in [1, 3]:
+                    option = "counter_x"
+                    if (self.rotate_angle == 1 and self.flip_h) or (self.rotate_angle == 3 and not self.flip_h):
+                        value = w - value - roi('w')
+
+            elif option == "counter_w" and self.rotate_angle in [1, 3]:
+                value = roi('h')
+
+            elif option == "counter_h" and self.rotate_angle in [1, 3]:
+                value = roi('w')
 
         if option in self._settings_map.keys():
             if self._settings_map[option][0] == 'roi_server' and self._roi_server is not None:

@@ -68,7 +68,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         pg.setConfigOption("leftButtonPan", False)
 
         self.options = options
-        self.settings = self.get_settings(options)
+        self.settings = self.load_settings(options)
 
         self.setCentralWidget(None)
 
@@ -135,7 +135,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         dock.setObjectName(f'{"".join(camera_name.split())}Dock')
 
         children = [child for child in self.findChildren(QtWidgets.QDockWidget)
-                    if isinstance(child.widget(), CameraWidget)]
+                    if isinstance(child.widget(), (CameraWidget, EmptyCameraWidget))]
         if children:
             self.tabifyDockWidget(children[-1], dock)
         else:
@@ -152,7 +152,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         except Exception as err:
 
             widget = EmptyCameraWidget(self, camera_name, f'{err}')
-            widget.reinit_camera.connect(self._reinit_camera)
+            widget.reinit_camera.connect(self.reinit_camera)
             widget.load_ui_settings()
 
             open_mgs = QtWidgets.QMessageBox()
@@ -168,19 +168,16 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.camera_done.emit(camera_name)
 
     # ----------------------------------------------------------------------
-    def _reinit_camera(self, camera_name):
-        if camera_name in self.camera_widgets:
-            del self.camera_widgets[camera_name]
-        if camera_name in self.camera_docks:
-            del self.camera_docks[camera_name]
-
+    def reinit_camera(self, camera_name):
         try:
             widget = CameraWidget(self, camera_name)
             widget.load_ui_settings()
-            self.camera_widgets[camera_name] = widget
-            self.camera_docks[camera_name].setWidget(widget)
 
         except Exception as err:
+
+            widget = EmptyCameraWidget(self, camera_name, f'{err}')
+            widget.reinit_camera.connect(self.reinit_camera)
+            widget.load_ui_settings()
 
             open_mgs = QtWidgets.QMessageBox()
             open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
@@ -188,6 +185,20 @@ class PETRACamera(QtWidgets.QMainWindow):
             open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
             open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
             open_mgs.exec_()
+
+        self.camera_docks[camera_name].setWidget(widget)
+        self.camera_widgets[camera_name] = widget
+
+    # ----------------------------------------------------------------------
+    def reload_camera(self, camera_name, progress):
+
+        self.loader_progress.set_progress(f'Reloading camera {camera_name}', progress)
+
+        self.camera_widgets[camera_name].clean_close()
+
+        self.reinit_camera(camera_name)
+
+        self.camera_done.emit(camera_name)
 
     # ----------------------------------------------------------------------
     def start_server(self):
@@ -236,34 +247,6 @@ class PETRACamera(QtWidgets.QMainWindow):
                 self.loader.done.connect(self.loader_done)
 
                 self.loader.start()
-
-    # ----------------------------------------------------------------------
-    def reload_camera(self, camera_name, progress):
-
-        self.loader_progress.set_progress(f'Reloading camera {camera_name}', progress)
-
-        self.camera_widgets[camera_name].clean_close()
-
-        try:
-            widget = CameraWidget(self, camera_name)
-            widget.load_ui_settings()
-
-        except Exception as err:
-
-            widget = EmptyCameraWidget(self, camera_name, f'{err}')
-            widget.reinit_camera.connect(self._reinit_camera)
-            widget.load_ui_settings()
-
-            open_mgs = QtWidgets.QMessageBox()
-            open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
-            open_mgs.setWindowTitle(f"Error")
-            open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
-            open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
-            open_mgs.exec_()
-
-        self.camera_docks[camera_name].setWidget(widget)
-        self.camera_widgets[camera_name] = widget
-        self.camera_done.emit(camera_name)
 
     # ----------------------------------------------------------------------
     def close_camera(self, camera_name, progress):
@@ -326,7 +309,7 @@ class PETRACamera(QtWidgets.QMainWindow):
             # pass
 
     # ----------------------------------------------------------------------
-    def reset_settings(self):
+    def reset_settings_to_default(self):
 
         home = os.path.join(str(Path.home()), '.petra_camera')
         shutil.copy(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.xml'),
@@ -334,7 +317,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.settings = XmlSettings(os.path.join(home, 'default.xml'))
 
     # ----------------------------------------------------------------------
-    def get_settings(self, options):
+    def load_settings(self, options):
 
         home = os.path.join(str(Path.home()), '.petra_camera')
         file_name = str(options.profile)
@@ -349,15 +332,18 @@ class PETRACamera(QtWidgets.QMainWindow):
                 file = QtWidgets.QFileDialog.getOpenFileName(self, 'Cannot find settings file, please locate it',
                                                              str(Path.home()), 'XML settings (*.xml)')
                 if file[0]:
-                    shutil.copy(file[0], os.path.join(home, 'default.xml'))
+                    return XmlSettings(file[0])
+                else:
+                    raise RuntimeError('Cannot load cameras settings')
             else:
-                shutil.copy(os.path.join(home, file_name), os.path.join(home, 'default.xml'))
+                return XmlSettings(os.path.join(home, file_name))
 
-        if not os.path.exists(os.path.join(home, 'default.xml')):
-            shutil.copy(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.xml'),
-                        os.path.join(home, 'default.xml'))
+        else:
+            if not os.path.exists(os.path.join(home, 'default.xml')):
+                shutil.copy(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.xml'),
+                            os.path.join(home, 'default.xml'))
 
-        return XmlSettings(os.path.join(home, 'default.xml'))
+            return XmlSettings(os.path.join(home, 'default.xml'))
 
     # ----------------------------------------------------------------------
     def _get_cameras_list(self):

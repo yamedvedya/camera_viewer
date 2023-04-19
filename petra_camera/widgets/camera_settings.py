@@ -235,15 +235,19 @@ class CameraSettings(QtWidgets.QWidget):
             data_to_save.append(('high_depth', str(self._ui.chk_high_depth.isChecked())))
 
         no_changed = True
-        if set(self._original_settings.keys()) != set([key for key, value in data_to_save]):
-            no_changed = False
+        new_camera = False
+        if self._original_settings:
+            if set(self._original_settings.keys()) != set([key for key, value in data_to_save]):
+                no_changed = False
+            else:
+                for key, value in data_to_save:
+                    if self._original_settings.get(key) != value:
+                        no_changed = False
+                        break
         else:
-            for key, value in data_to_save:
-                if self._original_settings.get(key) != value:
-                    no_changed = False
-                    break
+            new_camera = True
 
-        return data_to_save, self.my_name != self._original_name, not no_changed
+        return data_to_save, new_camera, self.my_name != self._original_name, not no_changed
 
     # ----------------------------------------------------------------------
     def _new_name(self):

@@ -15,10 +15,11 @@ class TangoDBsInfo():
         srvs = self.getServerNameByClass(class_name, tango_host)
         argout = []
 
-        db = self._known_dbs[tango_host]
+        if srvs:
+            db = self._known_dbs[tango_host]
 
-        for srv in srvs:
-            argout += db.get_device_name(srv, class_name).value_string
+            for srv in srvs:
+                argout += db.get_device_name(srv, class_name).value_string
         return argout
 
     # ----------------------------------------------------------------------
@@ -50,23 +51,18 @@ class TangoDBsInfo():
 # ----------------------------------------------------------------------
 def findDB(tango_host):
 
-    #
-    # unexpeccted: tango://haspe212oh.desy.de:10000/motor/dummy_mot_ctrl/1
-    #
     if tango_host.find('tango://') == 0:
         print("Bad TANGO_HOST syntax %s" % tango_host)
         return None
-    #
-    # tangHost "haspp99:10000"
-    #
+
     lst = tango_host.split(':')
-    if len(lst) == 2:
-        return PyTango.Database(lst[0], lst[1])
-    #
-    # tangHost "haspp99"
-    #
-    elif len(lst) == 1:
-        return PyTango.Database(lst[0], "10000")
-    else:
-        print("Failed to return Database, %s" % tango_host)
-        return None
+    try:
+        if len(lst) == 2:
+            return PyTango.Database(lst[0], lst[1])
+        elif len(lst) == 1:
+            return PyTango.Database(lst[0], "10000")
+    except:
+        pass
+
+    print("Failed to return Database, %s" % tango_host)
+    return None

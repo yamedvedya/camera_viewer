@@ -9,6 +9,7 @@ This widget displays frame, markers, rois and provide functionality to move mark
 import time
 import json
 import logging
+import os
 
 import pyqtgraph as pg
 import numpy as np
@@ -25,6 +26,13 @@ from petra_camera.utils.gui_elements import ImageMarker, PeakMarker, LineSegment
 from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
+DEFAULT_IMAGE_EXT = "png"
+FILE_STAMP = "%Y%m%d_%H%M%S"
+DATETIME = "%Y-%m-%d %H:%M:%S"
+
+LABEL_BRUSH = (30, 144, 255, 170)
+LABEL_COLOR = (255, 255, 255)
+
 
 # ----------------------------------------------------------------------
 class FrameViewer(BaseWidget):
@@ -35,13 +43,6 @@ class FrameViewer(BaseWidget):
 
     WIDGET_NAME = 'FrameViewer'
     SAVE_STATE_UIS = ['splitter_y1', 'splitter_y2', 'splitter_x']
-
-    DEFAULT_IMAGE_EXT = "png"
-    FILE_STAMP = "%Y%m%d_%H%M%S"
-    DATETIME = "%Y-%m-%d %H:%M:%S"
-
-    LABEL_BRUSH = (30, 144, 255, 170)
-    LABEL_COLOR = (255, 255, 255)
 
     # ----------------------------------------------------------------------
     def __init__(self, parent):
@@ -361,15 +362,15 @@ class FrameViewer(BaseWidget):
         x, y = int(max(0, x)), int(max(0, y))
         w, h = int(min(w, frameW)), int(min(h, frameH))
 
-        dataSlice = self._last_frame[x:x + w, y:y + h]
-        if len(dataSlice.shape) > 2:
-            dataSlice = (dataSlice[...,0] * 65536 + dataSlice[...,1] * 256 + dataSlice[...,2])/16777215
+        data_slice = self._last_frame[x:x + w, y:y + h]
+        if len(data_slice.shape) > 2:
+            data_slice = (data_slice[...,0] * 65536 + data_slice[...,1] * 256 + data_slice[...,2]) / 16777215
 
         if self._ui.wiProfileX.frameSize().height() > epsilon:
-            self._ui.wiProfileX.range_changed(dataSlice, 1, (x, y, w, h))
+            self._ui.wiProfileX.range_changed(data_slice, 1, (x, y, w, h))
 
         if self._ui.wiProfileY.frameSize().width() > epsilon:
-            self._ui.wiProfileY.range_changed(dataSlice, 0, (x, y, w, h))
+            self._ui.wiProfileY.range_changed(data_slice, 0, (x, y, w, h))
 
     # ----------------------------------------------------------------------
     def repaint_peak_search(self):
@@ -605,7 +606,7 @@ class FrameViewer(BaseWidget):
             self._show_label(0.5, 0.04, self._device_label)
 
         if hasattr(self, "_datetime_label"):
-            msg = datetime.now().strftime(self.DATETIME)
+            msg = datetime.now().strftime(DATETIME)
             self._datetime_label.setText(msg)
 
             self._show_label(0.85, 0.9, self._datetime_label)
@@ -623,8 +624,8 @@ class FrameViewer(BaseWidget):
         :return: pg text item
         """
         if not style:
-            color = self.LABEL_COLOR
-            fill = self.LABEL_BRUSH
+            color = LABEL_COLOR
+            fill = LABEL_BRUSH
             font = QtGui.QFont("Arial", 10)
         else:
             color = tuple(int(v) for v in style.get("fg_color").split(","))
@@ -662,41 +663,38 @@ class FrameViewer(BaseWidget):
     def save_to_image(self):
         """
         """
-        self.stop_live_mode()
-
-        fileName = self._get_image_file_name("Save Image")
-        if fileName:
-            pixmap = QtGui.QScreen.grabWidget(self._ui.image_view)
-            pixmap.save(fileName)
+        file_name = self._get_image_file_name("Save Image")
+        if file_name:
+            pix = QtGui.QPixmap(self._ui.image_view.size())
+            self._ui.image_view.render(pix)
+            pix.save(file_name)
 
     # ----------------------------------------------------------------------
 
     def save_to_file(self, fmt):
         """Saves to text file or numpy's npy/npz.
         """
-        self.stop_live_mode()
-
         fmt = fmt.lower()
-        defaultName = "data_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
-                                          fmt)
+        default_name = "data_{}.{}".format(datetime.now().strftime(FILE_STAMP), fmt)
 
-        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save To File", self._save_data_folder + defaultName,
-                                                             filter=(self.tr("Ascii Files (*.csv)")
+        file_tuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save To File",
+                                                              os.path.join(self._save_data_folder, default_name),
+                                                              filter=(self.tr("Ascii Files (*.csv)")
                                                               if fmt == "csv" else
                                                               self.tr("Numpy Files (*.npy)")))
 
-        self._save_data_folder = QtCore.QFileInfo(fileTuple).path() + '/'
+        self._save_data_folder = QtCore.QFileInfo(file_tuple).path() + '/'
 
-        fileName = str(fileTuple)
-        fileName = fileName.strip()
+        file_name = str(file_tuple)
+        file_name = file_name.strip()
 
-        if fileName:
+        if file_name:
             data, scale = self._camera_device.get_frame()  # sync with data acq! TODO
 
             if fmt.lower() == "csv":
-                np.savetxt(fileName, data)
+                np.savetxt(file_name, data)
             elif fmt.lower() == "npy":
-                np.save(fileName, data)
+                np.save(file_name, data)
             else:
                 raise ValueError("Unknown format '{}'".format(fmt))
 
@@ -704,21 +702,17 @@ class FrameViewer(BaseWidget):
     def print_image(self):
         """
         """
-        self.stop_live_mode()
+        printer = QtPrintSupport.QPrinter()
 
-        self._printer = QtPrintSupport.QPrinter()
-
-        if QtPrintSupport.QPrintDialog(self._printer).exec_() == QtWidgets.QDialog.Accepted:
-            self._printPainter = QtGui.QPainter(self._printer)
-            self._printPainter.setRenderHint(QtGui.QPainter.Antialiasing)
-
-            self._ui.image_view.view.render(self._printPainter)
+        if QtPrintSupport.QPrintDialog(printer).exec_() == QtWidgets.QDialog.Accepted:
+            print_painter = QtGui.QPainter(printer)
+            print_painter.setRenderHint(QtGui.QPainter.Antialiasing)
+            self._ui.image_view.view.render(print_painter)
 
     # ---------------------------------------------------------------------- 
     def to_clipboard(self):
         """NOTE that the content of the clipboard is cleared after program's exit.
         """
-        self.stop_live_mode()
 
         pixmap = QtGui.QScreen.grabWidget(self._ui.image_view)
         QtWidgets.qApp.clipboard().setPixmap(pixmap)
@@ -727,17 +721,24 @@ class FrameViewer(BaseWidget):
     def _get_image_file_name(self, title):
         """
         """
-        filesFilter = ";;".join(["(*.{})".format(ffilter) for ffilter in
-                                 QtGui.QImageWriter.supportedImageFormats()])
+        all_types = [str(ftype, 'utf-8') for ftype in QtGui.QImageWriter.supportedImageFormats()]
+        files_filter = ";;".join([f"(*.{ffilter})" for ffilter in all_types])
+        if DEFAULT_IMAGE_EXT in all_types:
+            default_filter = f"(*.{DEFAULT_IMAGE_EXT})"
+        else:
+            default_filter = f"(*.{all_types[0]})"
 
-        defaultName = "image_{}.{}".format(datetime.now().strftime(self.FILE_STAMP),
-                                           self.DEFAULT_IMAGE_EXT)
-        fileTuple, _ = QtWidgets.QFileDialog.getSaveFileName(self, title, self._save_data_folder + defaultName,
-                                                             filesFilter)
+        default_name = "image_{}".format(datetime.now().strftime(FILE_STAMP))
+        f_name, f_ext = QtWidgets.QFileDialog.getSaveFileName(self, title,
+                                                              os.path.join(self._save_data_folder , default_name),
+                                                              files_filter, default_filter)
 
-        self._save_data_folder = QtCore.QFileInfo(fileTuple).path() + '/'
+        self._save_data_folder = os.path.dirname(f_name)
 
-        return str(fileTuple)
+        if not f_name.lower().endswith(tuple([f".{ftype}" for ftype in all_types])):
+            f_name += f_ext.split('*')[1].strip('()')
+
+        return f_name
 
     # ----------------------------------------------------------------------
     def save_ui_settings(self, camera_name):

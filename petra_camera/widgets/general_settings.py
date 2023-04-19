@@ -67,7 +67,7 @@ class ProgramSetup(QtWidgets.QDialog):
         ok = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Warning, 'Attention!', 'Are you sure want to reset settings to default?',
                                    QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.No).exec_()
         if ok == QtWidgets.QMessageBox.Ok:
-            self._main_window.reset_settings()
+            self._main_window.reset_settings_to_default()
 
             QtCore.QSettings(APP_NAME).setValue("{}/geometry".format(self.WIDGET_NAME), self.saveGeometry())
 
@@ -250,9 +250,11 @@ class ProgramSetup(QtWidgets.QDialog):
 
         cameras_settings = []
         for ind in range(self._ui.tb_cameras.count()):
-            settings, name_changed, need_to_reload = self._ui.tb_cameras.widget(ind).get_data()
+            settings, new_camera, name_changed, need_to_reload = self._ui.tb_cameras.widget(ind).get_data()
             cameras_settings.append(settings)
-            if name_changed:
+            if new_camera:
+                self.cameras_to_add.append(self._ui.tb_cameras.widget(ind).get_name())
+            elif name_changed:
                 self.cameras_to_close.append(self._ui.tb_cameras.widget(ind).get_original_name())
                 self.cameras_to_add.append(self._ui.tb_cameras.widget(ind).get_name())
             elif need_to_reload:

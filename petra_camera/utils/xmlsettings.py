@@ -9,6 +9,7 @@
 """
 
 import os
+from pathlib import Path
 import shutil
 from datetime import datetime
 import xml.etree.cElementTree as ET
@@ -102,7 +103,7 @@ class XmlSettings(object):
     # ----------------------------------------------------------------------
     def _archive_settings(self):
         file_name = os.path.basename(self.file_name)
-        folder = os.path.join(os.path.dirname(self.file_name), 'archive')
+        folder = os.path.join(os.path.join(str(Path.home()), '.petra_camera'), 'archive')
 
         if not os.path.exists(folder):
             os.mkdir(folder)
