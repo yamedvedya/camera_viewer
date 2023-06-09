@@ -1,4 +1,4 @@
-<camera_viewer version="1.0">
+<camera_viewer version="2.0">
 
     <roi_server enable="true" host="" port="23358"/>
     <roi font="Arial,10" bg_color="#1e90ff" fg_color="#ffffff" fr_color="#ff0000"/>

@@ -84,7 +84,6 @@ def setup_logger(args):
         console.setFormatter(log_formatter)
         app_log.addHandler(console)
 
-
 # --------------------------------------------------------------------
 def main():
 

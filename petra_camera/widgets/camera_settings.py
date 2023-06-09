@@ -1,7 +1,9 @@
 # Created by matveyev at 22.02.2022
 
-from distutils.util import strtobool
 import PyTango
+import time
+
+from distutils.util import strtobool
 
 from PyQt5 import QtWidgets, QtCore
 
@@ -144,6 +146,8 @@ class CameraSettings(QtWidgets.QWidget):
         self._ui.chk_high_depth.setVisible(camera_properties is not None and camera_properties['high_depth'])
         self._ui.chk_roi_server.setChecked(False)
 
+        self._rescan_database()
+
     # ----------------------------------------------------------------------
     def _rescan_database(self):
         for dev_type, cmb_box in ((self._ui.cmb_camera_type.currentText(),  self._ui.cmb_tango_device),
@@ -184,7 +188,11 @@ class CameraSettings(QtWidgets.QWidget):
         camera_type = self._ui.cmb_camera_type.currentText()
         camera_properties = CAMERAS_SETTINGS[camera_type]
 
-        data_to_save = [('name', self._ui.le_name.text()),
+        if self._original_settings.get('name') != self._ui.le_name.text():
+            self.my_id = time.time_ns()
+
+        data_to_save = [('id', str(self.my_id)),
+                        ('name', self._ui.le_name.text()),
                         ('enabled', str(self._ui.chk_enabled.isChecked())),
                         ('proxy', camera_type)]
 
@@ -234,9 +242,8 @@ class CameraSettings(QtWidgets.QWidget):
         if camera_properties['high_depth']:
             data_to_save.append(('high_depth', str(self._ui.chk_high_depth.isChecked())))
 
-        no_changed = True
-        new_camera = False
-        if self._original_settings:
+        if self._original_settings is not None and int(self._original_settings.get('id')) == self.my_id:
+            no_changed = True
             if set(self._original_settings.keys()) != set([key for key, value in data_to_save]):
                 no_changed = False
             else:
@@ -244,27 +251,14 @@ class CameraSettings(QtWidgets.QWidget):
                     if self._original_settings.get(key) != value:
                         no_changed = False
                         break
+            return data_to_save, not no_changed
         else:
-            new_camera = True
-
-        return data_to_save, new_camera, self.my_name != self._original_name, not no_changed
+            return data_to_save, False
 
     # ----------------------------------------------------------------------
     def _new_name(self):
-        self._ui.le_name.blockSignals(True)
-
-        new_name = self.parent.name_accepted(self.my_id, self._ui.le_name.text())
-        if new_name is not None:
-            self.my_name = new_name
-
-        self._ui.le_name.setText(self.my_name)
-        self._ui.le_name.blockSignals(False)
         self.new_name.emit(self.my_id, self.my_name)
 
     # ----------------------------------------------------------------------
-    def get_name(self):
-        return self.my_name
-
-    # ----------------------------------------------------------------------
-    def get_original_name(self):
-        return self._original_name
+    def get_id(self):
+        return self.my_id

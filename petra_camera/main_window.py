@@ -9,14 +9,19 @@ import getpass
 import shutil
 import logging
 import os
+
+import numpy as np
 import psutil
 import socket
 import pyqtgraph as pg
 from pathlib import Path
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 from distutils.util import strtobool
+
+from queue import Queue, Empty
+from threading import Event
 
 from petra_camera.widgets.about_dialog import AboutDialog
 from petra_camera.widgets.general_settings import ProgramSetup
@@ -30,7 +35,10 @@ from petra_camera.roisrv.roiserver import RoiServer
 from petra_camera.gui.MainWindow_ui import Ui_MainWindow
 
 from petra_camera.constants import APP_NAME
+
 logger = logging.getLogger(APP_NAME)
+
+N_WORKERS = 3
 
 
 # ----------------------------------------------------------------------
@@ -38,10 +46,9 @@ class PETRACamera(QtWidgets.QMainWindow):
     """
     """
     LOG_PREVIEW = "gvim"
-    STATUS_TICK = 3000              # [ms]
+    STATUS_TICK = 500  # [ms]
 
-    camera_done = QtCore.pyqtSignal(str)
-    camera_closed = QtCore.pyqtSignal(str)
+    job_done = QtCore.pyqtSignal(object)
 
     # ----------------------------------------------------------------------
     def __init__(self, options):
@@ -54,12 +61,6 @@ class PETRACamera(QtWidgets.QMainWindow):
         self._init_menu()
 
         self.loader_progress = BatchProgress()
-        self.loader_progress.stop_batch.connect(self.interrupt_batch)
-
-        self.loader = None
-        self.cameras_to_reload = []
-        self.cameras_to_delete = []
-        self.cameras_to_add = []
 
         self.close_requested = False
 
@@ -80,6 +81,7 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.camera_widgets = {}
         self.camera_docks = {}
+        self.tab_widget = None
 
         self.camera_list = self.get_cameras()
 
@@ -87,14 +89,22 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         # first we reset progress bar
         self.loader_progress.clear()
-        self.loader_progress.set_titel('Open cameras')
+        self.loader_progress.new_cameras_set(list(self.camera_list.items()))
+        self.loader_progress.set_title('Open cameras')
         self.loader_progress.show()
 
-        self.loader = CameraLoader(self, 'open')
-        self.camera_done.connect(self.loader.camera_done)
+        self.loader = BatchLoader(self)
+        self.job_done.connect(self.loader.job_done)
         self.loader.add_camera.connect(self.add_camera)
-        self.loader.done.connect(self.loader_done)
+        self.loader.close_camera.connect(self.close_camera)
+        self.loader.reload_camera.connect(self.reload_camera)
+        self.loader.set_done.connect(self.loader_done)
+
+        self.loader.loader_set_camera_status.connect(self.loader_progress.set_camera_progress)
+        self.loader.loader_set_progress.connect(self.loader_progress.total_progress)
+
         self.loader.start()
+        self.loader.new_set_to_be_done(list(self.camera_list.keys()), [], [])
 
         self._roi_server = None
         self.start_server()
@@ -105,34 +115,20 @@ class PETRACamera(QtWidgets.QMainWindow):
         self._load_ui_settings()
 
         self._status_timer = QtCore.QTimer(self)
-        self._status_timer.timeout.connect(self._refresh_status_bar)
+        self._status_timer.timeout.connect(self._refresh_status)
         self._status_timer.start(self.STATUS_TICK)
 
         logger.info("Initialized successfully")
 
     # ----------------------------------------------------------------------
-    def interrupt_batch(self):
-        self.loader.interrupt_batch()
-
-    # ----------------------------------------------------------------------
-    def loader_done(self):
-        self.loader_progress.hide()
-
-        if self.close_requested:
-            logger.info("Closed properly")
-            QtWidgets.qApp.quit()
-
-        self.camera_list = self.get_cameras()
-
-    # ----------------------------------------------------------------------
-    def add_camera(self, camera_name, progress):
+    def add_camera(self, camera_id, job_id):
         """
         """
+        logger.debug(f"Request to add {camera_id}")
+        dock = QtWidgets.QDockWidget(self.camera_list[camera_id], self)
+        dock.setObjectName(f'{camera_id}Dock')
 
-        self.loader_progress.set_progress(f'Open camera {camera_name}', progress)
-
-        dock = QtWidgets.QDockWidget(camera_name)
-        dock.setObjectName(f'{"".join(camera_name.split())}Dock')
+        self.camera_docks[camera_id] = dock
 
         children = [child for child in self.findChildren(QtWidgets.QDockWidget)
                     if isinstance(child.widget(), (CameraWidget, EmptyCameraWidget))]
@@ -142,63 +138,45 @@ class PETRACamera(QtWidgets.QMainWindow):
             self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
 
         self.menu_cameras.addAction(dock.toggleViewAction())
-        dock.setStyleSheet("""QDockWidget {font-size: 14pt; font-weight: bold;}""")
-        self.camera_docks[camera_name] = dock
 
         try:
-            widget = CameraWidget(self, camera_name)
+            widget = CameraWidget(self, camera_id)
             widget.load_ui_settings()
 
         except Exception as err:
 
-            widget = EmptyCameraWidget(self, camera_name, f'{err}')
+            widget = EmptyCameraWidget(self, camera_id, f'{err}')
             widget.reinit_camera.connect(self.reinit_camera)
             widget.load_ui_settings()
 
-            open_mgs = QtWidgets.QMessageBox()
-            open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
-            open_mgs.setWindowTitle(f"Error")
-            open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
-            open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
-            open_mgs.exec_()
-
-        self.camera_widgets[camera_name] = widget
+        self.camera_widgets[camera_id] = widget
         dock.setWidget(widget)
 
-        self.camera_done.emit(camera_name)
+        logger.debug(f"Opening {camera_id} done")
+        self.job_done.emit(job_id)
 
     # ----------------------------------------------------------------------
-    def reinit_camera(self, camera_name):
+    def reinit_camera(self, camera_id):
         try:
-            widget = CameraWidget(self, camera_name)
+            widget = CameraWidget(self, camera_id)
             widget.load_ui_settings()
 
         except Exception as err:
 
-            widget = EmptyCameraWidget(self, camera_name, f'{err}')
+            widget = EmptyCameraWidget(self, camera_id, f'{err}')
             widget.reinit_camera.connect(self.reinit_camera)
             widget.load_ui_settings()
 
-            open_mgs = QtWidgets.QMessageBox()
-            open_mgs.setIcon(QtWidgets.QMessageBox.Critical)
-            open_mgs.setWindowTitle(f"Error")
-            open_mgs.setText(f"Cannot add {camera_name}:\n{err}")
-            open_mgs.setStandardButtons(QtWidgets.QMessageBox.Ok)
-            open_mgs.exec_()
-
-        self.camera_docks[camera_name].setWidget(widget)
-        self.camera_widgets[camera_name] = widget
+        self.camera_docks[camera_id].setWidget(widget)
+        self.camera_widgets[camera_id] = widget
 
     # ----------------------------------------------------------------------
-    def reload_camera(self, camera_name, progress):
-
-        self.loader_progress.set_progress(f'Reloading camera {camera_name}', progress)
-
-        self.camera_widgets[camera_name].clean_close()
-
-        self.reinit_camera(camera_name)
-
-        self.camera_done.emit(camera_name)
+    def reload_camera(self, camera_id, job_id):
+        logger.debug(f"Request to reload {camera_id}")
+        self.camera_widgets[camera_id].clean_close()
+        self.reinit_camera(camera_id)
+        logger.debug(f"Reload {camera_id} done")
+        self.job_done.emit(job_id)
 
     # ----------------------------------------------------------------------
     def start_server(self):
@@ -222,54 +200,60 @@ class PETRACamera(QtWidgets.QMainWindow):
     def show_settings(self):
 
         existing_cameras = self.camera_list
-        self.cameras_to_reload = []
-        self.cameras_to_delete = []
-        self.cameras_to_add = []
 
         dlg = ProgramSetup(self)
         if dlg.exec_():
             logger.info("Applying new settings...")
+
             self.camera_list = self._get_cameras_list()
 
-            self.cameras_to_reload = dlg.cameras_to_reload
-            self.cameras_to_add = dlg.cameras_to_add
-            self.cameras_to_delete = list(set(existing_cameras)-set(self.camera_list))
-            if self.cameras_to_reload or self.cameras_to_delete:
+            to_add = list(set(self.camera_list) - set(existing_cameras))
+            to_close = list(set(existing_cameras) - set(self.camera_list))
+            to_reload = dlg.cameras_to_reload
+
+            full_list = to_add + to_close + to_reload
+            existing_cameras.update(self.camera_list)
+
+            if len(full_list):
                 self.loader_progress.clear()
-                self.loader_progress.set_titel('Applying new settings')
+                self.loader_progress.set_title('Applying new settings')
+                self.loader_progress.new_cameras_set([(id, existing_cameras[id]) for id in full_list])
                 self.loader_progress.show()
 
-                self.loader = CameraLoader(self, 'reload')
-                self.camera_done.connect(self.loader.camera_done)
-                self.loader.add_camera.connect(self.add_camera)
-                self.loader.close_camera.connect(self.close_camera)
-                self.loader.reload_camera.connect(self.reload_camera)
-                self.loader.done.connect(self.loader_done)
-
-                self.loader.start()
+                self.loader.new_set_to_be_done(to_add, to_close, to_reload)
 
     # ----------------------------------------------------------------------
-    def close_camera(self, camera_name, progress):
-
-        self.loader_progress.set_progress(f'Closing camera {camera_name}', progress)
-
+    def close_camera(self, camera_id, job_id):
+        logger.debug(f"Request to close {camera_id}")
         try:
-            self.camera_widgets[camera_name].clean_close()
-            self.removeDockWidget(self.camera_docks[camera_name])
-            if camera_name in self.camera_widgets:
-                del self.camera_widgets[camera_name]
-            if camera_name in self.camera_docks:
-                del self.camera_docks[camera_name]
-        except Exception as err:
-            logger.error(f'Error while closing camera {camera_name} :{repr(err)}')
+            self.camera_widgets[camera_id].clean_close()
+            self.removeDockWidget(self.camera_docks[camera_id])
+            if camera_id in self.camera_widgets:
+                del self.camera_widgets[camera_id]
+            if camera_id in self.camera_docks:
+                del self.camera_docks[camera_id]
 
-        self.camera_done.emit(camera_name)
+        except Exception as err:
+            logger.error(f'Error while closing camera {self.camera_list[camera_id]} :{repr(err)}')
+
+        logger.debug(f"Closing {camera_id} done")
+        self.job_done.emit(job_id)
+
+    # ----------------------------------------------------------------------
+    def loader_done(self):
+        self.loader_progress.hide()
+
+        if self.close_requested:
+            self.loader.wait_to_safe_close()
+            QtWidgets.qApp.quit()
 
     # ----------------------------------------------------------------------
     def clean_close(self):
         """
         """
         logger.info("Closing the app...")
+
+        QtWidgets.qApp.clipboard().clear()
 
         if self._roi_server is not None:
             logger.info("Stopping ROI server...")
@@ -280,19 +264,14 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self._save_ui_settings()
 
-        QtWidgets.qApp.clipboard().clear()
-
         self.loader_progress.clear()
-        self.loader_progress.set_titel('Closing cameras')
+        self.loader_progress.new_cameras_set(list(self.camera_list.items()))
+        self.loader_progress.set_title('Closing cameras')
         self.loader_progress.show()
 
         self.close_requested = True
 
-        self.loader = CameraLoader(self, 'close')
-        self.camera_done.connect(self.loader.camera_done)
-        self.loader.close_camera.connect(self.close_camera)
-        self.loader.done.connect(self.loader_done)
-        self.loader.start()
+        self.loader.new_set_to_be_done([], list(self.camera_list.keys()), [])
 
     # ----------------------------------------------------------------------
     def closeEvent(self, event):
@@ -306,7 +285,6 @@ class PETRACamera(QtWidgets.QMainWindow):
         """
         """
         self.clean_close()
-            # pass
 
     # ----------------------------------------------------------------------
     def reset_settings_to_default(self):
@@ -348,15 +326,11 @@ class PETRACamera(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def _get_cameras_list(self):
 
-        cam_list = []
+        cam_list = {}
         for device in self.settings.get_nodes('camera'):
-            if 'enabled' in device.keys():
-                if strtobool(device.get('enabled')):
-                    cam_list.append(device.get('name'))
-            else:
-                cam_list.append(device.get('name'))
-
-        cam_list.sort()
+            if 'enabled' in device.keys() and not strtobool(device.get('enabled')):
+                continue
+            cam_list[int(device.get('id'))] = device.get('name')
 
         return cam_list
 
@@ -467,7 +441,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.statusBar().addPermanentWidget(self._lb_resources_status)
 
     # ----------------------------------------------------------------------
-    def _refresh_status_bar(self):
+    def _refresh_status(self):
         """
         """
         process = psutil.Process(os.getpid())
@@ -476,86 +450,183 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self._lb_resources_status.setText("| {:.2f}MB | CPU {} % |".format(mem,
                                                                            cpu))
+        for widget in self.camera_widgets.values():
+            id, state = widget.get_last_state()
+            if id in self.camera_list:
+                self.set_tab_style(self.camera_list[id], state)
+            else:
+                print(f"Cannot find {id} in camera_list!")
+
+    # ----------------------------------------------------------------------
+    def set_tab_style(self, camera_name, state):
+        if self.tab_widget is None:
+            for child in self.children():
+                if isinstance(child, QtWidgets.QTabBar) and child.count():
+                    self.tab_widget = child
+                    child.setStyleSheet("font-size: 14pt; font-weight: bold;")
+
+        if self.tab_widget is not None:
+            for ind in range(self.tab_widget.count()):
+                if self.tab_widget.tabText(ind) == camera_name:
+                    if state:
+                        self.tab_widget.setTabTextColor(ind, QtGui.QColor('red'))
+                    else:
+                        self.tab_widget.setTabTextColor(ind, QtGui.QColor('black'))
 
 
 # ----------------------------------------------------------------------
-class CameraLoader(QtCore.QThread):
+class BatchLoader(QtCore.QThread):
     """
     separate QThread, that loads cameras
     """
 
-    add_camera = QtCore.pyqtSignal(str, float)
-    close_camera = QtCore.pyqtSignal(str, float)
-    reload_camera = QtCore.pyqtSignal(str, float)
-    done = QtCore.pyqtSignal()
+    add_camera = QtCore.pyqtSignal(object, int)
+    close_camera = QtCore.pyqtSignal(object, int)
+    reload_camera = QtCore.pyqtSignal(object, int)
 
-    #----------------------------------------------------------------------
-    def __init__(self, main_window, mode):
-        super(CameraLoader, self).__init__()
+    loader_set_camera_status = QtCore.pyqtSignal(object, str)
+    loader_set_progress = QtCore.pyqtSignal(float)
+
+    set_done = QtCore.pyqtSignal()
+
+    # ----------------------------------------------------------------------
+    def __init__(self, main_window):
+        super(BatchLoader, self).__init__()
 
         self.main_window = main_window
-        self.mode = mode
 
-        self.done_cameras = []
-        self._stop_batch = False
+        self.jobs_to_be_done = []
+        self.total_jobs = 0
+
+        self.job_queue = Queue()
+        self.job_id = 0
+
+        self.stop_event = Event()
+        self.is_done = Event()
+
+        self.new_jobs = Event()
+
+        self.workers = []
+        for id in range(N_WORKERS):
+            worker = CameraLoader(id, self.job_queue, self.stop_event)
+            worker.add_camera.connect(lambda camera_id, job_id: self.add_camera.emit(camera_id, job_id))
+            worker.close_camera.connect(lambda camera_id, job_id: self.close_camera.emit(camera_id, job_id))
+            worker.reload_camera.connect(lambda camera_id, job_id: self.reload_camera.emit(camera_id, job_id))
+            worker.loader_set_camera_status.connect(lambda camera, status:
+                                                    self.loader_set_camera_status.emit(camera, status))
+
+            self.workers.append(worker)
+            worker.start()
 
     # ----------------------------------------------------------------------
-    def wait_till_camera_done(self, camera_name):
-        while camera_name not in self.done_cameras:
-            if self._stop_batch:
-                break
+    def wait_to_safe_close(self):
+        self.stop_event.set()
+        while np.any([worker.is_active() for worker in self.workers]) or not self.is_done.is_set():
             self.msleep(100)
 
+        logger.debug("BatchLoader closed")
+
     # ----------------------------------------------------------------------
-    def interrupt_load(self):
-        self._stop_batch = True
+    def new_set_to_be_done(self, to_open, to_close, to_reload):
+        logger.debug(f"New jobs set: open {to_open}, close {to_close}, reload {to_reload}")
+        for camera_id in to_open:
+            self.job_queue.put(("open", self.job_id, camera_id))
+            self.jobs_to_be_done.append(self.job_id)
+            self.job_id += 1
+
+        for camera_id in to_close:
+            self.job_queue.put(("close", self.job_id, camera_id))
+            self.jobs_to_be_done.append(self.job_id)
+            self.job_id += 1
+
+        for camera_id in to_reload:
+            self.job_queue.put(("reload", self.job_id, camera_id))
+            self.jobs_to_be_done.append(self.job_id)
+            self.job_id += 1
+
+        self.total_jobs = len(self.jobs_to_be_done)
+        self.new_jobs.set()
 
     # ----------------------------------------------------------------------
     def run(self):
 
-        if self.mode in ['open', 'close']:
-            total_cameras = float(len(self.main_window.camera_list))
-            if self.mode == 'open':
-                signal = self.add_camera
-            else:
-                signal = self.close_camera
+        while not self.stop_event.is_set():
+            if self.new_jobs.is_set():
+                logger.debug("Processing new set")
+                while len(self.jobs_to_be_done):
+                    self.loader_set_progress.emit((self.total_jobs - len(self.jobs_to_be_done)) / self.total_jobs)
+                    self.msleep(100)
+                logger.debug(f"Jobs set done")
+                self.set_done.emit()
+                self.new_jobs.clear()
+            self.msleep(100)
 
-            for ind, camera_name in enumerate(self.main_window.camera_list):
-                signal.emit(camera_name, ind/total_cameras)
-                self.wait_till_camera_done(camera_name)
-                if self._stop_batch:
-                    break
-
-        else:
-            total_cameras = len(self.main_window.cameras_to_reload) +\
-                            len(self.main_window.cameras_to_delete) +\
-                            len(self.main_window.cameras_to_add)
-            counter = 0
-
-            for camera_name in self.main_window.cameras_to_delete:
-                self.close_camera.emit(camera_name, counter / total_cameras)
-                self.wait_till_camera_done(camera_name)
-                if self._stop_batch:
-                    break
-
-            if not self._stop_batch:
-                for camera_name in self.main_window.cameras_to_reload:
-                    self.reload_camera.emit(camera_name, counter / total_cameras)
-                    self.wait_till_camera_done(camera_name)
-                    if self._stop_batch:
-                        break
-                    counter += 1
-
-            if not self._stop_batch:
-                for camera_name in self.main_window.cameras_to_add:
-                    self.add_camera.emit(camera_name, counter / total_cameras)
-                    self.wait_till_camera_done(camera_name)
-                    if self._stop_batch:
-                        break
-                    counter += 1
-
-        self.done.emit()
+        self.is_done.set()
+        logger.debug(f"Butcher done")
 
     # ----------------------------------------------------------------------
-    def camera_done(self, camera_name):
-        self.done_cameras.append(camera_name)
+    def job_done(self, job_id):
+        logger.debug(f"Camera {job_id} done")
+        if job_id in self.jobs_to_be_done:
+            self.jobs_to_be_done.remove(job_id)
+        else:
+            print(f"Cannot find {job_id} in cameras_to_be_done")
+        for worker in self.workers:
+            worker.job_done(job_id)
+
+
+# ----------------------------------------------------------------------
+class CameraLoader(QtCore.QThread):
+    add_camera = QtCore.pyqtSignal(object, int)
+    close_camera = QtCore.pyqtSignal(object, int)
+    reload_camera = QtCore.pyqtSignal(object, int)
+
+    loader_set_camera_status = QtCore.pyqtSignal(object, str)
+
+    # ----------------------------------------------------------------------
+    def __init__(self, my_id, job_queue, stop_event):
+        super(CameraLoader, self).__init__()
+        self.job_queue = job_queue
+        self.stop_event = stop_event
+        self.my_id = my_id
+
+        self.is_done = Event()
+
+        self.done_jobs = []
+
+    # ----------------------------------------------------------------------
+    def run(self):
+        while not self.stop_event.is_set():
+            try:
+                task, job_id, camera_id = self.job_queue.get(block=False)
+                logger.debug(f"Loader {self.my_id} got task {task} for camera {camera_id}")
+                if task == "open":
+                    self.loader_set_camera_status.emit(camera_id, "opening...")
+                    self.add_camera.emit(camera_id, job_id)
+                if task == "close":
+                    self.loader_set_camera_status.emit(camera_id, "closing...")
+                    self.close_camera.emit(camera_id, job_id)
+                if task == "reload":
+                    self.loader_set_camera_status.emit(camera_id, "reloading...")
+                    self.reload_camera.emit(camera_id, job_id)
+                while job_id not in self.done_jobs:
+                    self.msleep(100)
+                if task == "open":
+                    self.loader_set_camera_status.emit(camera_id, "opened.")
+                if task == "close":
+                    self.loader_set_camera_status.emit(camera_id, "closed.")
+                if task == "reload":
+                    self.loader_set_camera_status.emit(camera_id, "reloaded.")
+            except Empty:
+                self.msleep(100)
+
+        logger.debug(f"Loader {self.my_id} no more tasks")
+        self.is_done.set()
+
+    # ----------------------------------------------------------------------
+    def is_active(self):
+        return not self.is_done.is_set()
+
+    # ----------------------------------------------------------------------
+    def job_done(self, camera_name):
+        self.done_jobs.append(camera_name)

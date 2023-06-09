@@ -54,7 +54,6 @@ class DataSource2D(QtCore.QObject):
         self.settings = parent.settings
 
         self.device_id = ''
-        self._base_id = ''
 
         self.auto_screen = False
 
@@ -92,18 +91,16 @@ class DataSource2D(QtCore.QObject):
         self.subtract_dark_image = False
 
     # ----------------------------------------------------------------------
-    def new_device_proxy(self, name, auto_screen):
+    def new_device_proxy(self, id, auto_screen):
         """
 
-        :param name: str, camera name to be loaded from config
+        :param id: int, camera id to be loaded from config
         :param auto_screen: bool, is generally moving screens is allowed
         :return: bool, success or not
         """
 
         for device in self.settings.get_nodes('camera'):
-            if device.get('name') == name:
-
-                self._base_id = name
+            if int(device.get('id')) == id:
 
                 try:
                     proxyClass = device.get("proxy")
@@ -112,7 +109,7 @@ class DataSource2D(QtCore.QObject):
                     module = importlib.import_module("petra_camera.devices.{}".format(proxyClass.lower()))
                     self._device_proxy = getattr(module, proxyClass)(device)
 
-                    self.device_id = self._base_id + self._device_proxy.file_name
+                    self.device_id = device.get('name') + self._device_proxy.file_name
 
                     # reset flags and variables
                     self.got_first_frame = False
@@ -215,6 +212,9 @@ class DataSource2D(QtCore.QObject):
         :return: None
         """
 
+        if self.is_running():
+            self.stop(False)
+
         if self._device_proxy is not None:
             self._device_proxy.close_camera()
 
@@ -244,7 +244,7 @@ class DataSource2D(QtCore.QObject):
             self._state = "abort"
 
         while self._state != 'idle':
-            time.sleep(1e-3)
+            time.sleep(0.1)
 
         if self.auto_screen and auto_screen:
             self._device_proxy.move_motor(False)

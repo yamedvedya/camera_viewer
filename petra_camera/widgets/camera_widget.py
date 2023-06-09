@@ -39,19 +39,20 @@ class CameraWidget(QtWidgets.QMainWindow):
     REFRESH_ICONS_PERIOD = 500 # how often we update settings with Tango
 
     # ----------------------------------------------------------------------
-    def __init__(self, parent, my_name):
+    def __init__(self, parent, my_id):
         """
         """
         super(CameraWidget, self).__init__(parent)
 
         self.settings = parent.settings
-        self.camera_name = my_name
+        self.camera_id = my_id
+        self._last_state = None
         self._parent = parent
 
         self.hist_lock = QtCore.QMutex()
 
         self.camera_device = DataSource2D(self)
-        state, msg = self.camera_device.new_device_proxy(self.camera_name, self._parent.auto_screen_action.isChecked())
+        state, msg = self.camera_device.new_device_proxy(self.camera_id, self._parent.auto_screen_action.isChecked())
         if not state:
             raise RuntimeError(f'{msg}')
 
@@ -89,37 +90,35 @@ class CameraWidget(QtWidgets.QMainWindow):
 
         :return: None
         """
-        logger.info(f"Closing {self.camera_name}...")
+        logger.info(f"Closing {self.camera_id}...")
 
         self._settings_widget.close()
         if self._position_control_widget is not None:
             self._position_control_widget.close()
 
-        self._frame_viewer.close(self._parent.auto_screen_action.isChecked())
-
         self.camera_device.close_camera()
 
-        self._frame_viewer.save_ui_settings(self.camera_name)
-        self._settings_widget.save_ui_settings(self.camera_name)
-        self._markerroi_widget.save_ui_settings(self.camera_name)
+        self._frame_viewer.save_ui_settings(self.camera_id)
+        self._settings_widget.save_ui_settings(self.camera_id)
+        self._markerroi_widget.save_ui_settings(self.camera_id)
         if self._peak_search_widget is not None:
-            self._peak_search_widget.save_ui_settings(self.camera_name)
+            self._peak_search_widget.save_ui_settings(self.camera_id)
 
         if self._position_control_widget is not None:
-            self._position_control_widget.save_ui_settings(self.camera_name)
+            self._position_control_widget.save_ui_settings(self.camera_id)
 
         self._save_ui_settings()
 
-        logger.info(f"{self.camera_name} closed.")
+        logger.info(f"{self.camera_id} closed.")
 
     # ----------------------------------------------------------------------
     def _refresh_icons(self):
         try:
-            state = self.camera_device.is_running()
-            if state is None:
+            self._last_state = self.camera_device.is_running()
+            if self._last_state is None:
                 self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
                 self._action_start_stop.setEnabled(False)
-            elif state:
+            elif self._last_state:
                 self._action_start_stop.setIcon(QtGui.QIcon(":/ico/stop.png"))
                 self._action_start_stop.setEnabled(True)
             else:
@@ -143,6 +142,10 @@ class CameraWidget(QtWidgets.QMainWindow):
                 self._move_motor_action.setToolTip('Move screen OUT' if position else 'Move screen IN')
         except Exception as err:
             logger.exception(f"Exception: motor state: {err}")
+
+    # ----------------------------------------------------------------------
+    def get_last_state(self):
+        return self.camera_id, self._last_state
 
     # ----------------------------------------------------------------------
     def _refresh_view(self):
@@ -219,14 +222,14 @@ class CameraWidget(QtWidgets.QMainWindow):
             self._position_control_widget, self._position_control_dock = None, None
 
             # after all widgets are loaded we restore the user layout
-        self._frame_viewer.load_ui_settings(self.camera_name)
-        self._settings_widget.load_ui_settings(self.camera_name)
-        self._markerroi_widget.load_ui_settings(self.camera_name)
+        self._frame_viewer.load_ui_settings(self.camera_id)
+        self._settings_widget.load_ui_settings(self.camera_id)
+        self._markerroi_widget.load_ui_settings(self.camera_id)
         if self._peak_search_widget is not None:
-            self._peak_search_widget.load_ui_settings(self.camera_name)
+            self._peak_search_widget.load_ui_settings(self.camera_id)
 
         if self._position_control_widget is not None:
-            self._position_control_widget.load_ui_settings(self.camera_name)
+            self._position_control_widget.load_ui_settings(self.camera_id)
 
         # link between picture and histogram
         self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())
@@ -378,8 +381,8 @@ class CameraWidget(QtWidgets.QMainWindow):
         """
         settings = QtCore.QSettings(APP_NAME)
 
-        settings.setValue(f"{self.camera_name}/geometry", self.saveGeometry())
-        settings.setValue(f"{self.camera_name}/state", self.saveState())
+        settings.setValue(f"{self.camera_id}/geometry", self.saveGeometry())
+        settings.setValue(f"{self.camera_id}/state", self.saveState())
 
     # ----------------------------------------------------------------------
     def load_ui_settings(self):
@@ -388,11 +391,11 @@ class CameraWidget(QtWidgets.QMainWindow):
         settings = QtCore.QSettings(APP_NAME)
 
         try:
-            self.restoreGeometry(settings.value(f"{self.camera_name}/geometry"))
+            self.restoreGeometry(settings.value(f"{self.camera_id}/geometry"))
         except:
             pass
 
         try:
-            self.restoreState(settings.value(f"{self.camera_name}/state"))
+            self.restoreState(settings.value(f"{self.camera_id}/state"))
         except:
             pass

@@ -6,35 +6,40 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>100</height>
+    <width>398</width>
+    <height>144</height>
    </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>Batch processing</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
+  <layout class="QVBoxLayout" name="verticalLayout_3">
    <item>
-    <widget class="QLabel" name="lb_camera_name">
-     <property name="text">
-      <string>Open camera...</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,0">
+     <item>
+      <layout class="QVBoxLayout" name="layout_names"/>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="layout_status"/>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QProgressBar" name="pb_progress">
+     <property name="minimumSize">
+      <size>
+       <width>380</width>
+       <height>25</height>
+      </size>
+     </property>
      <property name="value">
       <number>0</number>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QDialogButtonBox" name="but_box">
-     <property name="locale">
-      <locale language="English" country="UnitedStates"/>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Abort</set>
      </property>
     </widget>
    </item>

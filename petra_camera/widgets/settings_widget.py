@@ -462,7 +462,7 @@ class SettingsWidget(BaseWidget):
 
         self._stop_settings_reader.set()
         while self._settings_reader.isRunning():
-            time.sleep(1)
+            time.sleep(0.1)
 
         super(SettingsWidget, self).close()
 

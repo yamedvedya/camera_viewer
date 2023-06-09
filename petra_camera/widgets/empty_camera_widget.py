@@ -22,7 +22,7 @@ class EmptyCameraWidget(QtWidgets.QMainWindow):
     reinit_camera = QtCore.pyqtSignal(str)
 
     # ----------------------------------------------------------------------
-    def __init__(self, parent, my_name, last_error):
+    def __init__(self, parent, my_id, last_error):
         """
         """
         super(EmptyCameraWidget, self).__init__(parent)
@@ -30,8 +30,14 @@ class EmptyCameraWidget(QtWidgets.QMainWindow):
         self._ui = Ui_EmptyCameraWindow()
         self._ui.setupUi(self)
 
+        self.my_id = my_id
+
         self._ui.lb_error.setText(last_error)
-        self._ui.cmd_reinit_camera.clicked.connect(lambda state, x=my_name: self.reinit_camera.emit(x))
+        self._ui.cmd_reinit_camera.clicked.connect(lambda state, x=my_id: self.reinit_camera.emit(x))
+
+    # ----------------------------------------------------------------------
+    def get_last_state(self):
+        return self.my_id, False
 
     # ----------------------------------------------------------------------
     def _save_ui_settings(self):

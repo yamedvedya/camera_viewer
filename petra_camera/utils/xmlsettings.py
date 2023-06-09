@@ -21,35 +21,64 @@ class XmlSettings(object):
     # ----------------------------------------------------------------------
     def __init__(self, file_name):
         self.file_name = file_name
+        self.et_tree = ET.parse(file_name)
+        self.root = self.et_tree.getroot()
+
+        self.check_cameras_ids()
+
+    # ----------------------------------------------------------------------
+    def check_cameras_ids(self):
+
+        id_counter = 0
+        used_ids = []
+        need_to_be_saved = False
+
+        for el in self.root.findall('camera'):
+            if not el.get("id"):
+                need_to_be_saved = True
+                el.set("id", str(id_counter))
+                used_ids.append(id_counter)
+            else:
+                id = int(el.get("id"))
+                if id in used_ids:
+                    need_to_be_saved = True
+                    el.set("id", str(id_counter))
+                    used_ids.append(id_counter)
+                else:
+                    used_ids.append(id)
+            while id_counter in used_ids:
+                id_counter += 1
+
+        if need_to_be_saved:
+            self._archive_settings()
+            self.et_tree.write(self.file_name)
 
     # ----------------------------------------------------------------------
     def save_new_options(self, general_settings, cameras_settings):
 
         self._archive_settings()
 
-        et_tree = ET.parse(self.file_name)
-        root = et_tree.getroot()
         for node, values in general_settings:
             try:
-                node = self.node(node, root)
+                node = self.node(node, self.root)
             except:
-                node = self.make_node(root, node)
+                node = self.make_node(self.root, node)
 
             for attribute, value in values:
                 node.set(attribute, str(value))
 
-        for el in root.findall('camera'):
-            root.remove(el)
+        for el in self.root.findall('camera'):
+            self.root.remove(el)
 
         el = None
         for camera in cameras_settings:
-            el = ET.SubElement(root, 'camera', dict((key, value) for (key, value) in camera))
+            el = ET.SubElement(self.root, 'camera', dict((key, value) for (key, value) in camera))
             el.tail = '\n\n\t'
 
         if el is not None:
             el.tail = '\n\n'
 
-        et_tree.write(self.file_name)
+        self.et_tree.write(self.file_name)
 
     # ----------------------------------------------------------------------
     def option(self, node_path, attribute):
@@ -81,7 +110,7 @@ class XmlSettings(object):
         """
         """
         if root is None:
-            root = ET.parse(self.file_name).getroot()
+            root = self.root
 
         if node_path is not None:
             for node in node_path.split("/"):

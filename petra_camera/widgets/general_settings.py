@@ -1,6 +1,7 @@
 # Created by matveyev at 22.02.2022
 
 import logging
+import time
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 
@@ -30,15 +31,11 @@ class ProgramSetup(QtWidgets.QDialog):
 
         self._main_window = main_window
 
-        self._last_camera_id = 0
-
         self._settings = main_window.settings
 
         self.tango_dbs_info = TangoDBsInfo()
 
         self.cameras_to_reload = []
-        self.cameras_to_close = []
-        self.cameras_to_add = []
 
         self.btn_add_camera = QtWidgets.QToolButton(self)
         self.btn_add_camera.setText('Add camera') #.setIcon(QtGui.QIcon(":/icons/plus_small.png"))
@@ -127,7 +124,8 @@ class ProgramSetup(QtWidgets.QDialog):
         self.cameras_settings = self._settings.get_nodes('camera')
 
         self.loader_progress = BatchProgress()
-        self.loader_progress.stop_batch.connect(self.interrupt_batch)
+        self.loader_progress.new_cameras_set([(int(camera.get('id')), camera.get('name')) for camera in self.cameras_settings])
+        self.loader_progress.set_title('Get camera settings')
         self.loader_progress.show()
 
         self.loader = CameraLoader(self)
@@ -139,36 +137,31 @@ class ProgramSetup(QtWidgets.QDialog):
         # for ind, device in enumerate():
 
     # ----------------------------------------------------------------------
-    def interrupt_batch(self):
-        self.loader.interrupt_batch()
-
-    # ----------------------------------------------------------------------
     def loader_done(self):
         self.loader_progress.hide()
 
     # ----------------------------------------------------------------------
     def show_camera(self, ind, progress):
-
         camera_settings = self.cameras_settings[ind]
-        camera_name = camera_settings.get('name')
-        self.loader_progress.set_progress(f'Load settings for camera {camera_name}', progress)
+        camera_id = int(camera_settings.get('id'))
+        self.loader_progress.set_camera_progress(camera_id, f'Load settings')
 
-        widget = CameraSettings(self, ind, camera_settings)
+        widget = CameraSettings(self, camera_id, camera_settings)
         widget.delete_me.connect(self._delete_camera)
         widget.new_name.connect(self._new_name)
-        self._ui.tb_cameras.addTab(widget, camera_name)
-        self._last_camera_id += 1
+        self._ui.tb_cameras.addTab(widget, camera_settings.get('name'))
 
+        self.loader_progress.set_camera_progress(camera_id, f'done')
+        self.loader_progress.total_progress(progress)
         self.camera_done.emit(ind)
 
     # ----------------------------------------------------------------------
     def _add_camera(self):
-        widget = CameraSettings(self, self._last_camera_id)
+        widget = CameraSettings(self, time.time_ns())
         widget.delete_me.connect(self._delete_camera)
         widget.new_name.connect(self._new_name)
         self._ui.tb_cameras.addTab(widget, 'New camera')
         self._ui.tb_cameras.setCurrentIndex(self._ui.tb_cameras.count() - 1)
-        self._last_camera_id += 1
 
     # ----------------------------------------------------------------------
     def name_accepted(self, camera_id, new_name):
@@ -250,15 +243,10 @@ class ProgramSetup(QtWidgets.QDialog):
 
         cameras_settings = []
         for ind in range(self._ui.tb_cameras.count()):
-            settings, new_camera, name_changed, need_to_reload = self._ui.tb_cameras.widget(ind).get_data()
+            settings, need_to_reload = self._ui.tb_cameras.widget(ind).get_data()
             cameras_settings.append(settings)
-            if new_camera:
-                self.cameras_to_add.append(self._ui.tb_cameras.widget(ind).get_name())
-            elif name_changed:
-                self.cameras_to_close.append(self._ui.tb_cameras.widget(ind).get_original_name())
-                self.cameras_to_add.append(self._ui.tb_cameras.widget(ind).get_name())
-            elif need_to_reload:
-                self.cameras_to_reload.append(self._ui.tb_cameras.widget(ind).get_name())
+            if need_to_reload:
+                self.cameras_to_reload.append(self._ui.tb_cameras.widget(ind).get_id())
 
         self._settings.save_new_options(general_options, cameras_settings)
 

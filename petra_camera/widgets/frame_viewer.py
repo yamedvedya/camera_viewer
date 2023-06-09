@@ -204,20 +204,6 @@ class FrameViewer(BaseWidget):
         return True
 
     # ----------------------------------------------------------------------
-    def close(self, auto_screen):
-        """
-
-        :param auto_screen: bool, general settings screen control
-        :return:
-        """
-        logger.debug("Closing FrameViewer")
-
-        if self._camera_device and self._camera_device.is_running():
-            self._camera_device.stop(auto_screen)
-
-        super(FrameViewer, self).close()
-
-    # ----------------------------------------------------------------------
     def _visible_range_changed(self, viewBox):
         """
         slot for picture zoom signal

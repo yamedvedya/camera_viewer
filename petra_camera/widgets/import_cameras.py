@@ -49,13 +49,14 @@ class ImportCameras(QtWidgets.QDialog):
         host = PyTango.Database().get_db_host().split('.')[0] + ':10000/'
         cameras_settings = []
 
-        for camera_type, boxes in self._boxes.items():
+        for id, (camera_type, boxes) in enumerate(self._boxes.items()):
             for box in boxes:
                 if box.isChecked():
-                    cameras_settings.append((('name', box.text()),
-                                             ('enabled', 'True'),
-                                             ('proxy', camera_type),
-                                             ('tango_server', host + box.text())))
+                    cameras_settings.append(('id', str(id),
+                                            ('name', box.text()),
+                                            ('enabled', 'True'),
+                                            ('proxy', camera_type),
+                                            ('tango_server', host + box.text())))
 
         self._settings.save_new_options([], cameras_settings)
         
