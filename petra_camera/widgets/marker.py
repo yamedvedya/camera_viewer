@@ -12,7 +12,7 @@ from petra_camera.gui.Marker_ui import Ui_Marker
 class Marker(QtWidgets.QWidget):
 
     repaint_marker = QtCore.pyqtSignal()
-    delete_me = QtCore.pyqtSignal(int)
+    delete_me = QtCore.pyqtSignal('qint64')
 
     # ----------------------------------------------------------------------
     def __init__(self, id, camera_device):

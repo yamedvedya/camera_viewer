@@ -19,7 +19,7 @@ from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
 _base_settings_map = {"exposure": ("device_proxy", "ExposureTimeAbs"),
-                      "gain": ["device_proxy", "Gain"],
+                      # "gain": ["device_proxy", "Gain"],
                       'FPSmax': ("device_proxy", "AcquisitionFrameRateLimit"),
                       'FPS': ("device_proxy", "AcquisitionFrameRateAbs"),
                       'view_x': ("device_proxy", "OffsetX"),
@@ -66,7 +66,7 @@ class TangoVimba(BaseCamera):
 
         super(TangoVimba, self).__init__(settings)
 
-        self._settings_map["gain"][1] = str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0])
+        self._settings_map["gain"] = ("device_proxy", str(self._device_proxy.get_property('GainFeatureName')['GainFeatureName'][0]))
         if 'high_depth' in settings.keys():
             high_depth = strtobool(settings.get("high_depth"))
         else:

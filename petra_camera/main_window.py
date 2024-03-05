@@ -167,6 +167,7 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.camera_widgets[camera_id] = widget
         self.camera_docks[camera_id].setWidget(widget)
+        self.camera_docks[camera_id].setWindowTitle(self.camera_list[camera_id])
 
     # ----------------------------------------------------------------------
     def reinit_camera(self, camera_id):
@@ -483,9 +484,9 @@ class BatchLoader(QtCore.QThread):
     separate QThread, that loads cameras
     """
 
-    add_camera = QtCore.pyqtSignal(object, int)
-    close_camera = QtCore.pyqtSignal(object, int)
-    reload_camera = QtCore.pyqtSignal(object, int)
+    add_camera = QtCore.pyqtSignal(object, 'qint64')
+    close_camera = QtCore.pyqtSignal(object, 'qint64')
+    reload_camera = QtCore.pyqtSignal(object, 'qint64')
 
     loader_set_camera_status = QtCore.pyqtSignal(object, str)
     loader_set_progress = QtCore.pyqtSignal(float)
@@ -582,9 +583,9 @@ class BatchLoader(QtCore.QThread):
 
 # ----------------------------------------------------------------------
 class CameraLoader(QtCore.QThread):
-    add_camera = QtCore.pyqtSignal(object, int)
-    close_camera = QtCore.pyqtSignal(object, int)
-    reload_camera = QtCore.pyqtSignal(object, int)
+    add_camera = QtCore.pyqtSignal(object, 'qint64')
+    close_camera = QtCore.pyqtSignal(object, 'qint64')
+    reload_camera = QtCore.pyqtSignal(object, 'qint64')
 
     loader_set_camera_status = QtCore.pyqtSignal(object, str)
 

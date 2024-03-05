@@ -11,7 +11,7 @@ from petra_camera.gui.ROI_ui import Ui_Roi
 # ----------------------------------------------------------------------
 class ROI(QtWidgets.QWidget):
 
-    delete_me = QtCore.pyqtSignal(int)
+    delete_me = QtCore.pyqtSignal('qint64')
     repaint_roi = QtCore.pyqtSignal()
 
     # ----------------------------------------------------------------------

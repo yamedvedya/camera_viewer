@@ -17,8 +17,8 @@ from petra_camera.gui.CameraSettings_ui import Ui_CameraSettings
 # ----------------------------------------------------------------------
 class CameraSettings(QtWidgets.QWidget):
 
-    delete_me = QtCore.pyqtSignal(int)
-    new_name = QtCore.pyqtSignal(int, str)
+    delete_me = QtCore.pyqtSignal('qint64')
+    new_name = QtCore.pyqtSignal('qint64', str)
 
     # ----------------------------------------------------------------------
     def __init__(self, parent, my_id, settings_node=None):

@@ -19,7 +19,8 @@ class ProgramSetup(QtWidgets.QDialog):
 
     WIDGET_NAME = 'ProgramSetup'
 
-    camera_done = QtCore.pyqtSignal(int)
+    camera_done = QtCore.pyqtSignal('qint64')
+    rename_camera = QtCore.pyqtSignal('qint64')
 
     # ----------------------------------------------------------------------
     def __init__(self, main_window):
@@ -272,7 +273,7 @@ class CameraLoader(QtCore.QThread):
     separate QThread, that loads cameras
     """
 
-    show_camera = QtCore.pyqtSignal(int, float)
+    show_camera = QtCore.pyqtSignal('qint64', float)
     done = QtCore.pyqtSignal()
 
     #----------------------------------------------------------------------
