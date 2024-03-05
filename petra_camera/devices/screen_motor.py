@@ -9,7 +9,7 @@ import socket
 import errno, time
 import json
 import logging
-import PyTango
+import tango
 import threading
 
 from io import StringIO
@@ -34,8 +34,8 @@ class MotorExecutor(object):
         if str(settings.get("motor_type")).lower() == 'acromag':
             self._motor_type = 'Acromag'
             server_name = str(settings.get("valve_tango_server"))
-            self._valve_device_proxy = PyTango.DeviceProxy(server_name)
-            if self._valve_device_proxy.state() == PyTango.DevState.FAULT:
+            self._valve_device_proxy = tango.DeviceProxy(server_name)
+            if self._valve_device_proxy.state() == tango.DevState.FAULT:
                 raise RuntimeError(f'{server_name} in FAULT state!')
             self._valve_channel = int(settings.get("valve_channel"))
 

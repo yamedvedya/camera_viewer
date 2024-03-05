@@ -50,6 +50,9 @@ class BatchProgress(QtWidgets.QWidget):
             self._ui.layout_status.addWidget(lb_status)
             self._statuses[camera_id] = lb_status
 
+    # ----------------------------------------------------------------------
+    def show(self):
+        super().show()
         self.setFixedSize(self.layout().sizeHint())
 
     # ----------------------------------------------------------------------

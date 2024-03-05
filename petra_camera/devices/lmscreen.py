@@ -10,7 +10,7 @@ import numpy as np
 import time
 import logging
 from threading import Thread
-import PyTango
+import tango
 
 from petra_camera.devices.base_camera import BaseCamera
 
@@ -39,7 +39,7 @@ class LMScreen(BaseCamera):
     # ----------------------------------------------------------------------
     def __init__(self, settings):
         self._settings_map = dict(_base_settings_map)
-        if PyTango.DeviceProxy(str(settings.get("tango_server"))).info().dev_class == 'LMScreen':
+        if tango.DeviceProxy(str(settings.get("tango_server"))).info().dev_class == 'LMScreen':
             self._settings_map.update({"counter_x": ('device_proxy', 'roi_x'),
                                        "counter_y": ('device_proxy', 'roi_y'),
                                        "counter_w": ('device_proxy', 'roi_w'),

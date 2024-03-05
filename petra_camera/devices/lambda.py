@@ -9,7 +9,7 @@
 """
 
 import numpy as np
-import PyTango
+import tango
 import logging
 import os.path as ospath
 
@@ -70,7 +70,7 @@ class LambdaProxy(BaseCamera):
                 logger.debug(f'{self._my_name}: starting acquisition: event mode')
 
                 self._eid = self._device_proxy.subscribe_event("LiveLastImageData",
-                                                               PyTango.EventType.DATA_READY_EVENT, self._on_event)
+                                                               tango.EventType.DATA_READY_EVENT, self._on_event)
                 self._running = True
 
         elif self._source == 'Files':
@@ -102,17 +102,24 @@ class LambdaProxy(BaseCamera):
 
     # ----------------------------------------------------------------------
     def _on_event(self, event):
+        self.error_flag = False
+        self.error_msg = ""
         if not event.err:
-            data = event.device.read_attribute(event.attr_name.split('/')[6])
-            self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
-                                                    self._picture_size[1]:self._picture_size[3]]
-
-            self._new_frame_flag = True
+            try:
+                data = event.attr_value
+                if data.quality == tango.AttrQuality.ATTR_VALID:
+                    self._last_frame = self._process_frame(data.value)
+                    self._new_frame_flag = True
+                    return
+                else:
+                    err = f"{self._my_name} error: AttrQuality is {data.quality}"
+            except Exception as err:
+                pass
         else:
-            print('Event error!')
-            # self._log.error('Tine error: {}'.format(self.error_msg))
-            # self.error_flag = True
-            # self.error_msg = event.errors
+            err = event.errors
+        self.error_flag = True
+        self.error_msg = str(err)
+        logger.error(f'{self._my_name} error: {err}')
     # ----------------------------------------------------------------------
     def _on_created(self, event):
 

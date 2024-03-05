@@ -140,7 +140,7 @@ class FrameViewer(BaseWidget):
         #                        Labels
         # ----------------------------------------------------------------------
         self._device_label = self._add_label('', self._settings.node("title"), visible=True)
-        self._device_label.setText(self._camera_device.device_id)
+        self._device_label.setText(self._camera_device.device_name)
 
         self._datetime_label = self._add_label("Time", self._settings.node("title"),
                                                visible=True)
@@ -249,7 +249,7 @@ class FrameViewer(BaseWidget):
             self._camera_device.start(auto_screen)
         else:
             QtWidgets.QMessageBox.warning(self, "Initialization Error",
-                                      "{} not yet initialized".format(self._camera_device.device_id))
+                                      "{} not yet initialized".format(self._camera_device.device_name))
 
     # ----------------------------------------------------------------------
     def _stop_live_mode(self, auto_screen):
@@ -260,7 +260,7 @@ class FrameViewer(BaseWidget):
         """
         if self._camera_device and self._camera_device.is_running():
             self._camera_device.stop(auto_screen)
-            logger.debug("{} stopped".format(self._camera_device.device_id))
+            logger.debug("{} stopped".format(self._camera_device.device_name))
 
     # ----------------------------------------------------------------------
     #                 Image set and refresh

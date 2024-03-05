@@ -9,6 +9,7 @@ import getpass
 import shutil
 import logging
 import os
+import time
 
 import numpy as np
 import psutil
@@ -31,6 +32,7 @@ from petra_camera.utils.xmlsettings import XmlSettings
 from petra_camera.widgets.import_cameras import ImportCameras
 from petra_camera.widgets.batch_progress import BatchProgress
 from petra_camera.roisrv.roiserver import RoiServer
+from petra_camera.devices.datasource2d import DataSource2D
 
 from petra_camera.gui.MainWindow_ui import Ui_MainWindow
 
@@ -81,6 +83,8 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.camera_widgets = {}
         self.camera_docks = {}
+        self.camera_devices = {}
+
         self.tab_widget = None
 
         self.camera_list = self.get_cameras()
@@ -139,42 +143,41 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.menu_cameras.addAction(dock.toggleViewAction())
 
-        try:
-            widget = CameraWidget(self, camera_id)
-            widget.load_ui_settings()
-
-        except Exception as err:
-
-            widget = EmptyCameraWidget(self, camera_id, f'{err}')
-            widget.reinit_camera.connect(self.reinit_camera)
-            widget.load_ui_settings()
-
-        self.camera_widgets[camera_id] = widget
-        dock.setWidget(widget)
+        self.make_camera_widget(camera_id)
 
         logger.debug(f"Opening {camera_id} done")
         self.job_done.emit(job_id)
 
     # ----------------------------------------------------------------------
-    def reinit_camera(self, camera_id):
-        try:
-            widget = CameraWidget(self, camera_id)
-            widget.load_ui_settings()
+    def make_camera_widget(self, camera_id):
+        widget, last_err = None, ""
+        if self.camera_devices[camera_id].load_status[0]:
+            try:
+                widget = CameraWidget(self, self.camera_devices[camera_id])
+            except Exception as err:
+                last_err = f'{err}'
+        else:
+            last_err = self.camera_devices[camera_id].load_status[1]
 
-        except Exception as err:
-
-            widget = EmptyCameraWidget(self, camera_id, f'{err}')
+        if widget is None:
+            widget = EmptyCameraWidget(self, camera_id, last_err)
             widget.reinit_camera.connect(self.reinit_camera)
-            widget.load_ui_settings()
 
-        self.camera_docks[camera_id].setWidget(widget)
+        widget.load_ui_settings()
+
         self.camera_widgets[camera_id] = widget
+        self.camera_docks[camera_id].setWidget(widget)
+
+    # ----------------------------------------------------------------------
+    def reinit_camera(self, camera_id):
+        self.camera_widgets[camera_id] = DataSource2D(self.settings, camera_id)
+        self.make_camera_widget(camera_id)
 
     # ----------------------------------------------------------------------
     def reload_camera(self, camera_id, job_id):
         logger.debug(f"Request to reload {camera_id}")
         self.camera_widgets[camera_id].clean_close()
-        self.reinit_camera(camera_id)
+        self.make_camera_widget(camera_id)
         logger.debug(f"Reload {camera_id} done")
         self.job_done.emit(job_id)
 
@@ -508,7 +511,7 @@ class BatchLoader(QtCore.QThread):
 
         self.workers = []
         for id in range(N_WORKERS):
-            worker = CameraLoader(id, self.job_queue, self.stop_event)
+            worker = CameraLoader(id, self.main_window, self.job_queue, self.stop_event)
             worker.add_camera.connect(lambda camera_id, job_id: self.add_camera.emit(camera_id, job_id))
             worker.close_camera.connect(lambda camera_id, job_id: self.close_camera.emit(camera_id, job_id))
             worker.reload_camera.connect(lambda camera_id, job_id: self.reload_camera.emit(camera_id, job_id))
@@ -552,11 +555,13 @@ class BatchLoader(QtCore.QThread):
 
         while not self.stop_event.is_set():
             if self.new_jobs.is_set():
+                s_time = time.time()
                 logger.debug("Processing new set")
                 while len(self.jobs_to_be_done):
                     self.loader_set_progress.emit((self.total_jobs - len(self.jobs_to_be_done)) / self.total_jobs)
                     self.msleep(100)
                 logger.debug(f"Jobs set done")
+                print(f"Time to done: {time.time() - s_time}")
                 self.set_done.emit()
                 self.new_jobs.clear()
             self.msleep(100)
@@ -584,10 +589,12 @@ class CameraLoader(QtCore.QThread):
     loader_set_camera_status = QtCore.pyqtSignal(object, str)
 
     # ----------------------------------------------------------------------
-    def __init__(self, my_id, job_queue, stop_event):
+    def __init__(self, my_id, main_window, job_queue, stop_event):
         super(CameraLoader, self).__init__()
         self.job_queue = job_queue
         self.stop_event = stop_event
+        self.camera_devices = main_window.camera_devices
+        self.settings = main_window.settings
         self.my_id = my_id
 
         self.is_done = Event()
@@ -602,12 +609,16 @@ class CameraLoader(QtCore.QThread):
                 logger.debug(f"Loader {self.my_id} got task {task} for camera {camera_id}")
                 if task == "open":
                     self.loader_set_camera_status.emit(camera_id, "opening...")
+                    self.camera_devices[camera_id] = DataSource2D(self.settings, camera_id)
                     self.add_camera.emit(camera_id, job_id)
                 if task == "close":
                     self.loader_set_camera_status.emit(camera_id, "closing...")
+                    self.camera_devices[camera_id].close_camera()
                     self.close_camera.emit(camera_id, job_id)
                 if task == "reload":
                     self.loader_set_camera_status.emit(camera_id, "reloading...")
+                    self.camera_devices[camera_id].close_camera()
+                    self.camera_devices[camera_id] = DataSource2D(self.settings, camera_id)
                     self.reload_camera.emit(camera_id, job_id)
                 while job_id not in self.done_jobs:
                     self.msleep(100)

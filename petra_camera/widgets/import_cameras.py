@@ -5,7 +5,7 @@
 """
 """
 
-import PyTango
+import tango
 from petra_camera.utils.tango_utils import TangoDBsInfo
 
 from PyQt5 import QtWidgets
@@ -27,7 +27,7 @@ class ImportCameras(QtWidgets.QDialog):
         self._boxes = {}
 
         tango_db = TangoDBsInfo()
-        host = PyTango.Database().get_db_host().split('.')[0]
+        host = tango.Database().get_db_host().split('.')[0]
         for camera_name, camera_properties in CAMERAS_SETTINGS.items():
             self._ui.verticalLayout.addWidget(QtWidgets.QLabel(camera_name + ":", self))
             self._boxes[camera_name] = []
@@ -46,17 +46,19 @@ class ImportCameras(QtWidgets.QDialog):
     # ----------------------------------------------------------------------
     def accept(self) -> None:
 
-        host = PyTango.Database().get_db_host().split('.')[0] + ':10000/'
+        host = tango.Database().get_db_host().split('.')[0] + ':10000/'
         cameras_settings = []
 
         for id, (camera_type, boxes) in enumerate(self._boxes.items()):
             for box in boxes:
                 if box.isChecked():
-                    cameras_settings.append(('id', str(id),
-                                            ('name', box.text()),
-                                            ('enabled', 'True'),
-                                            ('proxy', camera_type),
-                                            ('tango_server', host + box.text())))
+                    camera_settings = [('id', str(id)),
+                                       ('name', box.text()),
+                                       ('enabled', 'True'),
+                                       ('proxy', camera_type)]
+                    if CAMERAS_SETTINGS[camera_type]['tango_server'] is not None:
+                        camera_settings.append(('tango_server', host + box.text()))
+                    cameras_settings.append(camera_settings)
 
         self._settings.save_new_options([], cameras_settings)
         

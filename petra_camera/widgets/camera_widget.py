@@ -26,7 +26,6 @@ from petra_camera.widgets.marker_roi import MarkersROIsWidget
 from petra_camera.widgets.peak_search_widget import PeakSearchWidget
 from petra_camera.widgets.position_control import PositionControl
 
-from petra_camera.devices.datasource2d import DataSource2D
 from petra_camera.gui.CameraWidget_ui import Ui_CameraWindow
 
 logger = logging.getLogger(APP_NAME)
@@ -39,22 +38,19 @@ class CameraWidget(QtWidgets.QMainWindow):
     REFRESH_ICONS_PERIOD = 500 # how often we update settings with Tango
 
     # ----------------------------------------------------------------------
-    def __init__(self, parent, my_id):
+    def __init__(self, parent, camera):
         """
         """
         super(CameraWidget, self).__init__(parent)
 
         self.settings = parent.settings
-        self.camera_id = my_id
+        self.camera_id = camera.camera_id
         self._last_state = None
         self._parent = parent
 
         self.hist_lock = QtCore.QMutex()
 
-        self.camera_device = DataSource2D(self)
-        state, msg = self.camera_device.new_device_proxy(self.camera_id, self._parent.auto_screen_action.isChecked())
-        if not state:
-            raise RuntimeError(f'{msg}')
+        self.camera_device = camera
 
         self._ui = Ui_CameraWindow()
         self._ui.setupUi(self)
@@ -67,9 +63,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._refresh_run_stop_timer = QtCore.QTimer(self)
         self._refresh_run_stop_timer.timeout.connect(self._refresh_icons)
         self._refresh_run_stop_timer.start(self.REFRESH_ICONS_PERIOD)
-
-        self._refresh_view()
-        self._refresh_icons()
 
     # ----------------------------------------------------------------------
     def _start_stop_live_mode(self):
@@ -95,8 +88,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._settings_widget.close()
         if self._position_control_widget is not None:
             self._position_control_widget.close()
-
-        self.camera_device.close_camera()
 
         self._frame_viewer.save_ui_settings(self.camera_id)
         self._settings_widget.save_ui_settings(self.camera_id)
@@ -181,19 +172,58 @@ class CameraWidget(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def _init_ui(self):
 
-        self._init_tool_bar()
+        self.tool_bar = QtWidgets.QToolBar("Main toolbar", self)
+        self.tool_bar.setObjectName("CameraViewer_ToolBar")
 
-        self._init_status_bar()
+        self._action_start_stop = QtWidgets.QAction(self)
+        self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
+        self._action_start_stop.setText("Start/Stop")
 
-        self._load_docks()
+        self.tool_bar.addAction(self._action_start_stop)
+        self.tool_bar.addSeparator()
 
-        self._connect_signals()
+        # image saving
+        self._tbSaveScan = QtWidgets.QToolButton(self)
+        self._tbSaveScan.setIcon(QtGui.QIcon(":/ico/save.png"))
+        self._tbSaveScan.setToolTip("Save")
 
-    # ----------------------------------------------------------------------
-    def _load_docks(self):
-        """
-         here we loads all widgets, dock them
-        """
+        self._saveMenu = self._make_save_menu(self._tbSaveScan)
+        self._tbSaveScan.setMenu(self._saveMenu)
+        self._tbSaveScan.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.tool_bar.addWidget(self._tbSaveScan)
+
+        self._action_print_image = QtWidgets.QAction(self)
+        self._action_print_image.setIcon(QtGui.QIcon(":/ico/print.png"))
+        self._action_print_image.setText("Print Image")
+        self._action_print_image.setEnabled(False)
+        self.tool_bar.addAction(self._action_print_image)
+
+        self._action_copy_image = QtWidgets.QAction(self)
+        self._action_copy_image.setIcon(QtGui.QIcon(":/ico/copy.png"))
+        self._action_copy_image.setText("Copy to Clipboard")
+        self.tool_bar.addAction(self._action_copy_image)
+
+        self.tool_bar.addSeparator()
+        self._move_motor_label = QtWidgets.QLabel('Move screen IN:')
+        self.tool_bar.addWidget(self._move_motor_label)
+        self._move_motor_action = QtWidgets.QAction(self)
+        self._move_motor_action.setIcon(QtGui.QIcon(":/ico/screen_in.png"))
+        self._move_motor_action.setText("Move screen IN")
+        self.tool_bar.addAction(self._move_motor_action)
+
+        self.tool_bar.addSeparator()
+        self.tool_bar.addWidget(QtWidgets.QLabel('Widgets:'))
+
+        self.addToolBar(self.tool_bar)
+
+        self._lb_cursor_pos = QtWidgets.QLabel("")
+
+        self._lb_fps = QtWidgets.QLabel("FPS: -")
+        self._lb_fps.setMinimumWidth(70)
+
+        self.statusBar().addPermanentWidget(self._lb_cursor_pos)
+        self.statusBar().addPermanentWidget(self._lb_fps)
+
         self.setCentralWidget(None)
 
         self.setDockOptions(QtWidgets.QMainWindow.AnimatedDocks |
@@ -234,13 +264,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         # link between picture and histogram
         self._settings_widget.set_frame_to_hist(self._frame_viewer.get_image_view())
         self._frame_viewer.set_hist(self._settings_widget.get_hist())
-
-    # ----------------------------------------------------------------------
-    def _connect_signals(self):
-        """
-            connect signals between widgets
-        :return: None
-        """
 
         self._frame_viewer.new_fps.connect(self._display_fps)
         self._frame_viewer.cursor_moved.connect(self._viewer_cursor_moved)
@@ -314,66 +337,6 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._save_numpy_action = saveMenu.addAction("Numpy")
 
         return saveMenu
-
-    # ----------------------------------------------------------------------
-    def _init_tool_bar(self):
-        """
-        """
-
-        self.tool_bar = QtWidgets.QToolBar("Main toolbar", self)
-        self.tool_bar.setObjectName("CameraViewer_ToolBar")
-
-        self._action_start_stop = QtWidgets.QAction(self)
-        self._action_start_stop.setIcon(QtGui.QIcon(":/ico/play_16px.png"))
-        self._action_start_stop.setText("Start/Stop")
-
-        self.tool_bar.addAction(self._action_start_stop)
-        self.tool_bar.addSeparator()
-
-        # image saving
-        self._tbSaveScan = QtWidgets.QToolButton(self)
-        self._tbSaveScan.setIcon(QtGui.QIcon(":/ico/save.png"))
-        self._tbSaveScan.setToolTip("Save")
-
-        self._saveMenu = self._make_save_menu(self._tbSaveScan)
-        self._tbSaveScan.setMenu(self._saveMenu)
-        self._tbSaveScan.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-        self.tool_bar.addWidget(self._tbSaveScan)
-
-        self._action_print_image = QtWidgets.QAction(self)
-        self._action_print_image.setIcon(QtGui.QIcon(":/ico/print.png"))
-        self._action_print_image.setText("Print Image")
-        self._action_print_image.setEnabled(False)
-        self.tool_bar.addAction(self._action_print_image)
-
-        self._action_copy_image = QtWidgets.QAction(self)
-        self._action_copy_image.setIcon(QtGui.QIcon(":/ico/copy.png"))
-        self._action_copy_image.setText("Copy to Clipboard")
-        self.tool_bar.addAction(self._action_copy_image)
-
-        self.tool_bar.addSeparator()
-        self._move_motor_label = QtWidgets.QLabel('Move screen IN:')
-        self.tool_bar.addWidget(self._move_motor_label)
-        self._move_motor_action = QtWidgets.QAction(self)
-        self._move_motor_action.setIcon(QtGui.QIcon(":/ico/screen_in.png"))
-        self._move_motor_action.setText("Move screen IN")
-        self.tool_bar.addAction(self._move_motor_action)
-
-        self.tool_bar.addSeparator()
-        self.tool_bar.addWidget(QtWidgets.QLabel('Widgets:'))
-
-        self.addToolBar(self.tool_bar)
-
-    # ----------------------------------------------------------------------
-    def _init_status_bar(self):
-
-        self._lb_cursor_pos = QtWidgets.QLabel("")
-
-        self._lb_fps = QtWidgets.QLabel("FPS: -")
-        self._lb_fps.setMinimumWidth(70)
-
-        self.statusBar().addPermanentWidget(self._lb_cursor_pos)
-        self.statusBar().addPermanentWidget(self._lb_fps)
 
     # ----------------------------------------------------------------------
     def _save_ui_settings(self):

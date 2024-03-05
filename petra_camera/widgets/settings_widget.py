@@ -6,7 +6,7 @@
 """
 import threading
 
-import PyTango
+import tango
 import subprocess
 import logging
 import time
@@ -61,7 +61,7 @@ class SettingsWidget(BaseWidget):
         self._settings_reader = SettingsReader(self._camera_device,
                                                self._start_settings_read, self._stop_settings_reader)
         self._settings_reader.settings_ready.connect(self.display_tango_settings)
-        self._settings_reader.setObjectName(f'{self._camera_device.device_id}_settings_reader')
+        self._settings_reader.setObjectName(f'{self._camera_device.device_name}_settings_reader')
         self._settings_reader.start()
 
         self._load_camera_settings()

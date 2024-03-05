@@ -1,6 +1,6 @@
 # Created by matveyev at 22.02.2022
 
-import PyTango
+import tango
 import time
 
 from distutils.util import strtobool
@@ -33,12 +33,13 @@ class CameraSettings(QtWidgets.QWidget):
 
         self.tango_dbs_info = parent.tango_dbs_info
 
+        self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER)
         self._ui.cmd_default_status_source.clicked.connect(lambda: self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER))
 
         self._ui.cmb_camera_type.addItems(list(CAMERAS_SETTINGS.keys()))
         self._ui.cmb_motor_type.addItems(['None', 'FSBT', 'Acromag'])
 
-        self._ui.le_tango_host.setText(PyTango.Database().get_db_host().split('.')[0])
+        self._ui.le_tango_host.setText(tango.Database().get_db_host().split('.')[0])
         self._rescan_database()
 
         self._ui.cmd_delete.clicked.connect(lambda status, x=my_id: self.delete_me.emit(x))
@@ -72,9 +73,9 @@ class CameraSettings(QtWidgets.QWidget):
             if 'tango_server' in settings_node.keys():
                 server = settings_node.get('tango_server')
                 try:
-                    self._ui.le_tango_host.setText(PyTango.DeviceProxy(server).get_db_host().split('.')[0])
+                    self._ui.le_tango_host.setText(tango.DeviceProxy(server).get_db_host().split('.')[0])
                     self._rescan_database()
-                    set_manual = not refresh_combo_box(self._ui.cmb_tango_device, PyTango.DeviceProxy(server).dev_name())
+                    set_manual = not refresh_combo_box(self._ui.cmb_tango_device, tango.DeviceProxy(server).dev_name())
                 except:
                     set_manual = True
 
@@ -86,14 +87,14 @@ class CameraSettings(QtWidgets.QWidget):
                 server = settings_node.get('roi_server')
                 self._ui.chk_roi_server.setChecked(True)
 
-                if not refresh_combo_box(self._ui.cmb_roi_device, PyTango.DeviceProxy(server).dev_name()):
+                if not refresh_combo_box(self._ui.cmb_roi_device, tango.DeviceProxy(server).dev_name()):
                     self._ui.chk_manual_roi_device.setChecked(True)
                     self._ui.le_roi_server.setText(server)
 
             if 'status_source' in settings_node.keys():
                 if settings_node.get('status_source') == 'tango':
                     self._ui.but_status_source_tango.setChecked(True)
-                    if 'server' in settings_node.keys():
+                    if 'server' in settings_node.keys() and settings_node.get('server'):
                         self._ui.le_status_server.setText(settings_node.get('server'))
                     else:
                         self._ui.le_status_server.setText(DEFAULT_TANGO_SERVER)
@@ -188,7 +189,7 @@ class CameraSettings(QtWidgets.QWidget):
         camera_type = self._ui.cmb_camera_type.currentText()
         camera_properties = CAMERAS_SETTINGS[camera_type]
 
-        if self._original_settings.get('name') != self._ui.le_name.text():
+        if self._original_settings and self._original_settings.get('name') != self._ui.le_name.text():
             self.my_id = time.time_ns()
 
         data_to_save = [('id', str(self.my_id)),

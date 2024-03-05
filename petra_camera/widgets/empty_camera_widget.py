@@ -19,7 +19,7 @@ logger = logging.getLogger(APP_NAME)
 # ----------------------------------------------------------------------
 class EmptyCameraWidget(QtWidgets.QMainWindow):
 
-    reinit_camera = QtCore.pyqtSignal(str)
+    reinit_camera = QtCore.pyqtSignal(object)
 
     # ----------------------------------------------------------------------
     def __init__(self, parent, my_id, last_error):

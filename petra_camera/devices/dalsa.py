@@ -9,7 +9,7 @@
 """
 
 import numpy as np
-import PyTango
+import tango
 import logging
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
@@ -69,8 +69,8 @@ class DalsaProxy(BaseCamera):
 
             self._device_proxy.write_attribute("PixelFormat", "Mono16")
             self._device_proxy.write_attribute("ViewingMode", 2)
-            self._eid = self._device_proxy.subscribe_event("Image16", PyTango.EventType.DATA_READY_EVENT,
-                                                           self._on_event, [], True)
+            self._eid = self._device_proxy.subscribe_event("Image16", tango.EventType.DATA_READY_EVENT,
+                                                           self._on_event)
             self._running = True
             return True
 
@@ -110,17 +110,25 @@ class DalsaProxy(BaseCamera):
     # ----------------------------------------------------------------------
     def _on_event(self, event):
 
+        self.error_flag = False
+        self.error_msg = ""
         if not event.err:
-
-            logger.debug(f'{self._my_name}: new tango event')
-
-            data = event.device.read_attribute(event.attr_name.split('/')[6])
-            self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
-                                                    self._picture_size[1]:self._picture_size[3]]
-
-            self._new_frame_flag = True
+            try:
+                data = event.attr_value
+                if data.quality == tango.AttrQuality.ATTR_VALID:
+                    self._last_frame = np.array(data.value)[self._picture_size[0]:self._picture_size[2],
+                                       self._picture_size[1]:self._picture_size[3]]
+                    self._new_frame_flag = True
+                    return
+                else:
+                    err = f"{self._my_name} error: AttrQuality is {data.quality}"
+            except Exception as err:
+                pass
         else:
-            pass
+            err = event.errors
+        self.error_flag = True
+        self.error_msg = str(err)
+        logger.error(f'{self._my_name} error: {err}')
 
     # ----------------------------------------------------------------------
     def _on_created(self, event):

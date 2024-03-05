@@ -8,7 +8,7 @@
 import time
 import numpy as np
 import logging
-import PyTango
+import tango
 
 from distutils.util import strtobool
 
@@ -82,10 +82,10 @@ class AXISCamera(BaseCamera):
 
         if option == 'FPS':
             need_restart = False
-            if self._device_proxy.state() == PyTango.DevState.RUNNING:
+            if self._device_proxy.state() == tango.DevState.RUNNING:
                 need_restart = True
                 self._device_proxy.command_inout("StopAcquisition")
-                while self._device_proxy.state() == PyTango.DevState.RUNNING:
+                while self._device_proxy.state() == tango.DevState.RUNNING:
                     time.sleep(0.1)
             super(AXISCamera, self).save_settings(option, value)
             if need_restart:
@@ -98,34 +98,32 @@ class AXISCamera(BaseCamera):
         """
         """
 
-        if self._device_proxy.state() in [PyTango.DevState.ON, PyTango.DevState.RUNNING]:
-
-            logger.debug(f'{self._my_name}: starting acquisition')
-
-            self._mode = 'event'
-            self._eid = self._device_proxy.subscribe_event(self._image_source,
-                                                           PyTango.EventType.CHANGE_EVENT,
-                                                           self._readout_frame)
-
-            if self._device_proxy.state() == PyTango.DevState.ON:
-                self._main_runner = True
-                attemp = 0
-                while attemp < self.START_ATTEMPTS:
-                    try:
-                        self._device_proxy.command_inout("StartAcquisition")
-                        break
-                    except:
-                        attemp += 1
-            else:
-                self._main_runner = False
-
-            time.sleep(self.START_DELAY)
-
-            return True
-
-        else:
+        if self._device_proxy.state() not in [tango.DevState.ON, tango.DevState.RUNNING]:
             logger.warning("Camera should be in ON state (is it running already?)")
             return False
+
+        logger.debug(f'{self._my_name}: starting acquisition')
+
+        self._mode = 'event'
+        self._eid = self._device_proxy.subscribe_event(self._image_source,
+                                                       tango.EventType.CHANGE_EVENT,
+                                                       self._readout_frame)
+
+        if self._device_proxy.state() == tango.DevState.ON:
+            self._main_runner = True
+            attemp = 0
+            while attemp < self.START_ATTEMPTS:
+                try:
+                    self._device_proxy.command_inout("StartAcquisition")
+                    break
+                except:
+                    attemp += 1
+        else:
+            self._main_runner = False
+
+        time.sleep(self.START_DELAY)
+
+        return True
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
@@ -141,26 +139,31 @@ class AXISCamera(BaseCamera):
 
     # ----------------------------------------------------------------------
     def is_running(self):
-        return self._device_proxy.state() == PyTango.DevState.RUNNING and self._eid is not None
+        return self._device_proxy.state() == tango.DevState.RUNNING and self._eid is not None
 
     # ----------------------------------------------------------------------
     def _readout_frame(self, event):
         """Called each time new frame is available.
         """
+        self.error_flag = False
+        self.error_msg = ""
         if not event.err:
             try:
                 data = event.attr_value
-                if data.value is not None:
+                if data.quality == tango.AttrQuality.ATTR_VALID:
                     self._last_frame = self._process_frame(data.value)
                     self._new_frame_flag = True
+                    return
+                else:
+                    err = f"{self._my_name} error: AttrQuality is {data.quality}"
             except Exception as err:
-                logger.error('AXISCamera error: {}'.format(err))
-                self.error_flag = True
-                self.error_msg = str(err)
+                pass
         else:
-            logger.error('AXISCamera error: {}'.format(self.error_msg))
-            self.error_flag = True
-            self.error_msg = event.errors
+            err = event.errors
+        self.error_flag = True
+        self.error_msg = str(err)
+        logger.error(f'{self._my_name} error: {err}')
+
 
     # ----------------------------------------------------------------------
     def _process_frame(self, data):

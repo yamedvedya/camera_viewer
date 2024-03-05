@@ -12,7 +12,7 @@ import io
 from PIL import Image
 import numpy as np
 import logging
-import PyTango
+import tango
 
 from threading import Thread
 
@@ -21,7 +21,7 @@ from petra_camera.devices.base_camera import BaseCamera
 from petra_camera.constants import APP_NAME
 logger = logging.getLogger(APP_NAME)
 
-DEFAULT_TANGO_SERVER = 'haso102m:10000/pxx/petrastatusscreen/all'
+DEFAULT_TANGO_SERVER = 'haso102ym:10000/pxx/petrastatusscreen/all'
 
 
 # ----------------------------------------------------------------------
@@ -50,7 +50,12 @@ class PetraStatus(BaseCamera):
             self._mode = 'tango'
 
         if self._mode == 'tango' and 'server' in settings.keys():
-            self._tango_server = settings.get("server")
+            tango_server = settings.get("server")
+            try:
+                tango.DeviceProxy(tango_server)
+            except tango.DevFailed:
+                tango_server = DEFAULT_TANGO_SERVER
+            self._tango_server = tango_server
         else:
             self._tango_server = DEFAULT_TANGO_SERVER
 
@@ -81,14 +86,14 @@ class PetraStatus(BaseCamera):
             if self._run_acquisition.is_set():
                 try:
                     if self._mode == 'tango':
-                        data = PyTango.DeviceProxy(self._tango_server).statusscreen[
+                        data = tango.DeviceProxy(self._tango_server).statusscreen[
                                self._picture_size[0]:self._picture_size[2], self._picture_size[1]:self._picture_size[3]]
                         c_data = np.zeros(data.shape + (3,), dtype=np.ubyte)
                         c_data[..., 0] = data & 255
                         c_data[..., 1] = (data >> 8) & 255
                         c_data[..., 2] = (data >> 16) & 255
                         self._last_frame = c_data
-                        self._last_camera_msg = PyTango.DeviceProxy(self._tango_server).laststatusmessage
+                        self._last_camera_msg = tango.DeviceProxy(self._tango_server).laststatusmessage
                         self._new_frame_flag = True
                         self._new_msg_flag = True
                         logger.debug(f"{self._my_name} new frame")

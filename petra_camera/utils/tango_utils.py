@@ -1,4 +1,4 @@
-import PyTango
+import tango
 
 # ----------------------------------------------------------------------
 class TangoDBsInfo():
@@ -58,9 +58,9 @@ def findDB(tango_host):
     lst = tango_host.split(':')
     try:
         if len(lst) == 2:
-            return PyTango.Database(lst[0], lst[1])
+            return tango.Database(lst[0], lst[1])
         elif len(lst) == 1:
-            return PyTango.Database(lst[0], "10000")
+            return tango.Database(lst[0], "10000")
     except:
         pass
 

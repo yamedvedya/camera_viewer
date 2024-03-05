@@ -12,7 +12,7 @@ import threading
 import time
 import json
 import math
-import PyTango
+import tango
 
 import scipy.ndimage.measurements as scipymeasure
 import numpy as np
@@ -45,15 +45,15 @@ class DataSource2D(QtCore.QObject):
     got_error = QtCore.pyqtSignal(str)
 
     # ----------------------------------------------------------------------
-    def __init__(self, parent):
+    def __init__(self, settings, camera_id):
         """
         """
-        super(DataSource2D, self).__init__(parent)
+        super(DataSource2D, self).__init__()
 
-        self._parent = parent
-        self.settings = parent.settings
+        self.settings = settings
 
-        self.device_id = ''
+        self.device_name = ''
+        self.camera_id = camera_id
 
         self.auto_screen = False
 
@@ -90,18 +90,8 @@ class DataSource2D(QtCore.QObject):
         self._dark_image = None
         self.subtract_dark_image = False
 
-    # ----------------------------------------------------------------------
-    def new_device_proxy(self, id, auto_screen):
-        """
-
-        :param id: int, camera id to be loaded from config
-        :param auto_screen: bool, is generally moving screens is allowed
-        :return: bool, success or not
-        """
-
         for device in self.settings.get_nodes('camera'):
-            if int(device.get('id')) == id:
-
+            if int(device.get('id')) == camera_id:
                 try:
                     proxyClass = device.get("proxy")
                     logger.info("Loading device proxy {}...".format(proxyClass))
@@ -109,7 +99,7 @@ class DataSource2D(QtCore.QObject):
                     module = importlib.import_module("petra_camera.devices.{}".format(proxyClass.lower()))
                     self._device_proxy = getattr(module, proxyClass)(device)
 
-                    self.device_id = device.get('name') + self._device_proxy.file_name
+                    self.device_name = device.get('name') + self._device_proxy.file_name
 
                     # reset flags and variables
                     self.got_first_frame = False
@@ -191,19 +181,22 @@ class DataSource2D(QtCore.QObject):
 
                     # if Tango server for camera already acquiring - start data thread
                     if self._device_proxy.is_running():
-                        self.start(auto_screen)
+                        self.start(False)
 
-                    return True, ''
+                    self.load_status = True, ''
+                    return
 
-                except PyTango.DevFailed as ex:
+                except tango.DevFailed as ex:
                     logger.error(ex.args[0].desc)
-                    return False, ex.args[0].desc
+                    self.load_status = False, ex.args[0].desc
+                    return
 
                 except Exception as ex:
                     logger.error(ex)
-                    return False, ex.__repr__()
+                    self.load_status = False, ex.__repr__()
+                    return
 
-        return False, 'Cannot find camera in config'
+        self.load_status = False, 'Cannot find camera in config'
 
     # ----------------------------------------------------------------------
     def close_camera(self):
@@ -261,7 +254,7 @@ class DataSource2D(QtCore.QObject):
             self._state = 'abort'
             self._worker.join()
 
-        self._worker = threading.Thread(target=self.run, name=f'{self.device_id}_DataSource')
+        self._worker = threading.Thread(target=self.run, name=f'{self.device_name}_DataSource')
 
     # ----------------------------------------------------------------------
     def run(self):
@@ -295,7 +288,7 @@ class DataSource2D(QtCore.QObject):
 
                 time.sleep(1 / self.fps_limit)  # to decrease processor load
 
-            logger.info("Closing {}...".format(self.device_id))
+            logger.info("Closing {}...".format(self.device_name))
 
             if self._device_proxy:
                 self._device_proxy.stop_acquisition()
@@ -319,7 +312,7 @@ class DataSource2D(QtCore.QObject):
                     return False
 
             except Exception as err:
-                report_error(err, self._parent)
+                report_error(err)
                 return False
 
     # ----------------------------------------------------------------------

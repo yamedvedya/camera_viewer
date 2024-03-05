@@ -6,7 +6,7 @@
 Base camera class
 """
 
-import PyTango
+import tango
 import logging
 import time
 import numpy as np
@@ -70,8 +70,8 @@ class BaseCamera(object):
         # DeviceProxies instances
         if 'tango_server' in settings.keys():
             name = str(settings.get("tango_server"))
-            self._device_proxy = PyTango.DeviceProxy(name)
-            if self._device_proxy.state() == PyTango.DevState.FAULT:
+            self._device_proxy = tango.DeviceProxy(name)
+            if self._device_proxy.state() == tango.DevState.FAULT:
                 raise RuntimeError(f'{name} in FAULT state!')
             logger.debug(f'{self._my_name}: new tango proxy {name}')
         else:
@@ -79,8 +79,8 @@ class BaseCamera(object):
 
         if 'settings_server' in settings.keys():
             name = str(settings.get("settings_server"))
-            self._settings_proxy = PyTango.DeviceProxy(name)
-            if self._settings_proxy.state() == PyTango.DevState.FAULT:
+            self._settings_proxy = tango.DeviceProxy(name)
+            if self._settings_proxy.state() == tango.DevState.FAULT:
                 raise RuntimeError(f'{name} in FAULT state!')
             logger.debug(f'{self._my_name}: new settings proxy {name}')
         else:
@@ -88,8 +88,8 @@ class BaseCamera(object):
 
         if 'roi_server' in settings.keys():
             name = str(settings.get("roi_server"))
-            self._roi_server = PyTango.DeviceProxy(name)
-            if self._roi_server.state() == PyTango.DevState.FAULT:
+            self._roi_server = tango.DeviceProxy(name)
+            if self._roi_server.state() == tango.DevState.FAULT:
                 raise RuntimeError(f'{name} in FAULT state!')
             logger.debug(f'{self._my_name}: new roi server {name}')
         else:

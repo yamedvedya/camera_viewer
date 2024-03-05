@@ -8,7 +8,7 @@
 import time
 import numpy as np
 import logging
-import PyTango
+import tango
 
 from threading import Thread
 from distutils.util import strtobool
@@ -79,7 +79,7 @@ class TangoVimba(BaseCamera):
 
         accepted_format = None
 
-        if self._device_proxy.state() != PyTango.DevState.MOVING:
+        if self._device_proxy.state() != tango.DevState.MOVING:
             valid_formats = self._device_proxy.read_attribute('PixelFormat_Values').value
         else:
             valid_formats = self._device_proxy.pixelformat
@@ -114,7 +114,7 @@ class TangoVimba(BaseCamera):
         if accepted_format is None:
             raise RuntimeError('Cannot find acceptable pixel format!')
 
-        if self._device_proxy.state() != PyTango.DevState.MOVING:
+        if self._device_proxy.state() != tango.DevState.MOVING:
             self._device_proxy.pixelformat = accepted_format
             self._device_proxy.viewingmode = \
             self.SERVER_SETTINGS['color' if self._color else 'bw']['high' if self._high_depth else 'low'][0]
@@ -130,6 +130,8 @@ class TangoVimba(BaseCamera):
         self._frame_thread = None
         self._frame_thread_running = False
         self._stop_frame_thread = False
+
+        self._start_errors_received = False
 
     # ----------------------------------------------------------------------
     def get_settings(self, option, cast, do_rotate=True, do_log=True):
@@ -162,14 +164,22 @@ class TangoVimba(BaseCamera):
         """
         """
 
-        if self._device_proxy.state() == PyTango.DevState.ON:
+        if self._device_proxy.state() not in [tango.DevState.ON, tango.DevState.MOVING]:
+            logger.warning("Camera should be in ON state (is it running already?)")
+            return False
 
-            logger.debug(f'{self._my_name}: starting acquisition: event mode')
+        event_mode = self._device_proxy.state() == tango.DevState.ON
+
+        logger.debug(f'{self._my_name}: starting acquisition from {self._image_source}, mode: {"event" if event_mode else "thread"}')
+
+        if event_mode:
+
+            self._start_errors_received = False
 
             self._mode = 'event'
             self._eid = self._device_proxy.subscribe_event(self._image_source,
-                                                           PyTango.EventType.CHANGE_EVENT,
-                                                           self._readout_frame, [], True)
+                                                           tango.EventType.CHANGE_EVENT,
+                                                           self._readout_frame)
 
             attemp = 0
             while attemp < self.START_ATTEMPTS:
@@ -182,9 +192,7 @@ class TangoVimba(BaseCamera):
             time.sleep(self.START_DELAY)  # ? TODO
 
             return True
-        elif self._device_proxy.state() == PyTango.DevState.MOVING:
-
-            logger.debug(f'{self._my_name}: starting acquisition: thread mode')
+        else:
 
             self._stop_frame_thread = False
             self._mode = 'attribute'
@@ -192,10 +200,6 @@ class TangoVimba(BaseCamera):
             self._frame_thread_running = True
             self._frame_thread.start()
             return True
-
-        else:
-            logger.warning("Camera should be in ON state (is it running already?)")
-            return False
 
     # ----------------------------------------------------------------------
     def stop_acquisition(self):
@@ -205,7 +209,7 @@ class TangoVimba(BaseCamera):
             if self._eid is not None:
                 self._device_proxy.unsubscribe_event(self._eid)
                 self._eid = None
-            if self._device_proxy.state() == PyTango.DevState.MOVING:
+            if self._device_proxy.state() == tango.DevState.MOVING:
                 self._device_proxy.command_inout("StopAcquisition")
         else:
             if self._frame_thread_running:
@@ -218,9 +222,9 @@ class TangoVimba(BaseCamera):
     # ----------------------------------------------------------------------
     def is_running(self):
         if self._mode == 'event':
-            return self._device_proxy.state() == PyTango.DevState.MOVING
+            return self._device_proxy.state() == tango.DevState.MOVING
         else:
-            if self._device_proxy.state() != PyTango.DevState.MOVING:
+            if self._device_proxy.state() != tango.DevState.MOVING:
                 return False
             else:
                 return self._frame_thread_running
@@ -229,14 +233,14 @@ class TangoVimba(BaseCamera):
     def _read_frame(self):
         sleep_time = self.get_settings('FPS', int)
         while not self._stop_frame_thread:
-            if self._device_proxy.state() != PyTango.DevState.MOVING:
+            if self._device_proxy.state() != tango.DevState.MOVING:
                 self._frame_thread_running = False
                 raise RuntimeError('Camera was stopped!')
             try:
                 self._last_frame = self._process_frame(getattr(self._device_proxy, self._image_source))
                 self._new_frame_flag = True
             except Exception as err:
-                logger.error('Vimba error: {}'.format(err))
+                logger.error(f'{self._my_name}: error: {err}')
                 self.error_flag = True
                 self.error_msg = str(err)
             time.sleep(1/sleep_time)
@@ -246,16 +250,28 @@ class TangoVimba(BaseCamera):
     def _readout_frame(self, event):
         """Called each time new frame is available.
         """
+        self.error_flag = False
+        self.error_msg = ""
         if not event.err:
             try:
-                data = event.device.read_attribute(event.attr_name.split('/')[6])
-                self._last_frame = self._process_frame(data.value)
-                self._new_frame_flag = True
-
+                data = event.attr_value
+                if data.quality == tango.AttrQuality.ATTR_VALID:
+                    self._last_frame = self._process_frame(data.value)
+                    self._new_frame_flag = True
+                    return
+                else:
+                    err = f"{self._my_name} error: AttrQuality is {data.quality}"
             except Exception as err:
-                self.error_flag = True
-                self.error_msg = str(err)
-                logger.error('Vimba error: {}'.format(err))
+                pass
+        else:
+            err = event.errors
+        if self._start_errors_received:
+            self.error_flag = True
+            self.error_msg = str(err)
+            logger.error(f'{self._my_name} error: {err}')
+        else:
+            self._start_errors_received = True
+            logger.error(f'{self._my_name} Startup error: {err}')
 
     # ----------------------------------------------------------------------
     def _process_frame(self, data):
