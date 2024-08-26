@@ -62,4 +62,4 @@ class BatchProgress(QtWidgets.QWidget):
 
     # ----------------------------------------------------------------------
     def total_progress(self, progress):
-        self._ui.pb_progress.setValue(progress*100)
+        self._ui.pb_progress.setValue(int(progress*100))

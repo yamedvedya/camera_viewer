@@ -29,6 +29,7 @@
 
 import pyqtgraph as _pg
 from pyqtgraph import QtCore, QtGui
+from PyQt5.QtWidgets import QSizePolicy
 import numpy as np
 import logging
 
@@ -108,8 +109,8 @@ class HistogramHLUTWidget(_pg.widgets.GraphicsView.GraphicsView):
         #: (:class:`HistogramHLUTItem`) histogram item
         self.item = HistogramHLUTItem(bins, step, *args, **kargs)
         self.setCentralItem(self.item)
-        self.setSizePolicy(
-            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Preferred,
+                           QSizePolicy.Expanding)
         self.setMinimumWidth(95)
         self.setMinimumHeight(95)
 

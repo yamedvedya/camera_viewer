@@ -60,7 +60,7 @@ class ProjectionWidget(BaseWidget):
     def as_projection_y(self):
         """
         """
-        self._plot.rotate(90)
+        self._plot.setTransform(QtGui.QTransform().rotate(90), True)
 
         self._plot.getViewBox().invertY(True)
 

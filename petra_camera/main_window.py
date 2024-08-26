@@ -158,6 +158,7 @@ class PETRACamera(QtWidgets.QMainWindow):
             try:
                 widget = CameraWidget(self, self.camera_docks[camera_id], self.camera_devices[camera_id])
             except Exception as err:
+                logger.error(err, exc_info=True)
                 last_err = f'{err}'
         else:
             last_err = self.camera_devices[camera_id].load_status[1]
