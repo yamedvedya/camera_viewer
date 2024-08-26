@@ -38,12 +38,15 @@ class CameraWidget(QtWidgets.QMainWindow):
     REFRESH_ICONS_PERIOD = 500 # how often we update settings with Tango
 
     # ----------------------------------------------------------------------
-    def __init__(self, parent, camera):
+    def __init__(self, parent, dock, camera):
         """
         """
         super(CameraWidget, self).__init__(parent)
 
         self.settings = parent.settings
+
+        self.my_dock = dock
+
         self.camera_id = camera.camera_id
         self._last_state = None
         self._parent = parent
@@ -251,7 +254,23 @@ class CameraWidget(QtWidgets.QMainWindow):
         else:
             self._position_control_widget, self._position_control_dock = None, None
 
-            # after all widgets are loaded we restore the user layout
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred);
+        self.tool_bar.addWidget(spacer)
+
+        # Dock button
+        dock_button = QtWidgets.QToolButton()
+        dock_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_TitleBarShadeButton))
+        dock_button.clicked.connect(self.toggleDocked)
+        self.tool_bar.addWidget(dock_button)
+
+        # Close button
+        close_button = QtWidgets.QToolButton()
+        close_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_TitleBarCloseButton))
+        close_button.clicked.connect(self.closeDockWidget)
+        self.tool_bar.addWidget(close_button)
+
+        # after all widgets are loaded we restore the user layout
         self._frame_viewer.load_ui_settings(self.camera_id)
         self._settings_widget.load_ui_settings(self.camera_id)
         self._markerroi_widget.load_ui_settings(self.camera_id)
@@ -292,6 +311,17 @@ class CameraWidget(QtWidgets.QMainWindow):
         self._save_numpy_action.triggered.connect(partial(self._frame_viewer.save_to_file, fmt="npy"))
 
         self._move_motor_action.triggered.connect(lambda: self.camera_device.move_motor())
+
+    # ----------------------------------------------------------------------
+    def toggleDocked(self):
+        if self.my_dock.isFloating():
+            self.my_dock.setFloating(False)
+        else:
+            self.my_dock.setFloating(True)
+
+    # ----------------------------------------------------------------------
+    def closeDockWidget(self):
+        self.my_dock.close()
 
     # ----------------------------------------------------------------------
     def block_hist_signals(self):
@@ -362,3 +392,34 @@ class CameraWidget(QtWidgets.QMainWindow):
             self.restoreState(settings.value(f"{self.camera_id}/state"))
         except:
             pass
+
+
+# ----------------------------------------------------------------------
+class CustomTitleBar(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(CustomTitleBar, self).__init__(parent)
+
+        layout = QtWidgets.QHBoxLayout()
+
+        self.titleLabel = QtWidgets.QLabel("Your Custom Title")
+        layout.addWidget(self.titleLabel)
+
+        self.setLayout(layout)
+
+    # ----------------------------------------------------------------------
+    def setTitle(self, new_title):
+        self.titleLabel.setText(new_title)
+
+    # ----------------------------------------------------------------------
+    def showTitle(self, state):
+        if state:
+            self.titleLabel.show()
+        else:
+            self.titleLabel.hide()
+
+    # ----------------------------------------------------------------------
+    def setRunning(self, running):
+        if running:
+            self.titleLabel.setStyleSheet("QLabel {font-size: 12pt; font-weight: bold; color: red};")
+        else:
+            self.titleLabel.setStyleSheet("QLabel {font-size: 12pt; font-weight: bold; color: black};")

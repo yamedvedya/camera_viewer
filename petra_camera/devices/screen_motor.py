@@ -74,7 +74,7 @@ class MotorExecutor(object):
                 status = self.send_command_to_fsbt('status ' + self._motor_name)
                 self._motor_position = status[1][self._motor_name] == 'in'
             except Exception as err:
-                logger.error("Error during motor status {}...".format(err))
+                logger.error("Error during motor status {}...".format(err), exc_info=True)
                 if not self.get_connection_to_fsbt():
                     break
 
@@ -87,7 +87,7 @@ class MotorExecutor(object):
                 pass
 
             except Exception as err:
-                logger.error("Error during motor move {}...".format(err))
+                logger.error("Error during motor move {}...".format(err), exc_info=True)
                 break
 
             time.sleep(REFRESH_PERIOD)

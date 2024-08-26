@@ -162,7 +162,7 @@ class AXISCamera(BaseCamera):
             err = event.errors
         self.error_flag = True
         self.error_msg = str(err)
-        logger.error(f'{self._my_name} error: {err}')
+        logger.error(f'{self._my_name} error: {err}', exc_info=True)
 
 
     # ----------------------------------------------------------------------

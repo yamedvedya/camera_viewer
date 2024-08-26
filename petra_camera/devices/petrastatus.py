@@ -108,7 +108,7 @@ class PetraStatus(BaseCamera):
                             self._new_frame_flag = True
                             logger.debug(f"{self._my_name} new frame")
                 except Exception as err:
-                    logger.error(f"{self._my_name}: cannot get new frame: {repr(err)}")
+                    logger.error(f"{self._my_name}: cannot get new frame: {repr(err)}", exc_info=True)
 
         self._generator_thread_working = False
 

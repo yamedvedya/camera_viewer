@@ -187,12 +187,12 @@ class DataSource2D(QtCore.QObject):
                     return
 
                 except tango.DevFailed as ex:
-                    logger.error(ex.args[0].desc)
+                    logger.error(ex.args[0].desc, exc_info=True)
                     self.load_status = False, ex.args[0].desc
                     return
 
                 except Exception as ex:
-                    logger.error(ex)
+                    logger.error(ex, exc_info=True)
                     self.load_status = False, ex.__repr__()
                     return
 

@@ -240,7 +240,7 @@ class TangoVimba(BaseCamera):
                 self._last_frame = self._process_frame(getattr(self._device_proxy, self._image_source))
                 self._new_frame_flag = True
             except Exception as err:
-                logger.error(f'{self._my_name}: error: {err}')
+                logger.error(f'{self._my_name}: error: {err}', exc_info=True)
                 self.error_flag = True
                 self.error_msg = str(err)
             time.sleep(1/sleep_time)
@@ -268,10 +268,10 @@ class TangoVimba(BaseCamera):
         if self._start_errors_received:
             self.error_flag = True
             self.error_msg = str(err)
-            logger.error(f'{self._my_name} error: {err}')
+            logger.error(f'{self._my_name} error: {err}', exc_info=True)
         else:
             self._start_errors_received = True
-            logger.error(f'{self._my_name} Startup error: {err}')
+            logger.error(f'{self._my_name} Startup error: {err}', exc_info=True)
 
     # ----------------------------------------------------------------------
     def _process_frame(self, data):

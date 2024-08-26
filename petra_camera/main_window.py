@@ -26,7 +26,7 @@ from threading import Event
 
 from petra_camera.widgets.about_dialog import AboutDialog
 from petra_camera.widgets.general_settings import ProgramSetup
-from petra_camera.widgets.camera_widget import CameraWidget
+from petra_camera.widgets.camera_widget import CameraWidget, CustomTitleBar
 from petra_camera.widgets.empty_camera_widget import EmptyCameraWidget
 from petra_camera.utils.xmlsettings import XmlSettings
 from petra_camera.widgets.import_cameras import ImportCameras
@@ -60,6 +60,8 @@ class PETRACamera(QtWidgets.QMainWindow):
         self._ui = Ui_MainWindow()
         self._ui.setupUi(self)
 
+        self.init_finished = False
+
         self._init_menu()
 
         self.loader_progress = BatchProgress()
@@ -83,9 +85,8 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.camera_widgets = {}
         self.camera_docks = {}
+        self.camera_dock_title = {}
         self.camera_devices = {}
-
-        self.tab_widget = None
 
         self.camera_list = self.get_cameras()
 
@@ -116,7 +117,6 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.setWindowTitle("Camera Viewer ({}@{})".format(getpass.getuser(), socket.gethostname()))
 
         self._init_status_bar()
-        self._load_ui_settings()
 
         self._status_timer = QtCore.QTimer(self)
         self._status_timer.timeout.connect(self._refresh_status)
@@ -133,6 +133,9 @@ class PETRACamera(QtWidgets.QMainWindow):
         dock.setObjectName(f'{camera_id}Dock')
 
         self.camera_docks[camera_id] = dock
+        title_widget = CustomTitleBar(dock)
+        dock.setTitleBarWidget(title_widget)
+        self.camera_dock_title[camera_id] = title_widget
 
         children = [child for child in self.findChildren(QtWidgets.QDockWidget)
                     if isinstance(child.widget(), (CameraWidget, EmptyCameraWidget))]
@@ -153,7 +156,7 @@ class PETRACamera(QtWidgets.QMainWindow):
         widget, last_err = None, ""
         if self.camera_devices[camera_id].load_status[0]:
             try:
-                widget = CameraWidget(self, self.camera_devices[camera_id])
+                widget = CameraWidget(self, self.camera_docks[camera_id], self.camera_devices[camera_id])
             except Exception as err:
                 last_err = f'{err}'
         else:
@@ -167,7 +170,7 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.camera_widgets[camera_id] = widget
         self.camera_docks[camera_id].setWidget(widget)
-        self.camera_docks[camera_id].setWindowTitle(self.camera_list[camera_id])
+        self.camera_dock_title[camera_id].setTitle(self.camera_list[camera_id])
 
     # ----------------------------------------------------------------------
     def reinit_camera(self, camera_id):
@@ -236,9 +239,11 @@ class PETRACamera(QtWidgets.QMainWindow):
                 del self.camera_widgets[camera_id]
             if camera_id in self.camera_docks:
                 del self.camera_docks[camera_id]
+            if camera_id in self.camera_dock_title:
+                del self.camera_dock_title[camera_id]
 
         except Exception as err:
-            logger.error(f'Error while closing camera {self.camera_list[camera_id]} :{repr(err)}')
+            logger.error(f'Error while closing camera {self.camera_list[camera_id]} :{repr(err)}', exc_info=True)
 
         logger.debug(f"Closing {camera_id} done")
         self.job_done.emit(job_id)
@@ -246,6 +251,10 @@ class PETRACamera(QtWidgets.QMainWindow):
     # ----------------------------------------------------------------------
     def loader_done(self):
         self.loader_progress.hide()
+
+        if not self.init_finished:
+            self._load_ui_settings()
+            self.init_finished = True
 
         if self.close_requested:
             self.loader.wait_to_safe_close()
@@ -357,9 +366,25 @@ class PETRACamera(QtWidgets.QMainWindow):
         settings = QtCore.QSettings(APP_NAME)
 
         settings.setValue("MainWindow/geometry", self.saveGeometry())
-        settings.setValue("MainWindow/state", self.saveState())
 
-        settings.setValue("AutoScreen", self.auto_screen_action.isChecked())
+        use_saved_position = False
+        try:
+            use_saved_position = strtobool(settings.value("UseSavedPosition"))
+        except:
+            pass
+
+        if not use_saved_position:
+            settings.setValue("MainWindow/state", self.saveState())
+
+        settings.setValue("AutoScreen", str(self.auto_screen_action.isChecked()))
+
+    # ----------------------------------------------------------------------
+    def save_widgets_layout(self):
+        settings = QtCore.QSettings(APP_NAME)
+        if self.saved_position_action.isChecked():
+            settings.setValue("MainWindow/state", self.saveState())
+
+        settings.setValue("UseSavedPosition", str(self.saved_position_action.isChecked()))
 
     # ----------------------------------------------------------------------
     def _load_ui_settings(self):
@@ -385,6 +410,15 @@ class PETRACamera(QtWidgets.QMainWindow):
 
         self.auto_screen_action.setChecked(enable_auto_screens)
         self._display_auto_screens(enable_auto_screens)
+
+        use_saved_position = False
+        try:
+            use_saved_position = strtobool(settings.value("UseSavedPosition"))
+        except:
+            pass
+
+        self.saved_position_action.setChecked(use_saved_position)
+        self.position_on_exit_action.setChecked(not use_saved_position)
 
     # ----------------------------------------------------------------------
     def _display_auto_screens(self, state):
@@ -412,6 +446,22 @@ class PETRACamera(QtWidgets.QMainWindow):
         self.auto_screen_action.setCheckable(True)
         self.auto_screen_action.triggered.connect(self._display_auto_screens)
         self.menuBar().addAction(self.auto_screen_action)
+
+        widgets_menu = QtWidgets.QMenu('Widgets layout', self)
+        self.menuBar().addMenu(widgets_menu)
+
+        self.bg_position_on_exit = QtWidgets.QActionGroup(self)
+        self.bg_position_on_exit.triggered.connect(self.save_widgets_layout)
+
+        self.position_on_exit_action = QtWidgets.QAction('Use positions on exit', self)
+        self.position_on_exit_action.setCheckable(True)
+        self.bg_position_on_exit.addAction(self.position_on_exit_action)
+        widgets_menu.addAction(self.position_on_exit_action)
+
+        self.saved_position_action = QtWidgets.QAction('Save current position and use them', self)
+        self.saved_position_action.setCheckable(True)
+        self.bg_position_on_exit.addAction(self.saved_position_action)
+        widgets_menu.addAction(self.saved_position_action)
 
         about_action = QtWidgets.QAction('About', self)
         about_action.triggered.connect(self._show_about)
@@ -457,25 +507,26 @@ class PETRACamera(QtWidgets.QMainWindow):
         for widget in self.camera_widgets.values():
             id, state = widget.get_last_state()
             if id in self.camera_list:
-                self.set_tab_style(self.camera_list[id], state)
+                self.camera_dock_title[id].showTitle(not self.set_tab_style(self.camera_list[id], state))
+                self.camera_dock_title[id].setRunning(state)
             else:
                 print(f"Cannot find {id} in camera_list!")
 
     # ----------------------------------------------------------------------
     def set_tab_style(self, camera_name, state):
-        if self.tab_widget is None:
-            for child in self.children():
-                if isinstance(child, QtWidgets.QTabBar) and child.count():
-                    self.tab_widget = child
-                    child.setStyleSheet("font-size: 14pt; font-weight: bold;")
+        tab_found = False
+        for child in self.children():
+            if isinstance(child, QtWidgets.QTabBar) and child.count():
+                child.setStyleSheet("font-size: 12pt; font-weight: bold;")
+                for ind in range(child.count()):
+                    if child.tabText(ind) == camera_name:
+                        tab_found = True
+                        if state:
+                            child.setTabTextColor(ind, QtGui.QColor('red'))
+                        else:
+                            child.setTabTextColor(ind, QtGui.QColor('black'))
 
-        if self.tab_widget is not None:
-            for ind in range(self.tab_widget.count()):
-                if self.tab_widget.tabText(ind) == camera_name:
-                    if state:
-                        self.tab_widget.setTabTextColor(ind, QtGui.QColor('red'))
-                    else:
-                        self.tab_widget.setTabTextColor(ind, QtGui.QColor('black'))
+        return tab_found
 
 
 # ----------------------------------------------------------------------
@@ -561,8 +612,7 @@ class BatchLoader(QtCore.QThread):
                 while len(self.jobs_to_be_done):
                     self.loader_set_progress.emit((self.total_jobs - len(self.jobs_to_be_done)) / self.total_jobs)
                     self.msleep(100)
-                logger.debug(f"Jobs set done")
-                print(f"Time to done: {time.time() - s_time}")
+                logger.debug(f"Jobs set done within {time.time() - s_time}")
                 self.set_done.emit()
                 self.new_jobs.clear()
             self.msleep(100)
